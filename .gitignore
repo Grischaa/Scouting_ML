@@ -1,0 +1,17 @@
+# venv & IDE
+.venv/
+.vscode/
+__pycache__/
+*.pyc
+
+# data & secrets
+data/
+.env
+
+# test / cache
+.pytest_cache/
+.ipynb_checkpoints/
+
+# local dbs
+*.duckdb
+*.sqlite
