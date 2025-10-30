@@ -78,9 +78,29 @@ def _run(cmd: List[str]) -> int:
 # Per-club processing
 # -------------------------
 
-def process_club(club: Club, *, league_name: str, season_label: str, polite_sleep: float = 3.0) -> Dict[str, str]:
+def process_club(
+    club: Club,
+    *,
+    league_name: str,
+    season_label: str,
+    polite_sleep: float = 3.0,
+    skip_existing: bool = False,
+    force: bool = False,
+    ) -> Dict[str, str]:
+
     ensure_dirs()
 
+    out_name = f"{club.slug}_team.html"
+    team_processed_csv = Path("data/processed") / f"{club.slug}_team_players.csv"
+
+    # 🟢 short-circuit
+    if skip_existing and team_processed_csv.exists() and not force:
+        print(f"[skip] {club.name} already processed -> {team_processed_csv.name}")
+        return {
+            "processed_csv": str(team_processed_csv),
+            "normalized_csv": str(Path("data/processed") / f"{club.slug}_players_normalised.csv"),
+            "stats_csv": str(Path("data/interim/tm") / f"{club.slug}_team_stats.csv"),
+        }
     # A) run pipeline
     out_name = f"{club.slug}_team.html"
     pipeline_cmd = [
@@ -153,6 +173,8 @@ def main():
     ap.add_argument("--season-id", type=int, default=None)
     ap.add_argument("--sleep", type=float, default=3.0)
     ap.add_argument("--merge-stats", action="store_true")
+    ap.add_argument("--skip-existing",action="store_true",help="Skip clubs that already have a processed CSV.")
+    ap.add_argument("--force-club",action="append",default=[],help="Club slug(s) to force reprocess even if they exist (can repeat).")
     args = ap.parse_args()
 
     ensure_dirs()
@@ -160,12 +182,15 @@ def main():
     print(f"[league] Found {len(clubs)} clubs")
 
     for club in clubs:
-        process_club(
+        paths = process_club(
             club,
             league_name=args.league_name,
             season_label=args.season,
             polite_sleep=args.sleep,
+            skip_existing=args.skip_existing,
+            force=(club.slug in args.force_club),
         )
+
 
     # merge at the end
     if args.merge_stats:
