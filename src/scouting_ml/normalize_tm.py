@@ -25,22 +25,46 @@ _MV_RE = re.compile(r"€\s*([0-9]+(?:[.,][0-9]+)?)\s*([kKmM])?")
 _HEIGHT_RE = re.compile(r"(?:(\d{3})\s*cm)|([1-2](?:[.,]\d{1,2})?)\s*m", re.I)
 
 POSITION_MAP = {
-    # granular -> buckets (your earlier convention)
-    "Goalkeeper": "GK",
-    "Centre-Back": "CB",
-    "Left-Back": "LB",
-    "Right-Back": "RB",
-    "Defender": "DF",
-    "Defensive Midfield": "DM",
-    "Central Midfield": "CM",
-    "Attacking Midfield": "AM",
-    "Left Midfield": "LM",
-    "Right Midfield": "RM",
-    "Left Winger": "LW",
-    "Right Winger": "RW",
-    "Second Striker": "SS",
-    "Centre-Forward": "CF",
-    "Forward": "FW",
+    # Goalkeepers
+    "goalkeeper": "GK",
+    "keeper": "GK",
+
+    # Central / general defenders
+    "defender": "DF",
+    "back": "DF",
+    "centre-back": "DF",
+    "center-back": "DF",
+    "central defender": "DF",
+    "sweeper": "DF",
+
+    # Fullbacks / wingbacks
+    "left-back": "DF",
+    "right-back": "DF",
+    "left fullback": "DF",
+    "right fullback": "DF",
+    "left wing-back": "DF",
+    "right wing-back": "DF",
+    "wing-back": "DF",
+
+    # Midfield
+    "midfielder": "MF",
+    "central midfield": "MF",
+    "centre midfield": "MF",
+    "defensive midfield": "MF",
+    "attacking midfield": "MF",
+    "right midfield": "MF",
+    "left midfield": "MF",
+    "box-to-box": "MF",
+
+    # Forwards / wingers
+    "forward": "FW",
+    "striker": "FW",
+    "centre-forward": "FW",
+    "center-forward": "FW",
+    "second striker": "FW",
+    "right winger": "FW",
+    "left winger": "FW",
+    "winger": "FW",
 }
 
 FOOT_MAP = {
@@ -119,6 +143,24 @@ def _snake(s: str) -> str:
     s = re.sub(r"[^0-9a-zA-Z]+", "_", s)
     s = re.sub(r"_+", "_", s)
     return s.strip("_").lower()
+
+def to_position_group(main_pos: str | None, secondary: str | None = None) -> str | None:
+    def _norm(s: str) -> str:
+        return s.strip().lower()
+
+    if main_pos:
+        key = _norm(main_pos)
+        if key in POSITION_MAP:
+            return POSITION_MAP[key]
+
+    # fallback to secondary
+    if secondary:
+        key2 = secondary.strip().lower()
+        if key2 in POSITION_MAP:
+            return POSITION_MAP[key2]
+
+    return None
+
 
 # ---- core ------------------------------------------------------------------
 
@@ -199,6 +241,8 @@ def normalize_df(df: pd.DataFrame) -> pd.DataFrame:
         df["positions_secondary"] = df[pos2_col].fillna("").apply(
             lambda s: [p.strip() for p in re.split(r"[;/]", s) if p.strip()]
         )
+
+    #df["position_group"] = df.apply(lambda r: to_position_group(r.get("position"), r.get("position_secondary") or r.get("positions_secondary")),axis=1,)
 
     # Place of birth + flag whether born in nationality country
     if pob_city_col:

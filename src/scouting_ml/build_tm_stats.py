@@ -296,14 +296,18 @@ def run(in_players: str, out_path: str, concurrency: int = 4, debug_first: Optio
 def main():
     ap = argparse.ArgumentParser(description="Build Transfermarkt stats table from player parsed CSV")
     ap.add_argument("--in_players", required=True, help="CSV from build_tm_interim_from_raw stage")
-    ap.add_argument("--out", dest="out_path", required=True, help="Output CSV path")
+    ap.add_argument("--out", required=True, help="Output CSV to write team/player stats to (e.g. data/interim/tm/sturm_graz_team_stats.csv)")
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--debug_first", type=int, default=None)
     ap.add_argument("--verbose", action="store_true", help="Print debug info and save HTML")
     args = ap.parse_args()
+
     global VERBOSE
     VERBOSE = bool(args.verbose)
-    run(args.in_players, args.out_path, args.concurrency, args.debug_first)
+
+    # 👇 THIS was the bug: args.out_path -> args.out
+    run(args.in_players, args.out, args.concurrency, args.debug_first)
+
 
 if __name__ == "__main__":
     main()

@@ -509,12 +509,51 @@ def _map_position_group(pos: str | None) -> str | None:
     if not isinstance(pos, str):
         return None
     p = pos.lower()
-    if "torwart" in p or "goalkeeper" in p: return "GK"
-    if any(k in p for k in ["innenverteidiger","verteidiger","centre-back","center-back","full-back","right-back","left-back","defender"]): return "DF"
-    if any(k in p for k in ["mittelfeld","midfield","winger","flügel"]): return "MF"
-    if any(k in p for k in ["sturm","stürmer","forward","striker","centre-forward","center-forward"]): return "FW"
+
+    # GK
+    if "torwart" in p or "goalkeeper" in p or p == "gk":
+        return "GK"
+
+    # DEF
+    if any(k in p for k in [
+        "innenverteidiger", "verteidiger",
+        "centre-back", "center-back",
+        "full-back", "right-back", "left-back",
+        "defender", "back"  # <-- this is the one you were missing
+    ]):
+        return "DF"
+
+    # MID
+    if any(k in p for k in [
+        "mittelfeld", "midfield",
+        "defensive midfield", "attacking midfield", "central midfield",
+        "right midfield", "left midfield"
+    ]):
+        
+        return "MF"
+
+    # FWD
+    if any(k in p for k in [
+        "sturm", "stürmer",
+        "forward", "striker",
+        "centre-forward", "center-forward",
+        "winger", "right winger", "left winger"
+    ]):
+        return "FW"
+
     return None
 
+def _pick_pos(row):
+    # 1) from profile
+    if row.get("position_main"):
+        return row["position_main"]
+    # 2) from team-table enrichment / original parse
+    if row.get("position"):
+        return row["position"]
+    # 3) from alt position
+    if row.get("position_alt"):
+        return row["position_alt"]
+    return None
 
 
 
@@ -577,8 +616,9 @@ def main():
         df = _enrich_positions(df, max_workers=4)
 
     # 6) Position group (from main/position)
-    if "position_main" in df.columns or "position" in df.columns:
-        df["position_group"] = df.get("position_main", df.get("position")).fillna(df.get("position")).apply(_map_position_group)
+   
+    if "position" in df.columns or "position_main" in df.columns or "position_alt" in df.columns:
+        df["position_group"] = df.apply(lambda r: _map_position_group(_pick_pos(r)), axis=1)
 
     # 7) Stamp metadata
     meta = {}
