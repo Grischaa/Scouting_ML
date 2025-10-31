@@ -39,6 +39,16 @@ def _parse_team_html(html_path: Path) -> pd.DataFrame:
 
 # ---------- Cleaning helpers ----------
 
+def _is_filled(val) -> bool:
+    """Return True if val is a non-empty string (and not pandas.NA)."""
+    if val is None:
+        return False
+    # pandas.NA blows up on bool()
+    if val is pd.NA:  # type: ignore
+        return False
+    s = str(val).strip()
+    return s != "" and s.lower() != "nan"
+
 def _parse_market_value(s: str) -> float | None:
     if not isinstance(s, str):
         return None
@@ -94,15 +104,6 @@ def _clean_df(df: pd.DataFrame) -> pd.DataFrame:
     return df[ordered]
 
 
-# ---------- Position enrichment ----------
-
-def _players_cache_path(player_id: str) -> Path:
-    base = Path("data/raw/tm/players")
-    base.mkdir(parents=True, exist_ok=True)
-    return base / f"{player_id}.html"
-
-
-# --- replace the whole _extract_profile_facts with this version ---
 def _extract_profile_facts(html: str) -> dict:
     """
     Parse a Transfermarkt player profile using BeautifulSoup.
@@ -136,6 +137,20 @@ def _extract_profile_facts(html: str) -> dict:
             break
 
     if detail:
+        # ✅ NEW 1: try the modern TM structure first:
+        # sometimes all positions are simply listed as <dd class="detail-position_position">
+        dd_positions = [
+            norm(dd.get_text(" ", strip=True))
+            for dd in detail.select("dd.detail-position_position")
+        ]
+        dd_positions = [p for p in dd_positions if p and p not in ("-", "–")]
+        if dd_positions:
+            # first = main, rest = alt (comma-joined)
+            if not facts["position_main"]:
+                facts["position_main"] = dd_positions[0]
+            if len(dd_positions) > 1:
+                facts["position_alt"] = ", ".join(dd_positions[1:])
+
         # labels look like: "Hauptposition:" / "Main position:"
         def grab_detail(lbl_pat: str) -> str | None:
             lab = detail.find(text=re.compile(lbl_pat, re.I))
@@ -154,12 +169,18 @@ def _extract_profile_facts(html: str) -> dict:
             val = norm(row.get_text(" ", strip=True).split(":", 1)[-1])
             return val
 
-        facts["position_main"] = norm(
-            grab_detail(r"(Hauptposition|Main position)")
-        ) or facts["position_main"]
-        facts["position_alt"] = norm(
-            grab_detail(r"(Nebenposition|Other position)")
-        ) or facts["position_alt"]
+        # ✅ keep your old logic as fallback/override
+        main_from_lbl = grab_detail(r"(Hauptposition|Main position)")
+        if main_from_lbl:
+            facts["position_main"] = norm(main_from_lbl) or facts["position_main"]
+
+        alt_from_lbl = grab_detail(r"(Nebenposition|Other position)")
+        if alt_from_lbl:
+            # if we already collected multiple dd-positions, append this one
+            if facts["position_alt"]:
+                facts["position_alt"] = f"{facts['position_alt']}, {alt_from_lbl}"
+            else:
+                facts["position_alt"] = norm(alt_from_lbl)
 
     # --- B) Daten & Fakten table
     # In the info-table, labels have class ...--regular and values ...--bold
@@ -200,6 +221,10 @@ def _extract_profile_facts(html: str) -> dict:
         # take the most specific part (rightmost after '-')
         main = norm(pos_line.split("-")[-1])
         facts["position_main"] = main
+        # ✅ NEW 2: if the left side had extra info, use it as alt
+        left_parts = [p.strip() for p in pos_line.split("-")[:-1]]
+        if left_parts and not facts["position_alt"]:
+            facts["position_alt"] = ", ".join(left_parts)
 
     # Clean “Facts and data …” noise if it sneaks in
     for key in ("position_main", "position_alt"):
@@ -209,6 +234,10 @@ def _extract_profile_facts(html: str) -> dict:
 
     return facts
 
+def _players_cache_path(player_id: str) -> Path:
+    base = Path("data/raw/tm/players")
+    base.mkdir(parents=True, exist_ok=True)
+    return base / f"{player_id}.html"
 
 
 
@@ -220,23 +249,44 @@ def _fetch_or_load_profile(link: str, player_id: str, sleep_s: float = 0.7, forc
     """
     cache_path = _players_cache_path(player_id)
 
-    # 1) Try cache
+    def looks_like_consent(txt: str) -> bool:
+        low = txt[:20000].lower()
+        return (
+            "privacy settings" in low
+            or "consent" in low
+            or "enable javascript" in low
+            or "bot protection" in low
+        )
+
+    # 1) try cache
     text: str | None = None
     if not force and cache_path.exists() and cache_path.stat().st_size > 0:
         text = cache_path.read_text(encoding="utf-8", errors="ignore")
-        low = text.lower()
-        if ("consent" in low and "cookie" in low) or ("enable javascript" in low):
-            # invalidate cached consent page; force a refetch below
+        if looks_like_consent(text):
+            # invalidate and re-fetch
             text = None
 
-    # 2) Fetch if needed
+    # 2) fetch if needed
     if text is None:
-        time.sleep(sleep_s)  # be polite
-        html_bytes = fetch(link)  # your fetch() should have proper headers/retries
+        time.sleep(sleep_s)
+        html_bytes = fetch(link)  # your tm_scraper.fetch
         text = html_bytes.decode("utf-8", errors="ignore")
+
+        # ✅ SAVE RAW so we can inspect
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(text, encoding="utf-8", errors="ignore")
 
+        # if it's STILL a consent page, also dump to debug
+        if looks_like_consent(text):
+            dbg = Path("data/raw/tm/_last_player_debug.html")
+            dbg.write_text(text, encoding="utf-8", errors="ignore")
+            print(f"[enrich] ⚠ got consent/bot page for {player_id} -> wrote {dbg}")
+    else:
+        # cached good page
+        pass
+
     return text
+
 
     
 def _clean_team_position(name: str, raw: str) -> str | None:
@@ -464,11 +514,14 @@ def _enrich_positions(df: pd.DataFrame, max_workers: int = 4) -> pd.DataFrame:
     def worker(idx_link_pid: tuple[int, str, str]) -> tuple[int, dict]:
         idx, link, pid = idx_link_pid
         try:
-            html = _fetch_or_load_profile(link, pid)
+            print(f"[enrich] fetching {pid} -> {link}")
+            html = _fetch_or_load_profile(link, pid, force=False)
             facts = _extract_profile_facts(html)
             return idx, facts
-        except Exception:
+        except Exception as e:
+            print(f"[enrich] error for {pid}: {e}")
             return idx, {}
+
 
     tasks = [(idx, row["link"], str(row["player_id"])) for idx, row in todo.iterrows()]
 
@@ -543,16 +596,16 @@ def _map_position_group(pos: str | None) -> str | None:
 
     return None
 
-def _pick_pos(row):
-    # 1) from profile
-    if row.get("position_main"):
-        return row["position_main"]
-    # 2) from team-table enrichment / original parse
-    if row.get("position"):
-        return row["position"]
-    # 3) from alt position
-    if row.get("position_alt"):
-        return row["position_alt"]
+def _pick_pos(row) -> str | None:
+    pm = row.get("position_main")
+    if _is_filled(pm):
+        return str(pm)
+    p = row.get("position")
+    if _is_filled(p):
+        return str(p)
+    pa = row.get("position_alt")
+    if _is_filled(pa):
+        return str(pa)
     return None
 
 

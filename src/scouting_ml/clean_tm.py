@@ -1,0 +1,76 @@
+# src/scouting_ml/clean_tm.py
+from __future__ import annotations
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from scouting_ml.core_features import ensure_position_group
+
+
+def clean_transfermarkt(df: pd.DataFrame) -> pd.DataFrame:
+    """Final consistency cleaning for Transfermarkt merged dataset."""
+    df = df.copy()
+
+    # --- 1️⃣ Column standardization ---
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
+
+    # --- 2️⃣ Ensure essential fields exist ---
+    required = ["player_id", "name", "club", "league", "season", "market_value_eur"]
+    for col in required:
+        if col not in df.columns:
+            df[col] = np.nan
+
+    # --- 3️⃣ Ensure position_group ---
+    df = ensure_position_group(df)
+    df["position_group"] = df["position_group"].fillna("Unknown")
+    if "position_alt" in df.columns:
+        df["position_alt"] = df["position_alt"].astype("string").fillna("")
+
+
+    # --- 4️⃣ Numeric sanity checks ---
+    if "age" in df.columns:
+        df.loc[(df["age"] < 14) | (df["age"] > 45), "age"] = np.nan
+
+    if "height_cm" in df.columns:
+        df.loc[(df["height_cm"] < 150) | (df["height_cm"] > 210), "height_cm"] = np.nan
+
+    if "market_value_eur" in df.columns:
+        # ✅ Do NOT reconvert — just verify range
+        df.loc[(df["market_value_eur"] <= 0) | (df["market_value_eur"] > 1e8), "market_value_eur"] = np.nan
+
+    # --- 5️⃣ Drop duplicates ---
+    if "player_id" in df.columns:
+        before = len(df)
+        df = df.drop_duplicates(subset=["player_id"], keep="first")
+        print(f"[clean] Removed {before - len(df)} duplicates")
+
+    # --- 6️⃣ Fill missing metadata ---
+    df["club"] = df["club"].fillna("Unknown Club")
+    df["league"] = df["league"].fillna("Austrian Bundesliga")
+    df["season"] = df["season"].fillna("2025/26")
+
+    # --- 7️⃣ Sort for readability ---
+    sort_cols = [c for c in ["club", "position_group", "age"] if c in df.columns]
+    df = df.sort_values(sort_cols).reset_index(drop=True)
+
+    return df
+
+
+def main():
+    import argparse
+    p = argparse.ArgumentParser(description="Clean merged Transfermarkt dataset for final use.")
+    p.add_argument("--infile", required=True, help="Path to the merged features file")
+    p.add_argument("--outfile", required=True, help="Path to save cleaned CSV")
+    args = p.parse_args()
+
+    df = pd.read_csv(args.infile)
+    print(f"[clean] Loaded {len(df)} rows from {args.infile}")
+    df_clean = clean_transfermarkt(df)
+
+    out_path = Path(args.outfile)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    df_clean.to_csv(out_path, index=False)
+    print(f"[clean] ✅ Saved cleaned data -> {out_path.resolve()}")
+
+
+if __name__ == "__main__":
+    main()
