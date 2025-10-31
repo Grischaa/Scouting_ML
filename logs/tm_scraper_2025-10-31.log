@@ -1,0 +1,8 @@
+2025-10-31 13:05:16 | WARNING  | [sofa] attempt 1/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/team/2793'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 1.03s
+2025-10-31 13:05:17 | WARNING  | [sofa] attempt 2/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/team/2793'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 1.46s
+2025-10-31 13:05:19 | WARNING  | [sofa] attempt 3/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/team/2793'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 2.31s
+2025-10-31 13:05:22 | WARNING  | [sofa] attempt 4/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/team/2793'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 3.02s

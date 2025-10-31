@@ -22,6 +22,7 @@ pydantic==2.9.2
 python-dotenv==1.0.1
 tenacity==9.0.0             # retries for flaky requests
 tqdm==4.66.5
+scraperfc ==0.8.3          # robots.txt compliance
 
 # Logging & CLI
 loguru==0.7.2
@@ -31,3 +32,4 @@ typer==0.12.5
 ruff==0.6.8
 black==24.10.0
 pytest==8.3.3
+pyyaml==6.0.1
