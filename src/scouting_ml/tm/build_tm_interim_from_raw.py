@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import List, Tuple
 import pandas as pd
 from bs4 import BeautifulSoup
+from scouting_ml.utils.import_guard import *  # noqa: F403
+
 
 
 

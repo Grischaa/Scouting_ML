@@ -1,4 +1,6 @@
 from pathlib import Path
+from scouting_ml.utils.import_guard import *  # noqa: F403
+
 
 # This file lives at <repo>/src/scouting_ml/paths.py
 # Repo root is 2 levels up (paths.py -> scouting_ml -> src -> <repo>)

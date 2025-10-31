@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import json
 from pathlib import Path
-
+from scouting_ml.utils.import_guard import *  # noqa: F403
 import requests
 
 from scouting_ml.paths import RAW_DIR, ensure_dirs

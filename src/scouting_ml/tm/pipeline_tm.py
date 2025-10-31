@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup  # add at top with other imports
 import pandas as pd
 import unicodedata
-
+from scouting_ml.utils.import_guard import *  # noqa: F403
 from scouting_ml.tm_scraper import fetch
 from scouting_ml.paths import ensure_dirs, tm_html
 

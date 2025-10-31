@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from pathlib import Path
-
+from scouting_ml.utils.import_guard import *  # noqa: F403
 import pandas as pd
 
 

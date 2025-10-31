@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime
 from typing import Optional
-
+from scouting_ml.utils.import_guard import *  # noqa: F403
 import pandas as pd
 import typer
 

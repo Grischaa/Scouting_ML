@@ -4,6 +4,8 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 import re
+from scouting_ml.utils.import_guard import *  # noqa: F403
+
 
 
 # ---------- helpers -----------------------------------------------------------

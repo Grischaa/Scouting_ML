@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-
+from scouting_ml.utils.import_guard import *  # noqa: F403
 import httpx
 import typer
 import yaml

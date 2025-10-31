@@ -2,6 +2,7 @@
 from bs4 import BeautifulSoup
 import pandas as pd
 from scouting_ml.paths import tm_html, ensure_dirs
+from scouting_ml.utils.import_guard import *  # noqa: F403
 
 BASE = "https://www.transfermarkt.com"
 

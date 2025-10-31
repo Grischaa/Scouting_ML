@@ -1,6 +1,8 @@
 ﻿from pathlib import Path
 from loguru import logger
 import datetime
+from scouting_ml.utils.import_guard import *  # noqa: F403
+
 
 # Define log folder
 BASE_DIR = Path(__file__).resolve().parents[2]

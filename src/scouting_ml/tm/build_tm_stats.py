@@ -9,7 +9,7 @@ Usage (CLI):
 """
 
 from __future__ import annotations
-
+from scouting_ml.utils.import_guard import *  # noqa: F403
 import argparse
 import concurrent.futures as cf
 import dataclasses as dc

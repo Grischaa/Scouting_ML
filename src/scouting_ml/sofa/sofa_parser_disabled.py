@@ -1,12 +1,10 @@
 # src/scouting_ml/sofa_parser.py
 from __future__ import annotations
-
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
+from scouting_ml.utils.import_guard import *  # noqa: F403
 import pandas as pd
-
 from scouting_ml.paths import ensure_dirs, RAW_DIR
 
 SOFA_ROOT = RAW_DIR / "sofascore"

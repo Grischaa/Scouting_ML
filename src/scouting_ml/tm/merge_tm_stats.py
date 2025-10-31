@@ -1,6 +1,8 @@
 from pathlib import Path
 import pandas as pd
 import re
+from scouting_ml.utils.import_guard import *  # noqa: F403
+
 
 LEAGUE = "Austrian Bundesliga"
 SEASON = "2025/26"

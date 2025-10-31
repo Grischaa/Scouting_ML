@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from scouting_ml.core_features import ensure_position_group
+from scouting_ml.utils.import_guard import *  # noqa: F403
 
 
 def clean_transfermarkt(df: pd.DataFrame) -> pd.DataFrame:

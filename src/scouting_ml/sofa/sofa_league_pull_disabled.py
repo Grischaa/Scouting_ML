@@ -2,7 +2,7 @@
 from pathlib import Path
 import pandas as pd
 from ScraperFC.sofascore import Sofascore
-
+from scouting_ml.utils.import_guard import *  # noqa: F403
 from scouting_ml.paths import ensure_dirs
 
 def main():

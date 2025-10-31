@@ -5,7 +5,7 @@ import argparse
 import random
 import time
 from pathlib import Path
-
+from scouting_ml.utils.import_guard import *  # noqa: F403
 import httpx
 import requests
 

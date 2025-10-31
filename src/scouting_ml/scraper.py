@@ -10,10 +10,9 @@ Usage (PowerShell from project root):
 from pathlib import Path
 from typing import Optional
 import time
-
 import httpx
 import typer
-
+from scouting_ml.utils.import_guard import *  # noqa: F403
 from scouting_ml.paths import ensure_dirs, tm_html
 
 app = typer.Typer(add_completion=False)

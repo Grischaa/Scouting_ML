@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import sys
+from scouting_ml.utils.import_guard import *  # noqa: F403
+
 
 EXPECTED_SCHEMA = {
     "player_id": "object",

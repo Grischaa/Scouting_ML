@@ -4,6 +4,8 @@ from pathlib import Path
 import argparse
 import pandas as pd
 import numpy as np
+from scouting_ml.utils.import_guard import *  # noqa: F403
+
 
 
 def safe_read_csv(path: Path) -> pd.DataFrame:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 import typer
+from scouting_ml.utils.import_guard import *  # noqa: F403
 
 app = typer.Typer(add_completion=False)
 
