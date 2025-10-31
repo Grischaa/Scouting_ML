@@ -192,7 +192,10 @@ def main():
         )
 
 
-    # merge at the end
+    # -------------------------
+# Optional: merge stats
+# -------------------------
+
     if args.merge_stats:
         stats_dir = Path("data/interim/tm")
         all_stats = list(stats_dir.glob("*_team_stats.csv"))
@@ -204,6 +207,32 @@ def main():
             out = stats_dir / f"{_slug(args.league_name)}_{_slug(args.season)}_full_stats.csv"
             merged.to_csv(out, index=False)
             print(f"[merge] Wrote league stats -> {out.resolve()}")
+
+# -------------------------
+# ✅ NEW: Schema validation
+# -------------------------
+
+    try:
+        from scouting_ml.validate_schema import validate_schema
+        import pandas as pd
+
+        final_path = Path("data/processed") / f"{_slug(args.league_name)}_{_slug(args.season)}_clean.csv"
+        if final_path.exists():
+            print(f"\n[validate] Checking schema for {final_path.name} ...")
+            df = pd.read_csv(final_path)
+            validate_schema(df)
+        else:
+            # Fallback: validate merged feature file if clean file not yet created
+            merged_features = Path("data/processed") / f"{_slug(args.league_name)}_{_slug(args.season)}_features.csv"
+            if merged_features.exists():
+                print(f"\n[validate] Checking schema for {merged_features.name} ...")
+                df = pd.read_csv(merged_features)
+                validate_schema(df)
+            else:
+                print("[validate ⚠️] No merged or clean file found to validate.")
+    except Exception as e:
+        print(f"[validate ❌] Schema validation failed to run: {e}")
+
 
 
 if __name__ == "__main__":
