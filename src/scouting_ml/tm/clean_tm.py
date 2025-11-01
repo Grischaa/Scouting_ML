@@ -3,11 +3,17 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from scouting_ml.core_features import ensure_position_group
+from scouting_ml.analysis.core_features import ensure_position_group
+from scouting_ml.league_registry import get_league
 from scouting_ml.utils.import_guard import *  # noqa: F403
 
 
-def clean_transfermarkt(df: pd.DataFrame) -> pd.DataFrame:
+def clean_transfermarkt(
+    df: pd.DataFrame,
+    *,
+    default_league: str = "Unknown League",
+    default_season: str = "",
+) -> pd.DataFrame:
     """Final consistency cleaning for Transfermarkt merged dataset."""
     df = df.copy()
 
@@ -46,8 +52,8 @@ def clean_transfermarkt(df: pd.DataFrame) -> pd.DataFrame:
 
     # --- 6️⃣ Fill missing metadata ---
     df["club"] = df["club"].fillna("Unknown Club")
-    df["league"] = df["league"].fillna("Austrian Bundesliga")
-    df["season"] = df["season"].fillna("2025/26")
+    df["league"] = df["league"].fillna(default_league)
+    df["season"] = df["season"].fillna(default_season)
 
     # --- 7️⃣ Sort for readability ---
     sort_cols = [c for c in ["club", "position_group", "age"] if c in df.columns]
@@ -61,11 +67,39 @@ def main():
     p = argparse.ArgumentParser(description="Clean merged Transfermarkt dataset for final use.")
     p.add_argument("--infile", required=True, help="Path to the merged features file")
     p.add_argument("--outfile", required=True, help="Path to save cleaned CSV")
+    p.add_argument(
+        "--league",
+        help="League slug from scouting_ml.league_registry to use for default labels.",
+    )
+    p.add_argument(
+        "--default-league",
+        help="Fallback league label when missing from the dataset.",
+    )
+    p.add_argument(
+        "--default-season",
+        help="Fallback season label when missing from the dataset.",
+    )
     args = p.parse_args()
 
     df = pd.read_csv(args.infile)
     print(f"[clean] Loaded {len(df)} rows from {args.infile}")
-    df_clean = clean_transfermarkt(df)
+
+    default_league = args.default_league
+    default_season = args.default_season
+
+    if args.league:
+        try:
+            config = get_league(args.league)
+        except KeyError as exc:
+            raise SystemExit(str(exc))
+        default_league = default_league or config.name
+        default_season = default_season or (config.tm_season_label or config.sofa_season_label or "")
+
+    df_clean = clean_transfermarkt(
+        df,
+        default_league=default_league or "Unknown League",
+        default_season=default_season or "",
+    )
 
     out_path = Path(args.outfile)
     out_path.parent.mkdir(parents=True, exist_ok=True)

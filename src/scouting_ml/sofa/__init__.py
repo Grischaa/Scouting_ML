@@ -1,6 +1,6 @@
 """Helpers for interacting with the Sofascore API and related utilities."""
 
-from .sofa_league_pull import main as pull_league_stats
+from .league_pull import main as pull_league_stats
 from .sofa_parser import parse_all_players
 from .sofa_rapid import probe_tvchannels
 from .sofa_scraper import (

@@ -4,7 +4,7 @@ Fetches ONE url and saves the raw HTML under data/raw/tm/.
 
 Usage (PowerShell from project root):
   $env:PYTHONPATH = "$PWD\src"
-  python -m scouting_ml.tm_scraper --url "https://www.transfermarkt.com/schnellsuche/ergebnis/schnellsuche?query=sturm%20graz" --out "sturm_graz_search.html"
+  python -m scouting_ml.tm.tm_scraper --url "https://www.transfermarkt.com/schnellsuche/ergebnis/schnellsuche?query=sturm%20graz" --out "sturm_graz_search.html"
 """
 
 from pathlib import Path

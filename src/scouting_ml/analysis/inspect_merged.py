@@ -6,7 +6,7 @@ import argparse
 import pandas as pd
 from scouting_ml.utils.import_guard import *  # noqa: F403
 from scouting_ml.utils.import_guard import *  # noqa: F403
-from scouting_ml.core_features import add_basic_features
+from scouting_ml.analysis.core_features import add_basic_features
 
 
 def main() -> None:

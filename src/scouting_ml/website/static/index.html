@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ScoutML Player Radar</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+    <script src="data/players.js" defer></script>
+    <script src="assets/app.js" defer></script>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero__content">
+        <h1>ScoutML Player Radar</h1>
+        <p>
+          Explore Transfermarkt x Sofascore player datasets across leagues.
+          Filter by club, position, age, and more to surface recruitment
+          targets in seconds.
+        </p>
+        <p class="hero__meta" id="league-subtitle">
+          Choose a league to get started.
+        </p>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="filters">
+        <div class="filter">
+          <label for="league-select">League</label>
+          <select id="league-select" name="league">
+            <option value="">Select a league</option>
+          </select>
+        </div>
+        <div class="filter">
+          <label for="search-input">Search</label>
+          <input
+            type="search"
+            id="search-input"
+            name="search"
+            placeholder="Player or club"
+            autocomplete="off"
+          />
+        </div>
+        <div class="filter">
+          <label for="club-select">Club</label>
+          <select id="club-select" name="club">
+            <option value="">All clubs</option>
+          </select>
+        </div>
+        <div class="filter">
+          <label for="position-select">Position</label>
+          <select id="position-select" name="position">
+            <option value="">All positions</option>
+          </select>
+        </div>
+        <div class="filter">
+          <label for="age-select">Age band</label>
+          <select id="age-select" name="age">
+            <option value="">All</option>
+            <option value="u18">Under 18</option>
+            <option value="18-22">18 – 22</option>
+            <option value="23-26">23 – 26</option>
+            <option value="27-30">27 – 30</option>
+            <option value="30+">30+</option>
+          </select>
+        </div>
+        <div class="filter">
+          <label for="sort-select">Sort by</label>
+          <select id="sort-select" name="sort">
+            <option value="market_value_eur">Market value (€)</option>
+            <option value="sofa_minutesPlayed">Minutes played</option>
+            <option value="sofa_goals">Goals</option>
+            <option value="sofa_assists">Assists</option>
+            <option value="sofa_expectedGoals">Expected goals</option>
+            <option value="sofa_totalDuelsWonPercentage">Duels won %</option>
+            <option value="sofa_accuratePassesPercentage">Pass accuracy %</option>
+          </select>
+        </div>
+        <div class="filter">
+          <label for="sort-direction" class="sr-only">Sort direction</label>
+          <button id="sort-direction" aria-label="Toggle sort direction">
+            ↓ Desc
+          </button>
+        </div>
+      </section>
+
+      <section class="summary">
+        <div class="summary__item">
+          <span class="summary__label">Players</span>
+          <span class="summary__value" id="summary-count">0</span>
+        </div>
+        <div class="summary__item">
+          <span class="summary__label">Avg. market value</span>
+          <span class="summary__value" id="summary-market">€0</span>
+        </div>
+        <div class="summary__item">
+          <span class="summary__label">Avg. xG</span>
+          <span class="summary__value" id="summary-xg">0.00</span>
+        </div>
+        <div class="summary__item">
+          <span class="summary__label">Avg. minutes</span>
+          <span class="summary__value" id="summary-minutes">0</span>
+        </div>
+      </section>
+
+      <section class="table">
+        <table>
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Club</th>
+              <th>Pos</th>
+              <th>Age</th>
+              <th class="numeric">Market value</th>
+              <th class="numeric">Minutes</th>
+              <th class="numeric">Goals</th>
+              <th class="numeric">Assists</th>
+              <th class="numeric">xG</th>
+              <th class="numeric">Duels won %</th>
+              <th class="numeric">Pass accuracy %</th>
+            </tr>
+          </thead>
+          <tbody id="players-body">
+            <tr class="placeholder">
+              <td colspan="11">Loading players…</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="empty-state" id="empty-state" hidden>
+          <p>No players match the current filters. Adjust your search and try again.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Built with <span aria-hidden="true">⚽</span> by
+        <code>scouting_ml</code>. Data source: Transfermarkt &amp; Sofascore.
+      </p>
+    </footer>
+  </body>
+</html>

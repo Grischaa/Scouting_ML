@@ -10,30 +10,30 @@ from bs4 import BeautifulSoup  # add at top with other imports
 import pandas as pd
 import unicodedata
 from scouting_ml.utils.import_guard import *  # noqa: F403
-from scouting_ml.tm_scraper import fetch
+from scouting_ml.tm.tm_scraper import fetch
 from scouting_ml.paths import ensure_dirs, tm_html
 
 
 def _parse_team_html(html_path: Path) -> pd.DataFrame:
     """Parse a Transfermarkt *team* page HTML into a DataFrame."""
     try:
-        from scouting_ml.tm_parser import parse_tm_team  # preferred
+        from scouting_ml.tm.tm_parser import parse_tm_team  # preferred
         return parse_tm_team(html_path)
     except (ImportError, AttributeError):
         pass
 
     try:
-        from scouting_ml.tm_parser import parse_tm_search  # fallback if compatible
-        df = parse_tm_search(html_path)
+        from scouting_ml.tm.tm_parser import parse_tm_search  # fallback if compatible
+        df = parse_tm_search(html_path.name)
         if df is None or (hasattr(df, "empty") and df.empty):
             raise ValueError(
                 "parse_tm_search returned no rows for a team page. "
-                "Please implement parse_tm_team(html_path) in scouting_ml.tm_parser."
+                "Please implement parse_tm_team(html_path) in scouting_ml.tm.tm_parser."
             )
         return df
     except (ImportError, AttributeError):
         raise RuntimeError(
-            "No suitable parser found. Implement parse_tm_team(html_path) in scouting_ml.tm_parser."
+            "No suitable parser found. Implement parse_tm_team(html_path) in scouting_ml.tm.tm_parser."
         )
 
 
