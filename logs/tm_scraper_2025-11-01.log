@@ -1,0 +1,40 @@
+2025-11-01 13:10:50 | WARNING  | [sofa] attempt 1/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all'q=Erling%20Haaland&sports=football'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 0.88s
+2025-11-01 13:10:51 | WARNING  | [sofa] attempt 2/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all'q=Erling%20Haaland&sports=football'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 1.52s
+2025-11-01 13:10:52 | WARNING  | [sofa] attempt 3/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all'q=Erling%20Haaland&sports=football'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 2.18s
+2025-11-01 13:10:54 | WARNING  | [sofa] attempt 4/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all'q=Erling%20Haaland&sports=football'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 2.86s
+2025-11-01 13:12:10 | WARNING  | [sofa] attempt 1/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 0.83s
+2025-11-01 13:12:11 | WARNING  | [sofa] attempt 2/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 1.62s
+2025-11-01 13:12:12 | WARNING  | [sofa] attempt 3/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 2.25s
+2025-11-01 13:12:15 | WARNING  | [sofa] attempt 4/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 2.87s
+2025-11-01 13:13:34 | WARNING  | [sofa] attempt 1/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all?q=austrian%20bundesliga&sports=football'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 0.79s
+2025-11-01 13:13:35 | WARNING  | [sofa] attempt 2/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all?q=austrian%20bundesliga&sports=football'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 1.47s
+2025-11-01 13:13:36 | WARNING  | [sofa] attempt 3/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all?q=austrian%20bundesliga&sports=football'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 2.22s
+2025-11-01 13:13:38 | WARNING  | [sofa] attempt 4/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/search/all?q=austrian%20bundesliga&sports=football'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 2.94s
+2025-11-01 13:14:34 | WARNING  | [sofa] attempt 1/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/unique-tournament/197'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 0.97s
+2025-11-01 13:14:35 | WARNING  | [sofa] attempt 2/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/unique-tournament/197'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 1.73s
+2025-11-01 13:14:37 | WARNING  | [sofa] attempt 3/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/unique-tournament/197'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 2.39s
+2025-11-01 13:14:39 | WARNING  | [sofa] attempt 4/4 failed: Client error '403 Forbidden' for url 'https://api.sofascore.com/api/v1/unique-tournament/197'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403 -> sleep 2.92s
+2025-11-01 13:32:42 | WARNING  | [sofa] attempt 1/4 failed: Client error '404 Not Found' for url 'https://sofascore.p.rapidapi.com/api/v1/unique-tournament/197'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404 -> sleep 0.90s
+2025-11-01 13:32:43 | WARNING  | [sofa] attempt 2/4 failed: Client error '404 Not Found' for url 'https://sofascore.p.rapidapi.com/api/v1/unique-tournament/197'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404 -> sleep 1.72s
+2025-11-01 13:32:45 | WARNING  | [sofa] attempt 3/4 failed: Client error '404 Not Found' for url 'https://sofascore.p.rapidapi.com/api/v1/unique-tournament/197'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404 -> sleep 2.20s
+2025-11-01 13:32:47 | WARNING  | [sofa] attempt 4/4 failed: Client error '404 Not Found' for url 'https://sofascore.p.rapidapi.com/api/v1/unique-tournament/197'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404 -> sleep 2.97s

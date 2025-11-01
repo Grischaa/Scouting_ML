@@ -11,11 +11,9 @@ import pandas as pd
 def _norm_name(s: str) -> str:
     if not isinstance(s, str):
         return ""
-    # remove accents
     s = unicodedata.normalize("NFKD", s)
     s = "".join(ch for ch in s if not unicodedata.combining(ch))
     s = s.lower().strip()
-    # collapse spaces, drop dots
     s = re.sub(r"[.]", "", s)
     s = re.sub(r"\s+", " ", s)
     return s
@@ -23,54 +21,73 @@ def _norm_name(s: str) -> str:
 
 def merge_tm_sofa(
     tm_path: str = "data/processed/austrian_bundesliga_2025-26_clean.csv",
-    sofa_path: str = "data/processed/sofa_players_seasons.csv",
+    sofa_path: str = "data/processed/sofa_austrian_bundesliga_25-26.csv",
     out_path: str = "data/processed/austrian_bundesliga_2025-26_with_sofa.csv",
 ) -> None:
     tm_df = pd.read_csv(tm_path)
     sofa_df = pd.read_csv(sofa_path)
 
-    # add normalized names
     tm_df["name_norm"] = tm_df["name"].apply(_norm_name)
     if "club" in tm_df.columns:
         tm_df["club_norm"] = tm_df["club"].apply(_norm_name)
     else:
         tm_df["club_norm"] = ""
 
-    sofa_df["player_name_norm"] = sofa_df["player_name"].apply(_norm_name)
+    rename_map = {
+        "player": "player_name",
+        "team": "team_name",
+        "player id": "sofa_player_id",
+        "team id": "sofa_team_id",
+    }
+    sofa_df = sofa_df.rename(columns={k: v for k, v in rename_map.items() if k in sofa_df.columns})
 
-    # ----- first pass: name + club -----
+    sofa_df["player_name_norm"] = sofa_df["player_name"].apply(_norm_name)
+    sofa_df["team_name_norm"] = sofa_df["team_name"].apply(_norm_name)
+    sofa_df["sofa_team_name"] = sofa_df["team_name"]
+    sofa_df = sofa_df.drop(columns=["team_name"])
+
+    base_cols = {"player_name", "player_name_norm", "team_name_norm", "sofa_team_name"}
+    value_cols = [c for c in sofa_df.columns if c not in base_cols]
+    rename_prefixed: dict[str, str] = {}
+    for col in value_cols:
+        if not col.startswith("sofa_"):
+            safe = col.replace(" ", "_")
+            rename_prefixed[col] = f"sofa_{safe}"
+    if rename_prefixed:
+        sofa_df = sofa_df.rename(columns=rename_prefixed)
+
+    sofa_value_cols = [c for c in sofa_df.columns if c.startswith("sofa_") and c not in {"sofa_team_name"}]
+
     merged = tm_df.merge(
         sofa_df,
         left_on=["name_norm", "club_norm"],
-        right_on=["player_name_norm", "player_name_norm"],  # club often missing in Sofascore season files
+        right_on=["player_name_norm", "team_name_norm"],
         how="left",
-        suffixes=("", "_sofa"),
     )
-
-    # that was too naive — Sofascore season files don’t have team by default.
-    # So a better way is: join just on name_norm, then later you can filter manually.
-    # We'll do a second pass for rows that stayed empty.
 
     mask_unmatched = merged["sofa_player_id"].isna()
     if mask_unmatched.any():
-        # join only on name
-        tmp = tm_df.loc[mask_unmatched, ["name_norm"]].merge(
-            sofa_df[["player_name_norm", "sofa_player_id", "season_id", "appearances", "minutes", "goals", "assists", "rating"]],
-            left_on="name_norm",
-            right_on="player_name_norm",
-            how="left",
+        fallback = sofa_df.drop_duplicates("player_name_norm")
+        fallback = fallback[["player_name_norm", "team_name_norm", "sofa_team_name"] + sofa_value_cols]
+        tmp = (
+            merged.loc[mask_unmatched, ["name_norm"]]
+            .reset_index()
+            .merge(
+                fallback,
+                left_on="name_norm",
+                right_on="player_name_norm",
+                how="left",
+            )
+            .groupby("index", as_index=False)
+            .first()
+            .set_index("index")
         )
-        # now fill back
-        merged.loc[mask_unmatched, "sofa_player_id"] = tmp["sofa_player_id"].values
-        merged.loc[mask_unmatched, "sofa_season_id"] = tmp["season_id"].values
-        merged.loc[mask_unmatched, "sofa_appearances"] = tmp["appearances"].values
-        merged.loc[mask_unmatched, "sofa_minutes"] = tmp["minutes"].values
-        merged.loc[mask_unmatched, "sofa_goals"] = tmp["goals"].values
-        merged.loc[mask_unmatched, "sofa_assists"] = tmp["assists"].values
-        merged.loc[mask_unmatched, "sofa_rating"] = tmp["rating"].values
+        for col in ["team_name_norm", "sofa_team_name"] + sofa_value_cols:
+            updates = pd.Series(tmp[col], index=tmp.index)
+            merged.loc[tmp.index, col] = updates.values
 
-    # final tidy columns
     merged["sofa_matched"] = merged["sofa_player_id"].notna().astype(int)
+    merged = merged.drop(columns=["name_norm", "club_norm", "player_name_norm", "team_name_norm"], errors="ignore")
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -79,7 +96,7 @@ def merge_tm_sofa(
     print(f"[merge_tm_sofa] Matched {merged['sofa_matched'].sum()} / {len(merged)} players")
 
 
-def main():
+def main() -> None:
     merge_tm_sofa()
 
 

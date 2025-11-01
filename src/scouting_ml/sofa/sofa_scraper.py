@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import urlparse
 from scouting_ml.utils.import_guard import *  # noqa: F403
 import httpx
 import typer
@@ -32,10 +33,10 @@ DEFAULT_UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/124.0.0.0 Safari/537.36"
 )
-# Some endpoints you’ll likely use often (can be extended freely)
+# Some endpoints you'll likely use often (can be extended freely)
 ENDPOINT_SHORTCUTS = {
     # Search
-    "search_player": "/search/all?q={query}&sports=football",  # returns players, teams, etc.
+    "search_player": "/search/all'q={query}&sports=football",  # returns players, teams, etc.
     # Player
     "player_info": "/player/{playerId}",
     "player_seasons": "/player/{playerId}/unique-tournament/seasons",  # available seasons by competition
@@ -62,7 +63,7 @@ DEFAULT_MAX_RETRIES = 4
 DEFAULT_BACKOFF = 0.7  # seconds base, + jitter
 
 # Where we put Sofascore raw JSONs
-SOFA_ROOT = RAW_DIR / "sofascore"  # …/data/raw/sofascore   (from paths.py)
+SOFA_ROOT = RAW_DIR / "sofascore"  # data/raw/sofascore (from paths.py)
 # Structured subfolders
 SUBDIRS = {
     "player": SOFA_ROOT / "players",
@@ -138,6 +139,9 @@ class SofaClient:
                 "User-Agent": DEFAULT_UA,
                 "Accept": "application/json, */*;q=0.1",
                 "Accept-Language": "en-US,en;q=0.9,de;q=0.8",
+                "Referer": "https://www.sofascore.com/",
+                "Origin": "https://www.sofascore.com",
+                "Cache-Control": "no-cache",
                 **(cfg.headers or {}),
             },
             http2=cfg.http2,
@@ -178,9 +182,9 @@ class SofaClient:
 
     # ---- High-level convenience ----
 
-    def get(self, api_path: str, **tpl_vars: Any) -> Dict[str, Any]:
+    def get(self, api_path: str, *, params: Optional[Dict[str, Any]] = None, **tpl_vars: Any) -> Dict[str, Any]:
         path = _expand_template(api_path, **tpl_vars)
-        return self._request("GET", path)
+        return self._request("GET", path, params=params)
 
     # Shortcut wrappers for common tasks
     def search_player(self, query: str) -> Dict[str, Any]:
@@ -226,7 +230,7 @@ def _out_path_misc(name: str) -> Path:
 # CLI Commands
 # ------------------------------
 
-def _mk_client(
+def create_client(
     base: str = DEFAULT_BASE,
     rps: float = DEFAULT_RATE_LIMIT_RPS,
     timeout: float = 30.0,
@@ -234,8 +238,29 @@ def _mk_client(
     backoff: float = DEFAULT_BACKOFF,
     http2: bool = False,
 ) -> SofaClient:
-    cfg = SofaConfig(base_url=base, rps=rps, timeout=timeout, retries=retries, backoff=backoff, http2=http2)
+    extra_headers: Dict[str, str] = {}
+    rapidapi_key = os.environ.get("RAPIDAPI_KEY")
+    parsed_host = urlparse(base).netloc or urlparse(DEFAULT_BASE).netloc
+    if rapidapi_key and ".rapidapi." in parsed_host:
+        extra_headers.update(
+            {
+                "x-rapidapi-key": rapidapi_key,
+                "x-rapidapi-host": parsed_host,
+            }
+        )
+    cfg = SofaConfig(
+        base_url=base,
+        rps=rps,
+        timeout=timeout,
+        retries=retries,
+        backoff=backoff,
+        http2=http2,
+        headers=extra_headers or None,
+    )
     return SofaClient(cfg)
+
+# Backwards compatibility alias for earlier script versions.
+_mk_client = create_client
 
 @app.command()
 def search_player(
@@ -247,7 +272,7 @@ def search_player(
 ):
     """Search Sofascore for players."""
     ensure_dirs()
-    client = _mk_client(base=base, rps=rps, http2=http2)
+    client = create_client(base=base, rps=rps, http2=http2)
     out = _out_path_search(query)
     if out.exists() and not overwrite:
         typer.echo(f"[sofa] Exists -> {out}")
@@ -274,7 +299,7 @@ def fetch(
       python -m scouting_ml.sofa_scraper fetch "/player/{playerId}/season/{seasonId}" --var playerId=123 --var seasonId=54186 --out players/123/season_54186.json
     """
     ensure_dirs()
-    client = _mk_client(base=base, rps=rps, http2=http2)
+    client = create_client(base=base, rps=rps, http2=http2)
 
     # parse params & vars
     q: Dict[str, Any] = {}
@@ -286,7 +311,8 @@ def fetch(
         k, v = kv.split("=", 1)
         tpl[k] = v
 
-    data = client.get(path, **tpl)
+    params_dict = q or None
+    data = client.get(path, params=params_dict, **tpl)
     # destination
     if out:
         dest = SOFA_ROOT / out
@@ -317,7 +343,7 @@ def player_harvest(
       - transfers.json (optional)
     """
     ensure_dirs()
-    client = _mk_client(base=base, rps=rps, http2=http2)
+    client = create_client(base=base, rps=rps, http2=http2)
 
     # info
     info_path = _out_path_player(player_id, "player_info")
@@ -385,7 +411,7 @@ def team_harvest(
       - (optional) stats for each player season
     """
     ensure_dirs()
-    client = _mk_client(base=base, rps=rps, http2=http2)
+    client = create_client(base=base, rps=rps, http2=http2)
 
     # team info
     tinfo = _out_path_team(team_id, "team_info")
@@ -447,7 +473,7 @@ def run_config(
       - params: optional query params map
     """
     ensure_dirs()
-    client = _mk_client(base=base, rps=rps, http2=http2)
+    client = create_client(base=base, rps=rps, http2=http2)
 
     cfg = yaml.safe_load(config.read_text(encoding="utf-8"))
     jobs: List[Dict[str, Any]] = cfg if isinstance(cfg, list) else cfg.get("jobs", [])
