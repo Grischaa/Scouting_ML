@@ -22,10 +22,8 @@ HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9,de;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Cache-Control": "no-cache",
-    "Pragma": "no-cache",
-    "Connection": "keep-alive",
+    "Referer": "https://www.transfermarkt.de/",
+    "Cookie": "_sp_v1_ss=1:H4sIA...; ...; tis=EP280%3A4441%7CEP286%3A4441",
 }
 
 # Keep it simple (HTTP/1.1) to avoid extra deps; flip to True if you installed httpx[http2]

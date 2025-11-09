@@ -89,26 +89,26 @@ def process_club(
     *,
     league_name: str,
     season_label: str,
-    polite_sleep: float = 3.0,
+    polite_sleep: float = 5.0,
     skip_existing: bool = False,
     force: bool = False,
     ) -> Dict[str, str]:
 
     ensure_dirs()
 
-    out_name = f"{club.slug}_team.html"
-    team_processed_csv = Path("data/processed") / f"{club.slug}_team_players.csv"
+    season_slug = season_label.replace("/", "-").replace(" ", "_")
+    out_name = f"{club.slug}_{season_slug}_team.html"
+    team_processed_csv = Path("data/processed") / f"{club.slug}_{season_slug}_team_players.csv"
 
     # 🟢 short-circuit
     if skip_existing and team_processed_csv.exists() and not force:
         print(f"[skip] {club.name} already processed -> {team_processed_csv.name}")
         return {
             "processed_csv": str(team_processed_csv),
-            "normalized_csv": str(Path("data/processed") / f"{club.slug}_players_normalised.csv"),
-            "stats_csv": str(Path("data/interim/tm") / f"{club.slug}_team_stats.csv"),
+            "normalized_csv": str(Path("data/processed") / f"{club.slug}_{season_slug}_players_normalised.csv"),
+            "stats_csv": str(Path("data/interim/tm") / f"{club.slug}_{season_slug}_team_stats.csv"),
         }
     # A) run pipeline
-    out_name = f"{club.slug}_team.html"
     pipeline_cmd = [
         "python", "-m", "scouting_ml.tm.pipeline_tm",
         "--url", club.squad_url,
@@ -132,7 +132,7 @@ def process_club(
     time.sleep(polite_sleep)
 
     # B) normalize
-    norm_csv = Path("data/processed") / f"{club.slug}_players_normalised.csv"
+    norm_csv = Path("data/processed") / f"{club.slug}_{season_slug}_players_normalised.csv"
     normalize_cmd = [
         "python", "-m", "scouting_ml.tm.normalize_tm",
         "--in", str(team_processed_csv),
@@ -145,7 +145,7 @@ def process_club(
     time.sleep(polite_sleep)
 
     # C) stats
-    stats_csv = Path("data/interim/tm") / f"{club.slug}_team_stats.csv"
+    stats_csv = Path("data/interim/tm") / f"{club.slug}_{season_slug}_team_stats.csv"
     stats_csv.parent.mkdir(parents=True, exist_ok=True)
     stats_cmd = [
         "python", "-m", "scouting_ml.tm.build_tm_stats",
@@ -178,7 +178,7 @@ def main():
     ap.add_argument("--league-name", help="Human-readable league label.")
     ap.add_argument("--season", help="Display season label (e.g. '2025/26').")
     ap.add_argument("--season-id", type=int, default=None)
-    ap.add_argument("--sleep", type=float, default=3.0)
+    ap.add_argument("--sleep", type=float, default=5.0)
     ap.add_argument("--merge-stats", action="store_true")
     ap.add_argument("--skip-existing",action="store_true",help="Skip clubs that already have a processed CSV.")
     ap.add_argument("--force-club",action="append",default=[],help="Club slug(s) to force reprocess even if they exist (can repeat).")
