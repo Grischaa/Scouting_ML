@@ -20,6 +20,52 @@ def load_dataset(path: str) -> pd.DataFrame:
     return df.copy()
 
 
+def remove_id_like_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop identifier columns to avoid leakage (e.g., player_id, team_id)."""
+    id_like = {
+        "id",
+        "player_id",
+        "team_id",
+        "club_id",
+        "sofa_player_id",
+        "sofa_team_id",
+        "transfermarkt_id",
+    }
+    to_drop: list[str] = []
+    for col in df.columns:
+        low = col.lower()
+        if low in id_like or low.endswith("_id") or low.startswith("id_"):
+            to_drop.append(col)
+    if to_drop:
+        df = df.drop(columns=to_drop)
+        print(f"[clean] dropped ID-like columns: {to_drop}")
+    return df
+
+
+def drop_per90_base_duplicates(df: pd.DataFrame) -> pd.DataFrame:
+    """Prefer per90 stats over raw totals when both exist to reduce redundancy."""
+    to_drop: list[str] = []
+    for col in df.columns:
+        if col.endswith("_per90"):
+            base = col[: -len("_per90")]
+            if base in df.columns:
+                to_drop.append(base)
+    if to_drop:
+        df = df.drop(columns=to_drop)
+        print(f"[clean] dropped raw totals in favor of per90 versions: {to_drop}")
+    return df
+
+
+def add_age_bucket(df: pd.DataFrame) -> pd.DataFrame:
+    if "age" not in df.columns:
+        return df
+    bins = [0, 21, 24, 28, 33, 100]
+    labels = ["u21", "21-24", "25-28", "29-33", "34+"]
+    df = df.copy()
+    df["age_bucket"] = pd.cut(df["age"], bins=bins, labels=labels, right=False)
+    return df
+
+
 def build_pipeline(numeric_cols: List[str], categorical_cols: List[str]) -> Pipeline:
     numeric_pipeline = Pipeline(
         steps=[
@@ -108,15 +154,57 @@ def infer_categorical_columns(df: pd.DataFrame) -> List[str]:
     return cats
 
 
+def generate_shap_plot(
+    pipe: Pipeline, X_sample: pd.DataFrame, output_dir: str = "logs/shap", max_display: int = 20
+) -> Path:
+    try:
+        import shap  # type: ignore
+        import matplotlib.pyplot as plt
+    except ImportError as exc:
+        raise RuntimeError("SHAP plotting requires `pip install shap matplotlib`.") from exc
+
+    if len(X_sample) == 0:
+        raise ValueError("Cannot compute SHAP values with an empty sample.")
+
+    prep = pipe.named_steps["prep"]
+    model = pipe.named_steps["hist"]
+
+    sample = X_sample.sample(min(500, len(X_sample)), random_state=42)
+    transformed = prep.transform(sample)
+    if hasattr(transformed, "todense"):
+        transformed = np.asarray(transformed.todense())
+    else:
+        transformed = np.asarray(transformed)
+    feature_names = prep.get_feature_names_out()
+
+    explainer = shap.Explainer(model, transformed, feature_names=feature_names)
+    shap_values = explainer(transformed, check_additivity=False)
+
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "shap_global_bar.png"
+
+    shap.plots.bar(shap_values, max_display=max_display, show=False)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=200)
+    plt.close()
+    print(f"[shap] saved global bar plot → {out_path}")
+    return out_path
+
+
 def main(
     dataset_path: str = "data/model/big5_players_clean.parquet",
     test_season: str = "2024/25",
     output_path: str = "data/model/big5_predictions_2024-25.csv",
     run_grid: bool = False,
+    save_shap: bool = False,
 ) -> None:
     df = load_dataset(dataset_path)
 
     df = df[df["log_market_value"].notna()].copy()
+    df = remove_id_like_columns(df)
+    df = drop_per90_base_duplicates(df)
+    df = add_age_bucket(df)
 
     numeric_cols = infer_numeric_columns(df)
     categorical_cols = infer_categorical_columns(df)
@@ -143,6 +231,9 @@ def main(
     else:
         pipe.fit(X_train, y_train)
 
+    if save_shap:
+        generate_shap_plot(pipe, X_train, output_dir="logs/shap")
+
     log_preds = pipe.predict(X_test)
     preds = add_predictions(test, log_preds)
 
@@ -167,10 +258,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Run a coarse grid search over HistGradientBoosting hyperparameters.",
     )
+    parser.add_argument(
+        "--shap",
+        action="store_true",
+        help="Generate a SHAP global importance plot on a sample of the training data.",
+    )
     args = parser.parse_args()
     main(
         dataset_path=args.dataset,
         test_season=args.test_season,
         output_path=args.output,
         run_grid=args.grid,
+        save_shap=args.shap,
     )
