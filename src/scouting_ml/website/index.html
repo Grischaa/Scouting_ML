@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Football Scouting ML Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- ======================== NAVBAR ======================== -->
+<div id="navbar">
+  <div id="title">Scouting ML Dashboard</div>
+
+  <div id="nav-controls">
+    <div class="nav-group">
+      <label>League</label>
+      <select id="leagueSelect"></select>
+    </div>
+
+    <div class="nav-group">
+      <label>Season</label>
+      <select id="seasonSelect"></select>
+    </div>
+
+    <input id="searchInput" placeholder="Search players…">
+
+    <button id="filterToggleBtn">Filters</button>
+    <button id="compareToggleBtn">Compare</button>
+    <button id="exportBtn">Export CSV</button>
+  </div>
+</div>
+
+
+<!-- ======================== SLIDE-IN FILTER PANEL ======================== -->
+<div id="filterPanel">
+  <div id="filterHeader">
+    <h2>Filters</h2>
+    <button id="closeFilterBtn">✕</button>
+  </div>
+
+  <div id="filterContent">
+
+    <div class="filter-block">
+      <label>Club</label>
+      <select id="filterClub"></select>
+    </div>
+
+    <div class="filter-block">
+      <label>Position</label>
+      <select id="filterPosition"></select>
+    </div>
+
+    <div class="filter-block">
+      <label>Age Band</label>
+      <select id="filterAgeBand">
+        <option value="">All</option>
+        <option value="u18">U18</option>
+        <option value="18-22">18–22</option>
+        <option value="23-26">23–26</option>
+        <option value="27-30">27–30</option>
+        <option value="30+">30+</option>
+      </select>
+    </div>
+
+    <div class="filter-block">
+      <label>Market Value (max €M)</label>
+      <input type="range" id="valueSlider" min="0" max="100" value="100">
+      <span id="valueSliderLabel"></span>
+    </div>
+
+    <div class="filter-block">
+      <label>Minutes Played (min)</label>
+      <input type="range" id="minutesSlider" min="0" max="3000" value="0">
+      <span id="minutesSliderLabel"></span>
+    </div>
+
+    <button id="resetFiltersBtn" class="danger-btn">Reset Filters</button>
+  </div>
+</div>
+
+
+<!-- ======================== PLAYER TABLE ======================== -->
+<div id="mainContent">
+  <table id="playersTable">
+    <thead>
+      <tr>
+        <th data-col="name">Name</th>
+        <th data-col="club">Club</th>
+        <th data-col="position_main">Pos</th>
+        <th data-col="age">Age</th>
+        <th data-col="market_value_eur">Value</th>
+        <th data-col="sofa_minutesPlayed">Min</th>
+        <th data-col="sofa_goals">G</th>
+        <th data-col="sofa_assists">A</th>
+        <th data-col="sofa_expectedGoals">xG</th>
+        <th data-col="actions">⚙</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div id="pagination"></div>
+</div>
+
+
+<!-- ======================== PLAYER POPUP ======================== -->
+<div id="playerPopup" class="modal">
+  <div class="modal-content">
+    <span class="close-popup" id="closePlayerPopup">✕</span>
+    <h2 id="popupName"></h2>
+    <div id="popupMeta"></div>
+
+    <canvas id="popupRadar" width="400" height="400"></canvas>
+
+    <button id="exportPlayerBtn">Export Player JSON</button>
+  </div>
+</div>
+
+
+<!-- ======================== COMPARISON PANEL ======================== -->
+<div id="comparisonPanel">
+  <div id="comparisonHeader">
+    <h2>Player Comparison</h2>
+    <button id="closeComparisonBtn">✕</button>
+  </div>
+
+  <div id="comparisonList"></div>
+
+  <canvas id="comparisonRadar" width="500" height="500"></canvas>
+
+  <button id="clearComparisonBtn" class="danger-btn">Clear Comparison</button>
+</div>
+
+
+<!-- ======================== SCRIPT LOADING ======================== -->
+<script src="static/data/players.js"></script>
+<script src="frontend.js"></script>
+<script src="components/filters.js"></script>
+<script src="components/table.js"></script>
+<script src="components/popup.js"></script>
+<script src="components/charts.js"></script>
+<script src="components/comparison.js"></script>
+<script src="components/export.js"></script>
+
+</body>
+</html>
