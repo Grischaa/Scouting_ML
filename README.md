@@ -301,3 +301,21 @@ If I had more time and data, the next steps would include:
 Overall, the project gave me hands-on experience with end-to-end
 machine-learning for a realistic football analytics problem, from raw
 data to model evaluation and interpretation.
+
+
+## Appendix - How to run this project in local execution
+
+pip install lightgbm xgboost shap scikit-learn pandas numpy matplotlib
+
+python -m scouting_ml.models.train_market_value_full `
+>>   --dataset "data/model/big5_players_clean.parquet" `
+>>   --test-season "2024/25" `
+>>   --output "data/model/big5_predictions_full_v2.csv" `
+>>   --trials 60
+>> 
+
+Outputs then will appear in: 
+
+data/model/
+logs/shap/
+
