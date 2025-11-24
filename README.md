@@ -7,14 +7,16 @@ football player market values in Europe’s “Big Five” leagues
 (English Premier League, La Liga, Serie A, Bundesliga and Ligue 1).
 I approximate market value using Transfermarkt’s estimated market values
 and try to predict them from season-level performance statistics
-collected from SofaScore, together with age and league information.
+collected from SofaScore using an API, together with age and league information
+from Transfermarkt using a scraper.
 
 Concretely, I formulate this as a supervised regression problem on the
-logarithm of a player’s market value. I compare a simple global baseline
-model to a more sophisticated, position-specific gradient boosting
-approach and then analyse feature importance with SHAP to better
-understand which attributes drive value for goalkeepers, defenders,
-midfielders and forwards.
+logarithm of a player’s market value. Concretely, I formulate the task
+as a supervised regression problem on the logarithm of a player’s market value.
+Instead of a single global model, I train fully position-specific gradient
+boosting models (one per role: GK/DF/MF/FW) and evaluate them on a held-out
+test season (2024/25). I then use SHAP to interpret which performance metrics
+drive player value by position.
 
 The models are evaluated on a hold-out test season (2024/25), which
 simulates the realistic task of predicting values for an upcoming
@@ -24,7 +26,8 @@ season from past seasons’ data.
 
 ## 2. Data – what data I am using
 
-The project is based on a pre-processed dataset:
+The project is based on data that I have collected my self scraping Transfermarkt
+and using an API to get relevant performance metrics from Sofascore:
 
 - `big5_players_clean.parquet`
 
@@ -55,9 +58,10 @@ volume stats are mostly converted into per-90 values during preprocessing
 (e.g. `sofa_goals_per90`, `sofa_tackles_per90`).
 
 I restrict the dataset to players with **a minimum number of minutes**
-(≥ 450) and non-missing market values to avoid extreme noise from
-fringe players. The 2024/25 season is **completely held out** as test
-data; all earlier seasons are used for model training and tuning.
+(≥ 450, which corresponds to around 5 full games) and non-missing market
+values to avoid extreme noise from fringe players. The 2024/25 season is 
+**completely held out** as testdata; all earlier seasons are used for model 
+training and tuning.
 
 ---
 
@@ -115,18 +119,7 @@ for use in scikit-learn pipelines with imputation and one-hot encoding.
 
 ## 4. Methods – which ML models and why
 
-I apply two main types of models:
-
-1. **Baseline model: global Ridge regression**
-
-   - A linear model with L2 regularisation (Ridge) trained on all
-     positions combined.
-   - Categorical features are one-hot encoded, numeric features are
-     standardised.
-   - This baseline is simple, fast to train, and provides a transparent
-     reference level of performance.
-
-2. **Main model: position-specific LightGBM regressors**
+**Position-specific LightGBM regressors**
 
    - Gradient-boosted decision trees (LightGBM) trained **separately for
      each position group**: goalkeepers (GK), defenders (DF),
@@ -147,40 +140,29 @@ For interpretability, I use **SHAP (SHapley Additive Explanations)** to:
 - inspect which features contribute positively or negatively to the
   predicted log market value for different positions.
 
-This combination (linear baseline + tree-based models + SHAP) balances
-technical sophistication with interpretability, which is important for
-a realistic football scouting use case.
-
 ---
 
-## 5. Hyper-parameter tuning – my approach
+## 5. Hyper-parameter Tuning – Summary
 
-Hyper-parameter tuning is done in two stages:
+Hyper-parameter tuning is fully automated inside the pipeline and runs separately for each position group (GK/DF/MF/FW):
 
-1. **Exploratory tuning (outside the notebook)**
+- I use Optuna (≈60 trials per position) to tune a LightGBM model on the preprocessed training data. The search  
+  optimises learning rate, depth, leaves, sampling, and regularisation, using 3-fold CV on
+  log_market_value.
 
-   - I first conducted exploratory tuning runs for LightGBM using
-     simple grid search and, in some experiments, Optuna on the training
-     seasons only.
-   - The objective was to minimise the RMSE on the **log market value**
-     using 3-fold cross-validation.
-   - These runs suggested a reasonably stable region of good parameters
-     (e.g. several hundred to ~1500 trees, moderate learning rate and
-     subsampling).
+    -   I used Optuna because it provides an efficient and automated way to tune complex gradient-boosting 
+        models. Unlike manual grid search, Optuna uses Bayesian optimisation to explore hyper-parameters intelligently, focusing on promising regions rather than testing every combination. This makes it significantly faster and more effective for models like LightGBM, where parameters interact non-linearly.
 
-2. **Fixed, documented configuration (inside the notebook)**
+- After tuning, I train the best LightGBM model and use SHAP to select the top 25 most important features for    
+  that position. This reduces noise and keeps only the strongest predictors.
 
-   - To keep the final notebook reproducible and within reasonable
-     runtime, I fix a single LightGBM configuration per position
-     (same structure, possibly slightly adjusted depth/regularisation).
-   - I document the chosen hyper-parameters in the notebook and apply
-     them consistently for training on all pre-2024/25 seasons and
-     evaluation on 2024/25.
-   - The Ridge baseline uses a small `GridSearchCV` over α to pick the
-     regularisation strength that minimises validation MAE.
+- Final models are then fitted on the reduced feature set:
 
-This approach shows that I understand hyper-parameter tuning in
-principle, but keeps the final deliverable focused and efficient.
+    - GK → tuned LightGBM
+
+    - DF/MF/FW → ensemble (tuned LightGBM + XGBoost + CatBoost) stacked with an ElasticNet meta-model.
+
+This approach ensures tuning is reproducible, position-specific, and computationally efficient while maximising out-of-sample performance.
 
 ---
 
@@ -257,10 +239,8 @@ SHAP analysis supports the quantitative results:
 
 This project demonstrates that:
 
-- A relatively standard machine-learning pipeline (feature engineering,
-  leakage control, baseline linear model, tree-based models, and SHAP)
-  can capture a meaningful fraction of the structure in football player
-  market values.
+- A relatively standard machine-learning pipeline can capture a meaningful 
+  fraction of the structure in football player market values.
 - Position-specific models make sense: the determinants of value are
   clearly different for goalkeepers, defenders, midfielders and forwards.
 - Even with fairly rich performance data, there remains substantial
@@ -278,10 +258,11 @@ From a learning perspective, the main takeaways for me are:
   across the value distribution.
 - **Temporal validation**: Splitting by season rather than random rows
   is crucial when the real task is to predict future seasons.
-- **Model comparison and interpretability**: Combining a simple
-  baseline, a more flexible tree-based model and SHAP allowed me to
-  not only improve accuracy but also explain which features were driving
-  the predictions in football terms.
+- **Model comparison and interpretability**: The combination of position-specific 
+  gradient-boosted models and SHAP explainability provided both strong
+  predictive accuracy and interpretable insights, which is essential 
+  for realistic scouting and valuation work.
+
 
 I did use Generative AI (e.g. ChatGPT) during the project, mainly as a
 coding assistant for structuring the pipeline, debugging sklearn /
@@ -295,8 +276,6 @@ If I had more time and data, the next steps would include:
 - incorporating **temporal dynamics** (multiple seasons per player and
   value trajectories),
 - including contract, wage and injury information where available,
-- experimenting with **ranking losses** or quantile regression that
-  better reflect scouting and transfer decision-making.
 
 Overall, the project gave me hands-on experience with end-to-end
 machine-learning for a realistic football analytics problem, from raw
@@ -307,6 +286,18 @@ data to model evaluation and interpretation.
 
 pip install lightgbm xgboost shap scikit-learn pandas numpy matplotlib
 
+$env:PYTHONPATH = "src"
+
+PS C:\Users\chris\Scout_Pred> python -m scouting_ml.models.build_dataset `          
+>>   --data-dir "data/processed/Clubs combined" `
+>>   --output "data/model/big5_players.parquet"        
+
+PS C:\Users\chris\Scout_Pred> python -m scouting_ml.models.clean_dataset `          
+>>   --input "data/model/big5_players.parquet" ` 
+>>   --output "data/model/big5_players_clean.parquet" `
+>>   --min-minutes 450
+>>               
+   
 python -m scouting_ml.models.train_market_value_full `
 >>   --dataset "data/model/big5_players_clean.parquet" `
 >>   --test-season "2024/25" `

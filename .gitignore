@@ -5,8 +5,11 @@ __pycache__/
 *.pyc
 
 # data & secrets
-data/
+data/*
+!data/model/
+!data/model/**
 .env
+
 
 # test / cache
 .pytest_cache/
