@@ -288,16 +288,6 @@ pip install lightgbm xgboost shap scikit-learn pandas numpy matplotlib
 
 $env:PYTHONPATH = "src"
 
-PS C:\Users\chris\Scout_Pred> python -m scouting_ml.models.build_dataset `          
->>   --data-dir "data/processed/Clubs combined" `
->>   --output "data/model/big5_players.parquet"        
-
-PS C:\Users\chris\Scout_Pred> python -m scouting_ml.models.clean_dataset `          
->>   --input "data/model/big5_players.parquet" ` 
->>   --output "data/model/big5_players_clean.parquet" `
->>   --min-minutes 450
->>               
-   
 python -m scouting_ml.models.train_market_value_full `
 >>   --dataset "data/model/big5_players_clean.parquet" `
 >>   --test-season "2024/25" `
