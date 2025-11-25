@@ -288,14 +288,14 @@ pip install lightgbm xgboost shap scikit-learn pandas numpy matplotlib
 
 $env:PYTHONPATH = "src"
 
-python -m scouting_ml.models.train_market_value_full `    
---dataset "data/model/big5_players_clean.parquet" `    
---test-season "2024/25" `    
---output "data/model/big5_predictions_full_v2.csv" `    
---trials 60     
+python -m scouting_ml.models.train_market_value_full `
+--dataset "data/model/big5_players_clean.parquet" `
+--test-season "2024/25" `
+--output "data/model/big5_predictions_full_v2.csv" `
+--trials 60
 
 Outputs then will appear in: 
 
-data/model/     
+data/model/
 logs/shap/
 
