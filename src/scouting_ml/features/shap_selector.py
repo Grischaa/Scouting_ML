@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import shap
 from sklearn.compose import ColumnTransformer
+import matplotlib
+matplotlib.use("Agg")
 
 
 def _base_from_feature_name(name: str) -> str:

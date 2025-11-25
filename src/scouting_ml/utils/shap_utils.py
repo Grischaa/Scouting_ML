@@ -5,6 +5,8 @@ import pandas as pd
 import shap
 import matplotlib.pyplot as plt
 from sklearn.compose import ColumnTransformer
+import matplotlib
+matplotlib.use("Agg")
 
 
 def save_tree_shap_bar(
