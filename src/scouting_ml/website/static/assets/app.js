@@ -140,6 +140,11 @@ const el = {
   detailStrengths: document.getElementById("detail-strengths"),
   detailLevers: document.getElementById("detail-levers"),
   detailHistory: document.getElementById("detail-history"),
+  detailArchetype: document.getElementById("detail-archetype"),
+  detailArchetypeCandidates: document.getElementById("detail-archetype-candidates"),
+  detailFormations: document.getElementById("detail-formations"),
+  detailRadar: document.getElementById("detail-radar"),
+  detailRadarMeta: document.getElementById("detail-radar-meta"),
   detailRisks: document.getElementById("detail-risks"),
   detailExportJson: document.getElementById("detail-export-json"),
   detailExportCsv: document.getElementById("detail-export-csv"),
@@ -200,6 +205,15 @@ function parseNumberOr(value, fallback) {
 function safeText(value) {
   if (value === null || value === undefined || value === "") return "-";
   return String(value);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function firstFiniteNumber(...values) {
@@ -751,6 +765,188 @@ function renderPager() {
   el.nextBtn.disabled = state.loading || state.offset + state.count >= state.total;
 }
 
+function renderArchetypeProfile(playerType = null, { loading = false, error = "" } = {}) {
+  if (!el.detailArchetype || !el.detailArchetypeCandidates) return;
+  if (loading) {
+    el.detailArchetype.textContent = "Loading archetype profile...";
+    el.detailArchetypeCandidates.innerHTML = '<li class="risk-item risk-item--none">Loading archetype candidates...</li>';
+    return;
+  }
+  if (error) {
+    el.detailArchetype.textContent = "Archetype profile unavailable for this player.";
+    el.detailArchetypeCandidates.innerHTML = '<li class="risk-item risk-item--none">No archetype candidates available.</li>';
+    return;
+  }
+  if (!playerType || typeof playerType !== "object") {
+    el.detailArchetype.textContent = "Select a player to estimate archetype fit.";
+    el.detailArchetypeCandidates.innerHTML = '<li class="risk-item risk-item--none">No archetype candidates loaded.</li>';
+    return;
+  }
+
+  const archetype = safeText(playerType.archetype);
+  const tier = safeText(playerType.tier).toLowerCase();
+  const conf = Number(playerType.confidence_0_to_1);
+  const confText = Number.isFinite(conf) ? formatPct(conf) : "-";
+  const summary = playerType.summary_text
+    ? `${playerType.summary_text} Confidence: ${confText}.`
+    : `${archetype} profile (${tier} confidence ${confText}).`;
+  el.detailArchetype.textContent = summary;
+
+  const candidates = Array.isArray(playerType.candidates) ? playerType.candidates : [];
+  if (!candidates.length) {
+    el.detailArchetypeCandidates.innerHTML = '<li class="risk-item risk-item--none">No archetype candidates available.</li>';
+    return;
+  }
+  el.detailArchetypeCandidates.innerHTML = candidates
+    .slice(0, 3)
+    .map((cand) => {
+      const score = Number(cand?.score_0_to_1);
+      const coverage = Number(cand?.coverage_0_to_1);
+      const scoreText = Number.isFinite(score) ? formatPct(score) : "-";
+      const coverageText = Number.isFinite(coverage) ? formatPct(coverage) : "-";
+      return `<li class="risk-item">${safeText(cand?.name)} (fit ${scoreText} | coverage ${coverageText})</li>`;
+    })
+    .join("");
+}
+
+function renderFormationFitProfile(formationFit = null, { loading = false, error = "" } = {}) {
+  if (!el.detailFormations) return;
+  if (loading) {
+    el.detailFormations.innerHTML = '<li class="risk-item risk-item--none">Loading formation fit...</li>';
+    return;
+  }
+  if (error) {
+    el.detailFormations.innerHTML = '<li class="risk-item risk-item--none">Formation fit unavailable for this player.</li>';
+    return;
+  }
+  const recommended =
+    formationFit && typeof formationFit === "object" && Array.isArray(formationFit.recommended)
+      ? formationFit.recommended
+      : [];
+  if (!recommended.length) {
+    el.detailFormations.innerHTML = '<li class="risk-item risk-item--none">No formation fit recommendations available.</li>';
+    return;
+  }
+  el.detailFormations.innerHTML = recommended
+    .slice(0, 3)
+    .map((rec) => {
+      const fit = Number(rec?.fit_score_0_to_1);
+      const coverage = Number(rec?.coverage_0_to_1);
+      const fitText = Number.isFinite(fit) ? formatPct(fit) : "-";
+      const coverageText = Number.isFinite(coverage) ? formatPct(coverage) : "-";
+      return `<li class="risk-item"><strong>${safeText(rec?.formation)}</strong> as ${safeText(
+        rec?.role
+      )} | fit ${fitText} | coverage ${coverageText}</li>`;
+    })
+    .join("");
+}
+
+function renderRadarProfile(radarProfile = null, { loading = false, error = "" } = {}) {
+  if (!el.detailRadar || !el.detailRadarMeta) return;
+  if (loading) {
+    el.detailRadar.innerHTML = "";
+    el.detailRadarMeta.textContent = "Loading radar profile...";
+    return;
+  }
+  if (error) {
+    el.detailRadar.innerHTML = "";
+    el.detailRadarMeta.textContent = "Radar profile unavailable for this player.";
+    return;
+  }
+  if (!radarProfile || typeof radarProfile !== "object") {
+    el.detailRadar.innerHTML = "";
+    el.detailRadarMeta.textContent = "Select a player to render radar profile.";
+    return;
+  }
+
+  const axes = Array.isArray(radarProfile.axes) ? radarProfile.axes : [];
+  const usable = axes
+    .filter((axis) => axis && axis.available)
+    .map((axis) => {
+      const n = Number(axis.normalized_0_to_100);
+      return Number.isFinite(n)
+        ? {
+            label: safeText(axis.label),
+            normalized: Math.max(0, Math.min(100, n)),
+          }
+        : null;
+    })
+    .filter(Boolean);
+
+  const coverage = Number(radarProfile.coverage_0_to_1);
+  const coverageText = Number.isFinite(coverage) ? formatPct(coverage) : "-";
+  if (usable.length < 3) {
+    el.detailRadar.innerHTML = "";
+    el.detailRadarMeta.textContent = `Radar unavailable (coverage ${coverageText}).`;
+    return;
+  }
+
+  const cx = 160;
+  const cy = 160;
+  const radius = 108;
+  const levels = [0.25, 0.5, 0.75, 1.0];
+  const step = (Math.PI * 2) / usable.length;
+  const angleAt = (idx) => -Math.PI / 2 + idx * step;
+  const pointAt = (idx, scale) => {
+    const a = angleAt(idx);
+    const r = radius * scale;
+    return {
+      x: cx + r * Math.cos(a),
+      y: cy + r * Math.sin(a),
+    };
+  };
+  const pointsToString = (scaleFn) =>
+    usable
+      .map((_, idx) => {
+        const p = scaleFn(idx);
+        return `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+      })
+      .join(" ");
+
+  const grid = levels
+    .map((lvl) => {
+      const pts = pointsToString((idx) => pointAt(idx, lvl));
+      return `<polygon points="${pts}" class="radar-grid" />`;
+    })
+    .join("");
+  const axesLines = usable
+    .map((_, idx) => {
+      const p = pointAt(idx, 1);
+      return `<line x1="${cx}" y1="${cy}" x2="${p.x.toFixed(2)}" y2="${p.y.toFixed(2)}" class="radar-axis" />`;
+    })
+    .join("");
+  const labels = usable
+    .map((axis, idx) => {
+      const p = pointAt(idx, 1.16);
+      const c = Math.cos(angleAt(idx));
+      const anchor = Math.abs(c) < 0.18 ? "middle" : c > 0 ? "start" : "end";
+      return `<text x="${p.x.toFixed(2)}" y="${p.y.toFixed(2)}" text-anchor="${anchor}" class="radar-label">${escapeHtml(
+        axis.label
+      )}</text>`;
+    })
+    .join("");
+  const profilePts = pointsToString((idx) => pointAt(idx, usable[idx].normalized / 100.0));
+  const profileNodes = usable
+    .map((axis, idx) => {
+      const p = pointAt(idx, axis.normalized / 100.0);
+      return `<circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="3.6" class="radar-node">
+        <title>${escapeHtml(axis.label)}: ${formatNumber(axis.normalized)}/100</title>
+      </circle>`;
+    })
+    .join("");
+  el.detailRadar.innerHTML = `
+    <g>
+      ${grid}
+      ${axesLines}
+      <polygon points="${profilePts}" class="radar-profile"></polygon>
+      ${profileNodes}
+      ${labels}
+    </g>
+  `;
+  const ready = radarProfile.ready_for_plot === true ? "ready" : "limited";
+  el.detailRadarMeta.textContent = `Radar ${ready}. Coverage: ${coverageText}.`;
+}
+
 function clearDetail() {
   state.detailRequestId += 1;
   state.selectedRow = null;
@@ -763,6 +959,9 @@ function clearDetail() {
   el.detailStrengths.innerHTML = '<li class="risk-item risk-item--none">Select a player to load strengths.</li>';
   el.detailLevers.innerHTML = '<li class="risk-item risk-item--none">Select a player to load development levers.</li>';
   el.detailRisks.innerHTML = '<li class="risk-item risk-item--none">Select a player to load risk flags.</li>';
+  renderArchetypeProfile(null);
+  renderFormationFitProfile(null);
+  renderRadarProfile(null);
   el.detailExportJson.disabled = true;
   el.detailExportCsv.disabled = true;
 }
@@ -823,6 +1022,9 @@ function renderDetail(row, { report = null, history = null, reportLoading = fals
     el.detailStrengths.innerHTML = '<li class="risk-item risk-item--none">Loading strengths...</li>';
     el.detailLevers.innerHTML = '<li class="risk-item risk-item--none">Loading development levers...</li>';
     el.detailRisks.innerHTML = '<li class="risk-item risk-item--none">Loading risk flags...</li>';
+    renderArchetypeProfile(null, { loading: true });
+    renderFormationFitProfile(null, { loading: true });
+    renderRadarProfile(null, { loading: true });
     return;
   }
   if (reportError) {
@@ -831,6 +1033,9 @@ function renderDetail(row, { report = null, history = null, reportLoading = fals
     el.detailStrengths.innerHTML = '<li class="risk-item risk-item--none">Strengths unavailable for this player.</li>';
     el.detailLevers.innerHTML = '<li class="risk-item risk-item--none">Development levers unavailable for this player.</li>';
     el.detailRisks.innerHTML = '<li class="risk-item risk-item--none">Risk flags unavailable for this player.</li>';
+    renderArchetypeProfile(null, { error: reportError });
+    renderFormationFitProfile(null, { error: reportError });
+    renderRadarProfile(null, { error: reportError });
     return;
   }
 
@@ -873,6 +1078,10 @@ function renderDetail(row, { report = null, history = null, reportLoading = fals
   } else {
     el.detailHistory.textContent = "History-strength breakdown unavailable for this player.";
   }
+
+  renderArchetypeProfile(report?.player_type);
+  renderFormationFitProfile(report?.formation_fit);
+  renderRadarProfile(report?.radar_profile);
 
   const riskFlags = Array.isArray(report?.risk_flags) ? report.risk_flags : [];
   if (!riskFlags.length) {
@@ -1175,6 +1384,9 @@ function buildPlayerMemoPayload(row, report = null) {
     valuation_guardrails: report?.valuation_guardrails || null,
     cohort: report?.cohort || null,
     history_strength: historyBreakdown,
+    player_type: report?.player_type || null,
+    formation_fit: report?.formation_fit || null,
+    radar_profile: report?.radar_profile || null,
   };
 }
 
@@ -1183,6 +1395,10 @@ function buildPlayerMemoCsvRow(row, report = null) {
   const topStrengths = memo.strengths.slice(0, 3).map((m) => m.label).join("|");
   const topLevers = memo.development_levers.slice(0, 3).map((m) => m.label).join("|");
   const riskCodes = memo.risk_flags.map((r) => r.code).join("|");
+  const bestFormation =
+    Array.isArray(memo.formation_fit?.recommended) && memo.formation_fit.recommended.length
+      ? memo.formation_fit.recommended[0]
+      : null;
   return {
     generated_at_utc: memo.generated_at_utc,
     split: memo.split,
@@ -1201,6 +1417,13 @@ function buildPlayerMemoCsvRow(row, report = null) {
     cap_threshold_eur: memo.valuation.cap_threshold_eur,
     cap_applied: memo.valuation.cap_applied,
     confidence: memo.player.undervaluation_confidence,
+    player_archetype: memo.player_type?.archetype || null,
+    player_archetype_confidence: memo.player_type?.confidence_0_to_1 ?? null,
+    player_archetype_tier: memo.player_type?.tier || null,
+    best_formation: bestFormation?.formation || null,
+    best_role: bestFormation?.role || null,
+    best_formation_fit_score: bestFormation?.fit_score_0_to_1 ?? null,
+    radar_coverage_0_to_1: memo.radar_profile?.coverage_0_to_1 ?? null,
     risk_codes: riskCodes,
     top_strengths: topStrengths,
     development_levers: topLevers,

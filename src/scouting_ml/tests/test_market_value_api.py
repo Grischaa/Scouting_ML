@@ -338,6 +338,75 @@ def test_player_report_endpoint_returns_profile(tmp_path: Path, monkeypatch) -> 
     assert "valuation_guardrails" in report
     assert report["valuation_guardrails"]["cap_applied"] is True
     assert report["valuation_guardrails"]["value_gap_capped_eur"] is not None
+    assert "player_type" in report
+    assert "formation_fit" in report
+    assert "radar_profile" in report
+    assert isinstance(report["player_type"].get("archetype"), str)
+    assert isinstance(report["formation_fit"].get("recommended"), list)
+    assert isinstance(report["radar_profile"].get("axes"), list)
+
+
+def test_player_advanced_profile_endpoint_returns_payload(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    _reset_service_caches()
+
+    client = TestClient(app)
+    resp = client.get(
+        "/market-value/player/profile_fw_target/advanced-profile",
+        params={"split": "test", "top_metrics": 6},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["split"] == "test"
+    profile = payload["profile"]
+    assert profile["player"]["player_id"] == "profile_fw_target"
+    assert isinstance(profile["player_type"].get("archetype"), str)
+    assert isinstance(profile["formation_fit"].get("recommended"), list)
+    assert isinstance(profile["radar_profile"].get("axes"), list)
+    assert isinstance(profile.get("summary_text"), str)
+
+
+def test_player_reports_endpoint_returns_bulk_profiles(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    _reset_service_caches()
+
+    client = TestClient(app)
+    resp = client.get(
+        "/market-value/player-reports",
+        params={
+            "split": "test",
+            "limit": 3,
+            "top_metrics": 3,
+            "include_history": "true",
+            "sort_by": "undervaluation_confidence",
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["split"] == "test"
+    assert payload["count"] == 3
+    assert payload["total"] >= 40
+    assert payload["sort_by"] == "undervaluation_confidence"
+    assert isinstance(payload["items"], list)
+
+    first = payload["items"][0]
+    assert first["player_id"]
+    assert "report" in first
+    assert "history_strength" in first
+    report = first["report"]
+    assert isinstance(report.get("summary_text"), str)
+    assert isinstance(report.get("strengths"), list)
+    assert isinstance(report.get("development_levers"), list)
+    assert isinstance(report.get("player_type"), dict)
+    assert isinstance(report.get("formation_fit"), dict)
+    assert isinstance(report.get("radar_profile"), dict)
+    assert isinstance(first["history_strength"].get("summary_text"), str)
 
 
 def test_player_history_strength_endpoint_returns_breakdown(tmp_path: Path, monkeypatch) -> None:

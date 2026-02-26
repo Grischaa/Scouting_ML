@@ -67,6 +67,319 @@ PROFILE_METRIC_SPECS: tuple[tuple[str, str, int], ...] = (
     ("history_strength_score", "History strength", 1),
 )
 
+ADVANCED_METRIC_SPECS: tuple[tuple[str, str, int], ...] = (
+    ("sofa_goals_per90", "Goals/90", 1),
+    ("sofa_assists_per90", "Assists/90", 1),
+    ("sofa_expectedGoals_per90", "xG/90", 1),
+    ("sofa_totalShots_per90", "Shots/90", 1),
+    ("sofa_shotsOnTarget_per90", "Shots on target/90", 1),
+    ("sofa_keyPasses_per90", "Key passes/90", 1),
+    ("sofa_successfulDribbles_per90", "Dribbles/90", 1),
+    ("sofa_accuratePassesPercentage", "Pass accuracy %", 1),
+    ("sofa_totalDuelsWonPercentage", "Duels won %", 1),
+    ("sofa_aerialDuelsWon_per90", "Aerial duels won/90", 1),
+    ("sofa_tackles_per90", "Tackles/90", 1),
+    ("sofa_interceptions_per90", "Interceptions/90", 1),
+    ("sofa_clearances_per90", "Clearances/90", 1),
+    ("sofa_saves", "Saves", 1),
+    ("sofa_highClaims", "High claims", 1),
+    ("sofa_successfulRunsOut", "Successful runs out", 1),
+    ("sofa_accurateLongBallsPercentage", "Long-ball accuracy %", 1),
+    ("injury_days_per_1000_min", "Injury days/1000 min", -1),
+    ("history_strength_score", "History strength", 1),
+)
+
+ADVANCED_METRIC_DIRECTION: dict[str, int] = {key: direction for key, _, direction in ADVANCED_METRIC_SPECS}
+ADVANCED_METRIC_LABEL: dict[str, str] = {key: label for key, label, _ in ADVANCED_METRIC_SPECS}
+
+RADAR_AXES_BY_POSITION: dict[str, tuple[str, ...]] = {
+    "FW": (
+        "sofa_goals_per90",
+        "sofa_expectedGoals_per90",
+        "sofa_shotsOnTarget_per90",
+        "sofa_keyPasses_per90",
+        "sofa_successfulDribbles_per90",
+        "sofa_totalDuelsWonPercentage",
+    ),
+    "MF": (
+        "sofa_keyPasses_per90",
+        "sofa_assists_per90",
+        "sofa_accuratePassesPercentage",
+        "sofa_tackles_per90",
+        "sofa_interceptions_per90",
+        "sofa_successfulDribbles_per90",
+    ),
+    "DF": (
+        "sofa_accuratePassesPercentage",
+        "sofa_clearances_per90",
+        "sofa_interceptions_per90",
+        "sofa_tackles_per90",
+        "sofa_aerialDuelsWon_per90",
+        "sofa_totalDuelsWonPercentage",
+    ),
+    "GK": (
+        "sofa_saves",
+        "sofa_highClaims",
+        "sofa_successfulRunsOut",
+        "sofa_accuratePassesPercentage",
+        "sofa_accurateLongBallsPercentage",
+        "injury_days_per_1000_min",
+    ),
+}
+
+ARCHETYPE_TEMPLATES: dict[str, tuple[dict[str, Any], ...]] = {
+    "FW": (
+        {
+            "name": "Poacher",
+            "description": "Final-third finisher with high shot and xG output.",
+            "targets": {
+                "sofa_goals_per90": 0.92,
+                "sofa_expectedGoals_per90": 0.88,
+                "sofa_totalShots_per90": 0.85,
+                "sofa_shotsOnTarget_per90": 0.82,
+                "sofa_keyPasses_per90": 0.35,
+            },
+        },
+        {
+            "name": "Creator Forward",
+            "description": "Chance-creating attacker with link-play and dribble volume.",
+            "targets": {
+                "sofa_assists_per90": 0.80,
+                "sofa_keyPasses_per90": 0.90,
+                "sofa_successfulDribbles_per90": 0.82,
+                "sofa_accuratePassesPercentage": 0.62,
+                "sofa_goals_per90": 0.58,
+            },
+        },
+        {
+            "name": "Pressing Forward",
+            "description": "Work-rate forward that contributes in duels and defensive actions.",
+            "targets": {
+                "sofa_tackles_per90": 0.80,
+                "sofa_totalDuelsWonPercentage": 0.72,
+                "sofa_keyPasses_per90": 0.62,
+                "sofa_goals_per90": 0.55,
+                "sofa_successfulDribbles_per90": 0.55,
+            },
+        },
+    ),
+    "MF": (
+        {
+            "name": "Deep Playmaker",
+            "description": "Tempo-setter with high passing quality and buildup contribution.",
+            "targets": {
+                "sofa_accuratePassesPercentage": 0.90,
+                "sofa_keyPasses_per90": 0.72,
+                "sofa_assists_per90": 0.62,
+                "sofa_tackles_per90": 0.45,
+                "sofa_interceptions_per90": 0.55,
+            },
+        },
+        {
+            "name": "Ball-Winning Midfielder",
+            "description": "Defensive midfielder focused on regains and duel control.",
+            "targets": {
+                "sofa_tackles_per90": 0.88,
+                "sofa_interceptions_per90": 0.88,
+                "sofa_totalDuelsWonPercentage": 0.76,
+                "sofa_accuratePassesPercentage": 0.60,
+                "sofa_keyPasses_per90": 0.40,
+            },
+        },
+        {
+            "name": "Box-to-Box Midfielder",
+            "description": "Balanced two-way midfielder with output in both phases.",
+            "targets": {
+                "sofa_tackles_per90": 0.70,
+                "sofa_interceptions_per90": 0.64,
+                "sofa_keyPasses_per90": 0.62,
+                "sofa_goals_per90": 0.52,
+                "sofa_assists_per90": 0.52,
+            },
+        },
+    ),
+    "DF": (
+        {
+            "name": "Ball-Playing Defender",
+            "description": "Build-up defender with passing control and progression.",
+            "targets": {
+                "sofa_accuratePassesPercentage": 0.90,
+                "sofa_keyPasses_per90": 0.58,
+                "sofa_interceptions_per90": 0.64,
+                "sofa_clearances_per90": 0.44,
+                "sofa_totalDuelsWonPercentage": 0.64,
+            },
+        },
+        {
+            "name": "Stopper",
+            "description": "Duel-oriented central defender with heavy defensive volume.",
+            "targets": {
+                "sofa_clearances_per90": 0.90,
+                "sofa_interceptions_per90": 0.72,
+                "sofa_tackles_per90": 0.72,
+                "sofa_totalDuelsWonPercentage": 0.74,
+                "sofa_accuratePassesPercentage": 0.44,
+            },
+        },
+        {
+            "name": "Aggressive Fullback",
+            "description": "Wide defender with activity in possession and defending transitions.",
+            "targets": {
+                "sofa_keyPasses_per90": 0.66,
+                "sofa_successfulDribbles_per90": 0.66,
+                "sofa_tackles_per90": 0.70,
+                "sofa_interceptions_per90": 0.62,
+                "sofa_accuratePassesPercentage": 0.58,
+            },
+        },
+    ),
+    "GK": (
+        {
+            "name": "Shot-Stopper",
+            "description": "Goalkeeper profile centered on save volume and box command.",
+            "targets": {
+                "sofa_saves": 0.86,
+                "sofa_highClaims": 0.68,
+                "sofa_accuratePassesPercentage": 0.45,
+                "sofa_successfulRunsOut": 0.42,
+                "injury_days_per_1000_min": 0.70,
+            },
+        },
+        {
+            "name": "Sweeper Keeper",
+            "description": "Proactive keeper for high-line structures and circulation.",
+            "targets": {
+                "sofa_successfulRunsOut": 0.86,
+                "sofa_accuratePassesPercentage": 0.78,
+                "sofa_accurateLongBallsPercentage": 0.72,
+                "sofa_highClaims": 0.60,
+                "sofa_saves": 0.50,
+            },
+        },
+    ),
+}
+
+FORMATION_FIT_TEMPLATES: dict[str, tuple[dict[str, Any], ...]] = {
+    "FW": (
+        {
+            "formation": "4-3-3",
+            "role": "Lone 9",
+            "targets": {
+                "sofa_goals_per90": 0.82,
+                "sofa_expectedGoals_per90": 0.82,
+                "sofa_totalShots_per90": 0.76,
+                "sofa_totalDuelsWonPercentage": 0.55,
+            },
+        },
+        {
+            "formation": "4-2-3-1",
+            "role": "Linking 9",
+            "targets": {
+                "sofa_keyPasses_per90": 0.66,
+                "sofa_assists_per90": 0.58,
+                "sofa_accuratePassesPercentage": 0.58,
+                "sofa_goals_per90": 0.62,
+            },
+        },
+        {
+            "formation": "3-5-2",
+            "role": "Second Striker",
+            "targets": {
+                "sofa_successfulDribbles_per90": 0.70,
+                "sofa_keyPasses_per90": 0.70,
+                "sofa_assists_per90": 0.64,
+                "sofa_goals_per90": 0.58,
+            },
+        },
+    ),
+    "MF": (
+        {
+            "formation": "4-3-3",
+            "role": "No. 6",
+            "targets": {
+                "sofa_interceptions_per90": 0.80,
+                "sofa_tackles_per90": 0.80,
+                "sofa_accuratePassesPercentage": 0.76,
+                "sofa_totalDuelsWonPercentage": 0.64,
+            },
+        },
+        {
+            "formation": "4-3-3",
+            "role": "No. 8",
+            "targets": {
+                "sofa_keyPasses_per90": 0.64,
+                "sofa_assists_per90": 0.56,
+                "sofa_tackles_per90": 0.62,
+                "sofa_successfulDribbles_per90": 0.58,
+            },
+        },
+        {
+            "formation": "4-2-3-1",
+            "role": "No. 10",
+            "targets": {
+                "sofa_keyPasses_per90": 0.84,
+                "sofa_assists_per90": 0.74,
+                "sofa_successfulDribbles_per90": 0.68,
+                "sofa_goals_per90": 0.50,
+            },
+        },
+    ),
+    "DF": (
+        {
+            "formation": "4-3-3",
+            "role": "Centre-Back",
+            "targets": {
+                "sofa_clearances_per90": 0.74,
+                "sofa_interceptions_per90": 0.66,
+                "sofa_totalDuelsWonPercentage": 0.70,
+                "sofa_accuratePassesPercentage": 0.62,
+            },
+        },
+        {
+            "formation": "3-4-3",
+            "role": "Wide Centre-Back",
+            "targets": {
+                "sofa_accuratePassesPercentage": 0.74,
+                "sofa_keyPasses_per90": 0.56,
+                "sofa_interceptions_per90": 0.60,
+                "sofa_tackles_per90": 0.56,
+            },
+        },
+        {
+            "formation": "4-2-3-1",
+            "role": "Fullback",
+            "targets": {
+                "sofa_keyPasses_per90": 0.64,
+                "sofa_successfulDribbles_per90": 0.62,
+                "sofa_tackles_per90": 0.64,
+                "sofa_interceptions_per90": 0.56,
+            },
+        },
+    ),
+    "GK": (
+        {
+            "formation": "4-3-3",
+            "role": "High-line Keeper",
+            "targets": {
+                "sofa_successfulRunsOut": 0.80,
+                "sofa_accuratePassesPercentage": 0.72,
+                "sofa_accurateLongBallsPercentage": 0.66,
+                "sofa_highClaims": 0.62,
+            },
+        },
+        {
+            "formation": "5-3-2",
+            "role": "Box Keeper",
+            "targets": {
+                "sofa_saves": 0.82,
+                "sofa_highClaims": 0.72,
+                "sofa_successfulRunsOut": 0.42,
+                "sofa_accuratePassesPercentage": 0.50,
+            },
+        },
+    ),
+}
+
 
 class ArtifactNotFoundError(FileNotFoundError):
     """Raised when required model artifacts are missing."""
@@ -1018,6 +1331,270 @@ def _metric_value_corr_abs(cohort: pd.DataFrame, col: str) -> float:
     return min(abs(float(corr)), 1.0)
 
 
+def _normalize_position_key(raw: Any) -> str:
+    if raw is None or pd.isna(raw):
+        return "UNK"
+    token = str(raw).strip().upper()
+    if token in {"GK", "DF", "MF", "FW"}:
+        return token
+    if token in {"BACK", "DEFENDER"} or "DEF" in token:
+        return "DF"
+    if token in {"MIDFIELD", "MIDFIELDER"} or "MID" in token:
+        return "MF"
+    if token in {"ATTACK", "ATTACKER", "FORWARD", "STRIKER"} or "WING" in token:
+        return "FW"
+    if "GOAL" in token:
+        return "GK"
+    return token
+
+
+def _metric_snapshot(
+    *,
+    row: pd.Series,
+    cohort: pd.DataFrame,
+    metric: str,
+    direction: int | None = None,
+) -> dict[str, Any] | None:
+    if metric not in row.index or metric not in cohort.columns:
+        return None
+    player_value = _safe_float(row.get(metric))
+    if player_value is None:
+        return None
+
+    series = pd.to_numeric(cohort[metric], errors="coerce").dropna()
+    if len(series) < 20:
+        return None
+
+    metric_direction = int(direction or ADVANCED_METRIC_DIRECTION.get(metric, 1))
+    percentile_raw = float((series <= player_value).mean())
+    quality_percentile = percentile_raw if metric_direction > 0 else (1.0 - percentile_raw)
+    quality_percentile = float(np.clip(quality_percentile, 0.0, 1.0))
+
+    q25, q50, q75 = np.nanquantile(series.to_numpy(), [0.25, 0.5, 0.75])
+    return {
+        "metric": metric,
+        "label": ADVANCED_METRIC_LABEL.get(metric, metric),
+        "direction": "higher_is_better" if metric_direction > 0 else "lower_is_better",
+        "player_value": player_value,
+        "cohort_p25": float(q25),
+        "cohort_median": float(q50),
+        "cohort_p75": float(q75),
+        "percentile_raw": float(percentile_raw),
+        "quality_percentile": quality_percentile,
+    }
+
+
+def _build_metric_snapshot_map(row: pd.Series, cohort: pd.DataFrame) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for metric, _, direction in ADVANCED_METRIC_SPECS:
+        snap = _metric_snapshot(row=row, cohort=cohort, metric=metric, direction=direction)
+        if snap is not None:
+            out[metric] = snap
+    return out
+
+
+def _score_template_fit(
+    *,
+    metric_map: dict[str, dict[str, Any]],
+    targets: dict[str, float],
+) -> dict[str, Any]:
+    parts: list[dict[str, Any]] = []
+    for metric, target_pct in targets.items():
+        snap = metric_map.get(metric)
+        if snap is None:
+            continue
+        observed = float(snap["quality_percentile"])
+        target = float(np.clip(target_pct, 0.0, 1.0))
+        # Soft match around target percentile. 1.0 is perfect, 0.0 is very far.
+        fit_score = max(0.0, 1.0 - abs(observed - target) / 0.75)
+        parts.append(
+            {
+                "metric": metric,
+                "label": snap["label"],
+                "target_percentile": target,
+                "observed_percentile": observed,
+                "fit_score": float(fit_score),
+            }
+        )
+
+    n_targets = max(len(targets), 1)
+    coverage = len(parts) / n_targets
+    if not parts:
+        return {
+            "score": 0.0,
+            "coverage": 0.0,
+            "parts": [],
+        }
+    mean_fit = float(np.mean([p["fit_score"] for p in parts]))
+    score = mean_fit * (0.65 + 0.35 * coverage)
+    return {
+        "score": float(np.clip(score, 0.0, 1.0)),
+        "coverage": float(np.clip(coverage, 0.0, 1.0)),
+        "parts": parts,
+    }
+
+
+def _build_player_type_profile(
+    *,
+    row: pd.Series,
+    metric_map: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    pos_key = _normalize_position_key(row.get("model_position") or row.get("position_group"))
+    templates = ARCHETYPE_TEMPLATES.get(pos_key, ())
+    if not templates:
+        return {
+            "position_key": pos_key,
+            "archetype": "Unknown",
+            "confidence_0_to_1": 0.0,
+            "tier": "low",
+            "runner_up": None,
+            "candidates": [],
+            "summary_text": "Not enough archetype templates for this position.",
+        }
+
+    scored: list[dict[str, Any]] = []
+    for template in templates:
+        fit = _score_template_fit(metric_map=metric_map, targets=template.get("targets", {}))
+        scored.append(
+            {
+                "name": str(template.get("name") or "Unknown"),
+                "description": str(template.get("description") or ""),
+                "score_0_to_1": fit["score"],
+                "coverage_0_to_1": fit["coverage"],
+                "matched_metrics": fit["parts"],
+            }
+        )
+
+    scored.sort(key=lambda x: (x["score_0_to_1"], x["coverage_0_to_1"]), reverse=True)
+    best = scored[0]
+    runner = scored[1] if len(scored) > 1 else None
+    conf = float(best["score_0_to_1"])
+    if runner is not None:
+        conf = float(np.clip(conf - 0.15 * max(0.0, runner["score_0_to_1"]), 0.0, 1.0))
+
+    tier = "low"
+    if conf >= 0.72:
+        tier = "high"
+    elif conf >= 0.52:
+        tier = "medium"
+
+    runner_name = runner["name"] if isinstance(runner, dict) else None
+    summary = f"Archetype: {best['name']} ({tier} confidence)."
+    if runner_name:
+        summary += f" Runner-up: {runner_name}."
+
+    return {
+        "position_key": pos_key,
+        "archetype": best["name"],
+        "description": best["description"],
+        "confidence_0_to_1": conf,
+        "tier": tier,
+        "runner_up": runner_name,
+        "candidates": scored[:3],
+        "summary_text": summary,
+    }
+
+
+def _build_formation_fit_profile(
+    *,
+    row: pd.Series,
+    metric_map: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    pos_key = _normalize_position_key(row.get("model_position") or row.get("position_group"))
+    templates = FORMATION_FIT_TEMPLATES.get(pos_key, ())
+    if not templates:
+        return {
+            "position_key": pos_key,
+            "recommended": [],
+            "summary_text": "No formation templates available for this position.",
+        }
+
+    fits: list[dict[str, Any]] = []
+    for template in templates:
+        fit = _score_template_fit(metric_map=metric_map, targets=template.get("targets", {}))
+        score = float(fit["score"])
+        tier = "low"
+        if score >= 0.75:
+            tier = "high"
+        elif score >= 0.55:
+            tier = "medium"
+        fits.append(
+            {
+                "formation": str(template.get("formation") or ""),
+                "role": str(template.get("role") or ""),
+                "fit_score_0_to_1": score,
+                "fit_tier": tier,
+                "coverage_0_to_1": float(fit["coverage"]),
+                "matched_metrics": fit["parts"],
+            }
+        )
+
+    fits.sort(key=lambda x: (x["fit_score_0_to_1"], x["coverage_0_to_1"]), reverse=True)
+    recommended = fits[:3]
+    if recommended:
+        top = recommended[0]
+        summary = (
+            f"Best tactical fit: {top['formation']} as {top['role']} "
+            f"({top['fit_tier']} fit)."
+        )
+    else:
+        summary = "No formation fit could be estimated from available metrics."
+    return {
+        "position_key": pos_key,
+        "recommended": recommended,
+        "summary_text": summary,
+    }
+
+
+def _build_radar_profile(
+    *,
+    row: pd.Series,
+    metric_map: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    pos_key = _normalize_position_key(row.get("model_position") or row.get("position_group"))
+    axes_metrics = RADAR_AXES_BY_POSITION.get(pos_key)
+    if axes_metrics is None:
+        axes_metrics = tuple(metric for metric, _, _ in PROFILE_METRIC_SPECS[:6])
+
+    axes: list[dict[str, Any]] = []
+    for metric in axes_metrics:
+        snap = metric_map.get(metric)
+        if snap is None:
+            axes.append(
+                {
+                    "metric": metric,
+                    "label": ADVANCED_METRIC_LABEL.get(metric, metric),
+                    "available": False,
+                    "normalized_0_to_100": None,
+                    "quality_percentile": None,
+                    "player_value": None,
+                    "cohort_median": None,
+                }
+            )
+            continue
+        quality = float(snap["quality_percentile"])
+        axes.append(
+            {
+                "metric": metric,
+                "label": snap["label"],
+                "available": True,
+                "normalized_0_to_100": float(np.clip(quality * 100.0, 0.0, 100.0)),
+                "quality_percentile": quality,
+                "player_value": snap["player_value"],
+                "cohort_median": snap["cohort_median"],
+            }
+        )
+
+    available = [a for a in axes if a["available"]]
+    coverage = float(len(available) / max(len(axes), 1))
+    return {
+        "position_key": pos_key,
+        "ready_for_plot": coverage >= 0.50,
+        "coverage_0_to_1": coverage,
+        "axes": axes,
+    }
+
+
 def _build_metric_profile(
     row: pd.Series,
     cohort: pd.DataFrame,
@@ -1400,10 +1977,23 @@ def get_player_report(
 ) -> dict[str, Any]:
     frame = _prepare_predictions_frame(get_predictions(split=split))
     row = _select_player_row(frame=frame, player_id=player_id, season=season)
+    return _build_player_report_from_row(frame=frame, row=row, top_metrics=top_metrics)
+
+
+def _build_player_report_from_row(
+    *,
+    frame: pd.DataFrame,
+    row: pd.Series,
+    top_metrics: int = 5,
+) -> dict[str, Any]:
     row_dict = _to_records(row.to_frame().T)[0]
 
     cohort, cohort_filters = _cohort_for_player(frame=frame, row=row)
+    metric_map = _build_metric_snapshot_map(row=row, cohort=cohort)
     metric_profile = _build_metric_profile(row=row, cohort=cohort, top_metrics=max(int(top_metrics), 1))
+    player_type = _build_player_type_profile(row=row, metric_map=metric_map)
+    formation_fit = _build_formation_fit_profile(row=row, metric_map=metric_map)
+    radar_profile = _build_radar_profile(row=row, metric_map=metric_map)
     confidence = _build_confidence_summary(row=row, cohort=cohort)
     valuation_guardrails = _build_valuation_guardrails(row=row)
     risk_flags = _build_risk_flags(
@@ -1430,10 +2020,132 @@ def get_player_report(
         "strengths": metric_profile["strengths"],
         "weaknesses": metric_profile["weaknesses"],
         "development_levers": metric_profile["development_levers"],
+        "player_type": player_type,
+        "formation_fit": formation_fit,
+        "radar_profile": radar_profile,
         "risk_flags": risk_flags,
         "confidence": confidence,
         "valuation_guardrails": valuation_guardrails,
         "summary_text": summary_text,
+    }
+
+
+def query_player_reports(
+    split: Split = "test",
+    season: str | None = None,
+    league: str | None = None,
+    club: str | None = None,
+    position: str | None = None,
+    min_minutes: float | None = None,
+    max_age: float | None = None,
+    player_ids: Sequence[str] | None = None,
+    top_metrics: int = 5,
+    include_history: bool = True,
+    sort_by: str = "undervaluation_score",
+    sort_order: Literal["asc", "desc"] = "desc",
+    limit: int = 200,
+    offset: int = 0,
+) -> dict[str, Any]:
+    frame = _prepare_predictions_frame(get_predictions(split=split))
+    work = frame.copy()
+
+    if season and "season" in work.columns:
+        work = work[work["season"].astype(str) == str(season)].copy()
+    if league and "league" in work.columns:
+        work = work[work["league"].astype(str).str.casefold() == str(league).casefold()].copy()
+    if club and "club" in work.columns:
+        work = work[work["club"].astype(str).str.casefold() == str(club).casefold()].copy()
+    if position:
+        pos_series = _position_series(work)
+        work = work[pos_series == str(position).upper()].copy()
+
+    if min_minutes is not None:
+        work = work[_minutes_series(work).fillna(0.0) >= float(min_minutes)].copy()
+    if max_age is not None and "age" in work.columns:
+        ages = pd.to_numeric(work["age"], errors="coerce")
+        work = work[ages <= float(max_age)].copy()
+
+    if player_ids:
+        if "player_id" not in work.columns:
+            raise ValueError("Prediction artifact does not include 'player_id'.")
+        wanted_ids = {str(pid).strip() for pid in player_ids if str(pid).strip()}
+        if wanted_ids:
+            work = work[work["player_id"].astype(str).isin(wanted_ids)].copy()
+
+    total = int(len(work))
+
+    if sort_by not in work.columns:
+        fallback = (
+            "undervaluation_score"
+            if "undervaluation_score" in work.columns
+            else (
+                "value_gap_capped_eur"
+                if "value_gap_capped_eur" in work.columns
+                else (
+                    "value_gap_conservative_eur"
+                    if "value_gap_conservative_eur" in work.columns
+                    else ("value_gap_eur" if "value_gap_eur" in work.columns else work.columns[0])
+                )
+            )
+        )
+        sort_by = fallback
+
+    ascending = sort_order == "asc"
+    work = work.sort_values(sort_by, ascending=ascending, na_position="last")
+
+    start = max(int(offset), 0)
+    end = start + max(int(limit), 0)
+    page = work.iloc[start:end].copy()
+
+    items: list[dict[str, Any]] = []
+    for _, row in page.iterrows():
+        report = _build_player_report_from_row(frame=frame, row=row, top_metrics=top_metrics)
+        item: dict[str, Any] = {
+            "player_id": str(row.get("player_id") or ""),
+            "season": row.get("season"),
+            "report": report,
+        }
+        if include_history:
+            item["history_strength"] = _build_history_strength_payload(row=row)
+        items.append(item)
+
+    return {
+        "split": split,
+        "total": total,
+        "count": int(len(items)),
+        "limit": int(limit),
+        "offset": int(offset),
+        "sort_by": sort_by,
+        "sort_order": sort_order,
+        "items": items,
+    }
+
+
+def get_player_advanced_profile(
+    player_id: str,
+    split: Split = "test",
+    season: str | None = None,
+    top_metrics: int = 6,
+) -> dict[str, Any]:
+    report = get_player_report(
+        player_id=player_id,
+        split=split,
+        season=season,
+        top_metrics=top_metrics,
+    )
+    return {
+        "player": report.get("player", {}),
+        "cohort": report.get("cohort", {}),
+        "player_type": report.get("player_type", {}),
+        "formation_fit": report.get("formation_fit", {}),
+        "radar_profile": report.get("radar_profile", {}),
+        "strengths": report.get("strengths", []),
+        "weaknesses": report.get("weaknesses", []),
+        "development_levers": report.get("development_levers", []),
+        "risk_flags": report.get("risk_flags", []),
+        "confidence": report.get("confidence", {}),
+        "valuation_guardrails": report.get("valuation_guardrails", {}),
+        "summary_text": report.get("summary_text"),
     }
 
 
@@ -1756,6 +2468,7 @@ __all__ = [
     "get_active_artifacts",
     "get_model_manifest",
     "get_metrics",
+    "get_player_advanced_profile",
     "get_player_history_strength",
     "get_player_report",
     "get_player_prediction",
@@ -1763,6 +2476,7 @@ __all__ = [
     "get_resolved_artifact_paths",
     "health_payload",
     "list_watchlist",
+    "query_player_reports",
     "query_predictions",
     "query_scout_targets",
     "query_shortlist",

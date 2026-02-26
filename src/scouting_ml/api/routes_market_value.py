@@ -14,11 +14,13 @@ from scouting_ml.services.market_value_service import (
     get_active_artifacts,
     get_model_manifest,
     get_metrics,
+    get_player_advanced_profile,
     get_player_history_strength,
     get_player_report,
     get_player_prediction,
     health_payload,
     list_watchlist,
+    query_player_reports,
     query_predictions,
     query_scout_targets,
     query_shortlist,
@@ -88,6 +90,22 @@ class PlayerPredictionResponse(BaseModel):
 class PlayerReportResponse(BaseModel):
     split: str
     report: Dict[str, Any]
+
+
+class PlayerAdvancedProfileResponse(BaseModel):
+    split: str
+    profile: Dict[str, Any]
+
+
+class PlayerReportsResponse(BaseModel):
+    split: str
+    total: int
+    count: int
+    limit: int
+    offset: int
+    sort_by: str
+    sort_order: str
+    items: List[Dict[str, Any]]
 
 
 class PlayerHistoryStrengthResponse(BaseModel):
@@ -362,6 +380,55 @@ def market_value_watchlist_delete(watch_id: str) -> WatchlistDeleteResponse:
     return WatchlistDeleteResponse(**payload)
 
 
+@router.get(
+    "/player-reports",
+    response_model=PlayerReportsResponse,
+    summary="Get precise scouting breakdowns for many players",
+)
+def market_value_player_reports(
+    split: Literal["test", "val"] = Query("test"),
+    season: Optional[str] = Query(None),
+    league: Optional[str] = Query(None),
+    club: Optional[str] = Query(None),
+    position: Optional[str] = Query(None, description="GK/DF/MF/FW"),
+    min_minutes: Optional[float] = Query(None, ge=0),
+    max_age: Optional[float] = Query(None, ge=0),
+    player_ids: Optional[str] = Query(None, description="Optional comma-separated player_ids filter."),
+    top_metrics: int = Query(5, ge=1, le=10),
+    include_history: bool = Query(True),
+    sort_by: str = Query("undervaluation_score"),
+    sort_order: Literal["asc", "desc"] = Query("desc"),
+    limit: int = Query(200, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
+) -> PlayerReportsResponse:
+    """Return detailed report payloads (and optional history-strength) for a player page."""
+    try:
+        selected_ids = [tok.strip() for tok in player_ids.split(",") if tok.strip()] if player_ids else None
+        payload = query_player_reports(
+            split=split,
+            season=season,
+            league=league,
+            club=club,
+            position=position,
+            min_minutes=min_minutes,
+            max_age=max_age,
+            player_ids=selected_ids,
+            top_metrics=top_metrics,
+            include_history=include_history,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
+        )
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=500, detail=f"Failed to build player reports: {exc}") from exc
+    return PlayerReportsResponse(**payload)
+
+
 @router.get("/player/{player_id}", response_model=PlayerPredictionResponse, summary="Get a player prediction")
 def market_value_player(
     player_id: str,
@@ -378,6 +445,34 @@ def market_value_player(
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=500, detail=f"Failed to load player prediction: {exc}") from exc
     return PlayerPredictionResponse(split=split, item=item)
+
+
+@router.get(
+    "/player/{player_id}/advanced-profile",
+    response_model=PlayerAdvancedProfileResponse,
+    summary="Get advanced player profile (type, radar, formation fit)",
+)
+def market_value_player_advanced_profile(
+    player_id: str,
+    split: Literal["test", "val"] = Query("test"),
+    season: Optional[str] = Query(None),
+    top_metrics: int = Query(6, ge=1, le=10),
+) -> PlayerAdvancedProfileResponse:
+    """Return tactical/archetype profile with radar payload and formation recommendations."""
+    try:
+        profile = get_player_advanced_profile(
+            player_id=player_id,
+            split=split,
+            season=season,
+            top_metrics=top_metrics,
+        )
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=500, detail=f"Failed to build advanced profile: {exc}") from exc
+    return PlayerAdvancedProfileResponse(split=split, profile=profile)
 
 
 @router.get(

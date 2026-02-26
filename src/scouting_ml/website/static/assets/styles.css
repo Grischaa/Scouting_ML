@@ -632,6 +632,49 @@ tbody tr:hover {
   line-height: 1.45;
 }
 
+.radar-wrap {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 8px;
+}
+
+.radar-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.radar-grid {
+  fill: rgba(255, 255, 255, 0.02);
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 1;
+}
+
+.radar-axis {
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 1;
+}
+
+.radar-profile {
+  fill: rgba(245, 157, 47, 0.24);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.radar-node {
+  fill: var(--accent);
+  stroke: #111;
+  stroke-width: 1;
+}
+
+.radar-label {
+  fill: var(--text-soft);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+}
+
 .detail-actions {
   margin-top: 12px;
   display: flex;
