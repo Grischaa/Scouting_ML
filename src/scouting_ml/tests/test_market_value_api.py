@@ -342,8 +342,27 @@ def test_player_report_endpoint_returns_profile(tmp_path: Path, monkeypatch) -> 
     assert "formation_fit" in report
     assert "radar_profile" in report
     assert isinstance(report["player_type"].get("archetype"), str)
-    assert isinstance(report["formation_fit"].get("recommended"), list)
-    assert isinstance(report["radar_profile"].get("axes"), list)
+    assert report["player_type"].get("archetype")
+
+    recommended = report["formation_fit"].get("recommended")
+    assert isinstance(recommended, list)
+    assert len(recommended) >= 1
+    top_fit = recommended[0]
+    assert isinstance(top_fit.get("formation"), str)
+    assert top_fit.get("formation")
+    assert isinstance(top_fit.get("role"), str)
+    assert top_fit.get("role")
+    assert 0.0 <= float(top_fit.get("fit_score_0_to_1", 0.0)) <= 1.0
+
+    radar_axes = report["radar_profile"].get("axes")
+    assert isinstance(radar_axes, list)
+    assert len(radar_axes) >= 4
+    available_axes = [a for a in radar_axes if bool(a.get("available"))]
+    assert len(available_axes) >= 3
+    for axis in available_axes:
+        norm = axis.get("normalized_0_to_100")
+        assert norm is not None
+        assert 0.0 <= float(norm) <= 100.0
 
 
 def test_player_advanced_profile_endpoint_returns_payload(tmp_path: Path, monkeypatch) -> None:
@@ -364,8 +383,16 @@ def test_player_advanced_profile_endpoint_returns_payload(tmp_path: Path, monkey
     profile = payload["profile"]
     assert profile["player"]["player_id"] == "profile_fw_target"
     assert isinstance(profile["player_type"].get("archetype"), str)
-    assert isinstance(profile["formation_fit"].get("recommended"), list)
-    assert isinstance(profile["radar_profile"].get("axes"), list)
+    assert profile["player_type"].get("archetype")
+
+    recommended = profile["formation_fit"].get("recommended")
+    assert isinstance(recommended, list)
+    assert len(recommended) >= 1
+
+    radar_axes = profile["radar_profile"].get("axes")
+    assert isinstance(radar_axes, list)
+    assert len(radar_axes) >= 4
+    assert any(bool(a.get("available")) for a in radar_axes)
     assert isinstance(profile.get("summary_text"), str)
 
 
@@ -406,6 +433,9 @@ def test_player_reports_endpoint_returns_bulk_profiles(tmp_path: Path, monkeypat
     assert isinstance(report.get("player_type"), dict)
     assert isinstance(report.get("formation_fit"), dict)
     assert isinstance(report.get("radar_profile"), dict)
+    assert report.get("player_type", {}).get("archetype")
+    assert len(report.get("formation_fit", {}).get("recommended", [])) >= 1
+    assert len(report.get("radar_profile", {}).get("axes", [])) >= 4
     assert isinstance(first["history_strength"].get("summary_text"), str)
 
 

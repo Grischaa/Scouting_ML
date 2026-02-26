@@ -358,6 +358,8 @@ Main endpoints:
 - `GET /market-value/scout-targets`
 - `GET /market-value/player/{player_id}`
 - `GET /market-value/player/{player_id}/report`
+- `GET /market-value/player/{player_id}/advanced-profile`
+- `GET /market-value/player/{player_id}/history-strength`
 - `GET /market-value/watchlist`
 - `POST /market-value/watchlist/items`
 - `DELETE /market-value/watchlist/items/{watch_id}`
@@ -433,6 +435,32 @@ Main UI views:
 - `Overview` (model trust card, segment reliability, league coverage)
 - `Valuation Workbench` (over/undervalued analysis by player)
 - `Talent Funnel` (shortlist builder, including a lower-league-only mode)
+
+### Weekly Scout Ops (single command)
+
+Run weekly KPI report, non-Big5 onboarding readiness, and shortlist workflow in one call:
+
+```powershell
+$env:PYTHONPATH = "src"
+
+python -m scouting_ml.scripts.run_weekly_scout_ops `
+  --predictions "data/model/champion_predictions_2024-25.csv" `
+  --split test `
+  --k-values "10,25,50" `
+  --label-col "interval_contains_truth" `
+  --min-minutes 900 `
+  --max-age 23 `
+  --non-big5-only `
+  --workflow-write-watchlist `
+  --workflow-watchlist-tag "u23_non_big5"
+```
+
+Outputs:
+
+- `data/model/reports/weekly_scout_kpi_*.csv|json`
+- `data/model/onboarding/non_big5_onboarding_report.csv|json`
+- `data/model/scout_workflow/scout_workflow_*`
+- `data/model/scout_workflow/weekly_ops_summary_*.json`
 
 ### External enrichment builders (optional but recommended)
 
