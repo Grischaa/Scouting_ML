@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Football Scouting ML - Player Market Value Prediction</title>
+
+    <!--
+        ============================================================
+        BASIC META TAGS
+        ============================================================
+        These help with SEO and when you share the link.
+        Replace content values where marked TODO if you like.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description"
+          content="Football Scouting ML - a machine learning pipeline that predicts football player market values using Transfermarkt and SofaScore data." />
+    <meta name="author" content="Christoph Schally" />
+
+    <!--
+        OPTIONAL: Google Font for nicer typography.
+        You can change the font-family in CSS if desired.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    />
+
+    <style>
+        /* 
+           ============================================================
+           GLOBAL STYLES
+           ============================================================
+        */
+
+        :root {
+            --bg: #050816;
+            --bg-alt: #0b1020;
+            --bg-card: #10172a;
+            --accent: #38bdf8;  /* Cyan-ish accent */
+            --accent-soft: rgba(56, 189, 248, 0.15);
+            --accent-strong: #0ea5e9;
+            --text: #e5e7eb;
+            --text-muted: #9ca3af;
+            --border-subtle: rgba(148, 163, 184, 0.35);
+            --danger: #f97373;
+            --success: #22c55e;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            scroll-behavior: smooth;
+        }
+
+        body {
+            line-height: 1.6;
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a:hover {
+            color: var(--accent-strong);
+        }
+
+        img {
+            max-width: 100%;
+            display: block;
+        }
+
+        /* Container to keep content centered and readable */
+        .container {
+            width: 100%;
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+
+        /* 
+           ============================================================
+           NAVIGATION BAR
+           ============================================================
+           Sticky top navigation with anchor links to sections.
+        */
+
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            backdrop-filter: blur(14px);
+            background: linear-gradient(
+                    to bottom,
+                    rgba(15, 23, 42, 0.95),
+                    rgba(15, 23, 42, 0.75),
+                    transparent
+            );
+            border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+        }
+
+        .navbar-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.85rem 0;
+        }
+
+        .navbar-logo {
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .navbar-logo span {
+            color: var(--accent-strong);
+        }
+
+        .navbar-links {
+            display: flex;
+            gap: 1.2rem;
+            font-size: 0.9rem;
+        }
+
+        .navbar-links a {
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 500;
+            font-size: 0.75rem;
+        }
+
+        .navbar-links a:hover {
+            color: var(--accent);
+        }
+
+        /* Smaller screens: collapse nav links a bit */
+        @media (max-width: 768px) {
+            .navbar-inner {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.6rem;
+            }
+
+            .navbar-links {
+                flex-wrap: wrap;
+                gap: 0.75rem;
+            }
+        }
+
+        /* 
+           ============================================================
+           HERO SECTION
+           ============================================================
+           Top landing block with title, subtitle, key metrics & CTA.
+        */
+
+        .hero {
+            padding: 3.5rem 0 2.5rem 0;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+            gap: 2.5rem;
+            align-items: center;
+        }
+
+        @media (max-width: 900px) {
+            .hero-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .hero-kicker {
+            text-transform: uppercase;
+            letter-spacing: 0.22em;
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .hero-title {
+            font-size: clamp(2.1rem, 4vw, 2.9rem);
+            font-weight: 700;
+            margin: 0 0 0.75rem 0;
+        }
+
+        .hero-title span {
+            color: var(--accent-strong);
+        }
+
+        .hero-subtitle {
+            color: var(--text-muted);
+            font-size: 0.98rem;
+            max-width: 36rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 1.75rem;
+        }
+
+        .badge {
+            border-radius: 999px;
+            padding: 0.35rem 0.8rem;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .badge-dot {
+            width: 0.4rem;
+            height: 0.4rem;
+            border-radius: 999px;
+            background: var(--accent);
+        }
+
+        .hero-cta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+        }
+
+        .btn-primary,
+        .btn-secondary {
+            border-radius: 999px;
+            padding: 0.6rem 1.3rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: 1px solid transparent;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(to right, #0ea5e9, #22c55e);
+            color: #0f172a;
+        }
+
+        .btn-primary:hover {
+            filter: brightness(1.06);
+        }
+
+        .btn-secondary {
+            background: rgba(15, 23, 42, 0.9);
+            border-color: rgba(148, 163, 184, 0.7);
+            color: var(--text-muted);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .hero-side-card {
+            position: relative;
+            border-radius: 1.2rem;
+            padding: 1.25rem 1.25rem 1.4rem 1.25rem;
+            background: radial-gradient(circle at top left, #0ea5e9 0, #0b1120 42%, #050816 100%);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            overflow: hidden;
+        }
+
+        .hero-side-card h3 {
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: #e5e7eb;
+            margin: 0 0 0.4rem 0;
+        }
+
+        .hero-side-metric {
+            font-size: 1.9rem;
+            font-weight: 700;
+            margin-bottom: 0.15rem;
+        }
+
+        .hero-side-caption {
+            font-size: 0.8rem;
+            color: #cbd5f5;
+            margin-bottom: 0.8rem;
+        }
+
+        .hero-side-pill-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+            margin-bottom: 0.7rem;
+        }
+
+        .hero-pill {
+            font-size: 0.75rem;
+            border-radius: 999px;
+            padding: 0.25rem 0.7rem;
+            border: 1px solid rgba(148, 163, 184, 0.6);
+            background: rgba(15, 23, 42, 0.6);
+            color: #e5e7eb;
+        }
+
+        .hero-side-footnote {
+            font-size: 0.7rem;
+            color: rgba(226, 232, 240, 0.85);
+        }
+
+        .hero-side-accent {
+            position: absolute;
+            inset: auto auto -40px -40px;
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.4), transparent 70%);
+            opacity: 0.8;
+        }
+
+        /* 
+           ============================================================
+           SECTION BASE STYLES
+           ============================================================
+        */
+
+        section {
+            padding: 2.5rem 0;
+        }
+
+        .section-header {
+            margin-bottom: 1.75rem;
+        }
+
+        .section-kicker {
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--accent);
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin: 0 0 0.35rem 0;
+        }
+
+        .section-subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            max-width: 38rem;
+        }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+            gap: 1.75rem;
+        }
+
+        @media (max-width: 900px) {
+            .two-col {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        /* 
+           ============================================================
+           CARD COMPONENTS
+           ============================================================
+        */
+
+        .card {
+            background: linear-gradient(to bottom right, #0b1120, #020617);
+            border-radius: 1.1rem;
+            padding: 1.1rem 1.2rem;
+            border: 1px solid var(--border-subtle);
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.85);
+        }
+
+        .card-soft {
+            background: radial-gradient(circle at top left, #0f172a, #020617);
+            border-radius: 1rem;
+            padding: 1rem 1.1rem;
+            border: 1px solid rgba(51, 65, 85, 0.8);
+        }
+
+        .card h3 {
+            margin-top: 0;
+            margin-bottom: 0.7rem;
+            font-size: 1rem;
+        }
+
+        .card p {
+            margin: 0.2rem 0 0.5rem 0;
+            font-size: 0.9rem;
+        }
+
+        .tag-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.5rem;
+        }
+
+        .tag {
+            padding: 0.2rem 0.5rem;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* 
+           ============================================================
+           LISTS & TABLES
+           ============================================================
+        */
+
+        ul {
+            padding-left: 1.1rem;
+            margin: 0.4rem 0 0.6rem 0;
+        }
+
+        li {
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+        }
+
+        .muted {
+            color: var(--text-muted);
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .metric-card {
+            border-radius: 0.85rem;
+            padding: 0.7rem 0.9rem;
+            background: radial-gradient(circle at top, rgba(56, 189, 248, 0.15), #020617);
+            border: 1px solid rgba(148, 163, 184, 0.5);
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 0.2rem;
+        }
+
+        .metric-value {
+            font-size: 1.05rem;
+            font-weight: 600;
+            margin-bottom: 0.1rem;
+        }
+
+        .metric-note {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            border-spacing: 0;
+            margin: 0.6rem 0 0.4rem 0;
+            font-size: 0.85rem;
+        }
+
+        th, td {
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            padding: 0.45rem 0.6rem;
+            text-align: left;
+        }
+
+        th {
+            background: #020617;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        tr:nth-child(even) {
+            background: rgba(15, 23, 42, 0.7);
+        }
+
+        .table-caption {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.2rem;
+        }
+
+        /* 
+           ============================================================
+           BADGES / LABELS FOR INSIGHTS
+           ============================================================
+        */
+
+        .insight-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 0.9rem;
+            margin-top: 0.8rem;
+        }
+
+        .insight-item {
+            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.15), #020617);
+            border-radius: 0.9rem;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            padding: 0.7rem 0.8rem;
+        }
+
+        .insight-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .insight-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* 
+           ============================================================
+           FOOTER
+           ============================================================
+        */
+
+        footer {
+            border-top: 1px solid rgba(148, 163, 184, 0.25);
+            padding: 1.2rem 0 1.8rem 0;
+            margin-top: 1.5rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        footer .footer-inner {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .footer-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ============================================================
+     NAVIGATION
+     ============================================================ -->
+<header class="navbar">
+    <div class="container navbar-inner">
+        <div class="navbar-logo">
+            <span>Football Scouting ML</span> - Player Valuation
+        </div>
+        <nav class="navbar-links">
+            <!-- The href values correspond to section IDs below. -->
+            <a href="#overview">Overview</a>
+            <a href="#data">Data &amp; Pipeline</a>
+            <a href="#modeling">Modeling</a>
+            <a href="#results">Results</a>
+            <a href="#interpretability">Interpretability</a>
+            <a href="#demo">Demo</a>
+            <a href="#insights">Insights</a>
+            <a href="#roadmap">Roadmap</a>
+            <a href="#about">About</a>
+            <a href="#contact">Contact</a>
+        </nav>
+    </div>
+</header>
+
+<!-- ============================================================
+     HERO SECTION
+     ============================================================ -->
+<section class="hero">
+    <div class="container hero-grid">
+        <!-- LEFT: Title, subtitle, metrics, CTAs -->
+        <div>
+            <div class="hero-kicker">Machine Learning - Football Analytics</div>
+            <h1 class="hero-title">
+                Predicting <span>Football Player Market Values</span> with ML
+            </h1>
+
+            <p class="hero-subtitle">
+                This project builds an end-to-end scouting pipeline that predicts football 
+                player market values using historical performance data from multiple seasons
+                and leagues. It combines data collection, feature engineering, model training,
+                and interpretability to support more data-driven scouting decisions.
+            </p>
+
+            <div class="hero-badges">
+                <!-- TODO: Replace XX.X% with your real current MAPE and metrics -->
+                <div class="badge">
+                    <span class="badge-dot"></span>
+                    MAPE ~ <strong>XX.X%</strong> on Big-5 leagues
+                </div>
+                <div class="badge">
+                    <span class="badge-dot"></span>
+                    2019-2025 seasons &amp; Big-5 leagues
+                </div>
+                <div class="badge">
+                    <span class="badge-dot"></span>
+                    Stack: Python - Pandas - XGBoost - SHAP
+                </div>
+            </div>
+
+            <div class="hero-cta">
+                <!-- TODO: Replace with the actual GitHub URL of the repo -->
+                <a class="btn-primary"
+                   href="https://github.com/Grischaa/Scouting_ML"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                    View Code on GitHub
+                </a>
+
+                <!-- TODO: Link to a notebook or documentation within repo -->
+                <a class="btn-secondary"
+                   href="https://github.com/Grischaa/Scouting_ML/tree/main/notebooks"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                    Explore Notebooks
+                </a>
+            </div>
+        </div>
+
+        <!-- RIGHT: Highlight card with key metric & context -->
+        <aside class="hero-side-card">
+            <h3>Model Performance Snapshot</h3>
+
+            <!-- TODO: Replace XX.X% with your main MAPE -->
+            <div class="hero-side-metric">XX.X% MAPE</div>
+            <div class="hero-side-caption">
+                Mean Absolute Percentage Error on hold-out test set of Big-5 leagues.
+            </div>
+
+            <div class="hero-side-pill-row">
+                <div class="hero-pill">End-to-end pipeline</div>
+                <div class="hero-pill">Cross-league comparison</div>
+                <div class="hero-pill">Explainable predictions</div>
+            </div>
+
+            <p class="hero-side-footnote">
+                Trained on player-season observations combining performance data and
+                market values. Includes robust preprocessing, hyperparameter tuning,
+                and model interpretability with SHAP values.
+            </p>
+
+            <div class="hero-side-accent"></div>
+        </aside>
+    </div>
+</section>
+
+<!-- ============================================================
+     OVERVIEW
+     ============================================================ -->
+<section id="overview">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-kicker">Project Overview</div>
+            <h2 class="section-title">What this project does</h2>
+            <p class="section-subtitle">
+                Football Scouting ML predicts player market values based on performance
+                and contextual data. The goal is not to replicate Transfermarkt exactly,
+                but to build a transparent, data-driven lens on valuation that can support
+                scouting and investment decisions.
+            </p>
+        </div>
+
+        <div class="two-col">
+            <div class="card">
+                <h3>Core Idea</h3>
+                <p>
+                    The model takes structured player attributes (performance statistics,
+                    age, position, league, etc.) and outputs an estimated market value in
+                    euros. This allows clubs, analysts, and agents to:
+                </p>
+                <ul>
+                    <li>Identify undervalued and overvalued players.</li>
+                    <li>Compare players across leagues and seasons.</li>
+                    <li>Quantify how different attributes impact valuation.</li>
+                </ul>
+
+                <h3>Main Objectives</h3>
+                <ul>
+                    <li>Build an end-to-end ML pipeline from raw data to predictions.</li>
+                    <li>Evaluate model performance across leagues and player segments.</li>
+                    <li>Provide model interpretability for individual players.</li>
+                </ul>
+            </div>
+
+            <div class="card-soft">
+                <h3>Scope &amp; Assumptions</h3>
+                <p class="muted">
+                    <!-- TODO: Adjust the bullets to match your exact dataset choices. -->
+                </p>
+                <ul>
+                    <li>Focus on the Big-5 European leagues (Premier League, La Liga,
+                        Bundesliga, Serie A, Ligue 1).</li>
+                    <li>Player-season level observations, covering multiple seasons.</li>
+                    <li>Market value from Transfermarkt (non-official but widely used baseline).</li>
+                    <li>Performance data from match statistics (minutes, goals, assists, etc.).</li>
+                </ul>
+
+                <div class="tag-row">
+                    <span class="tag">Supervised Regression</span>
+                    <span class="tag">Tabular Data</span>
+                    <span class="tag">Feature Engineering</span>
+                    <span class="tag">Model Explainability</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     DATA & PIPELINE
+     ============================================================ -->
+<section id="data">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-kicker">Data &amp; Processing</div>
+            <h2 class="section-title">From raw data to clean training set</h2>
+            <p class="section-subtitle">
+                The project integrates multiple data sources, handles missing values and
+                inconsistencies, and produces a clean feature matrix ready for training.
+            </p>
+        </div>
+
+        <div class="two-col">
+            <!-- LEFT: Data description -->
+            <div class="card">
+                <h3>Data Sources</h3>
+                <ul>
+                    <!-- TODO: Customize with your exact scraping / collection approach -->
+                    <li><strong>Market Values:</strong> Transfermarkt player market values
+                        per season.</li>
+                    <li><strong>Performance Stats:</strong> Match-level or season-level statistics
+                        (minutes, appearances, goals, assists, cards, etc.).</li>
+                    <li><strong>Contextual Data:</strong> Player age, position, league,
+                        club, possibly contract length and nationality.</li>
+                </ul>
+
+                <h3>Dataset Size (Example)</h3>
+                <ul>
+                    <!-- TODO: Replace approximate numbers with your actual dataset description -->
+                    <li>~N players across 5 major European leagues.</li>
+                    <li>~M player-season observations (multiple seasons).</li>
+                    <li>Dozens of engineered features capturing performance, age profile, etc.</li>
+                </ul>
+
+                <h3>Target Variable</h3>
+                <p>
+                    The target is the player market value in euros for a given season.
+                    To stabilize training, the model can predict a log-transformed market
+                    value and then map it back to euros for interpretation.
+                </p>
+            </div>
+
+            <!-- RIGHT: Pipeline diagram + text -->
+            <div class="card-soft">
+                <h3>Processing Pipeline</h3>
+                <p>
+                    The following steps are implemented in the data pipeline:
+                </p>
+                <ul>
+                    <li>Load raw scraped / downloaded data into Pandas DataFrames.</li>
+                    <li>Merge multiple tables (players, stats, leagues) on keys like player ID and season.</li>
+                    <li>Handle missing values and outliers (e.g., imputation, filtering).</li>
+                    <li>Engineer domain-specific features (per-90 stats, age buckets, etc.).</li>
+                    <li>Split into train/validation/test with time-aware logic if needed.</li>
+                    <li>Scale / encode features where appropriate.</li>
+                </ul>
+
+                    <p class="muted" style="margin-top: 0.6rem;">
+                        <!-- Placeholder for pipeline diagram image -->
+                        <em>Below you can include a custom diagram showing this pipeline visually.</em>
+                    </p>
+                    <img src="assets/pipeline_diagram_placeholder.png"
+                         alt="Pipeline diagram placeholder (replace with your actual pipeline image)." />
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     MODELING
+     ============================================================ -->
+<section id="modeling">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-kicker">Modeling Approach</div>
+            <h2 class="section-title">Model choices and training strategy</h2>
+            <p class="section-subtitle">
+                The project evaluates multiple regression algorithms and selects a
+                gradient-boosted tree model (XGBoost) as the primary choice due to its 
+                strong performance on structured tabular data.
+            </p>
+        </div>
+
+        <div class="two-col">
+            <div class="card">
+                <h3>Models Evaluated</h3>
+                <!-- TODO: Adjust table entries based on your experiments -->
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>MAPE</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Linear Regression</td>
+                            <td>~XX.X%</td>
+                            <td>Baseline; struggles with non-linearities.</td>
+                        </tr>
+                        <tr>
+                            <td>Random Forest</td>
+                            <td>~XX.X%</td>
+                            <td>Better, but less efficient and less tuned.</td>
+                        </tr>
+                        <tr>
+                            <td><strong>XGBoost</strong></td>
+                            <td><strong>~XX.X%</strong></td>
+                            <td>Best trade-off of accuracy and robustness.</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="table-caption">
+                    TODO: Replace MAPE values with your actual cross-validated results.
+                </div>
+
+                <h3>Training Strategy</h3>
+                <ul>
+                    <li>Train / validation split configuration (for example, by season or random).</li>
+                    <li>Hyperparameter tuning with randomized or grid search.</li>
+                    <li>Early stopping to avoid overfitting.</li>
+                    <li>Performance monitored via MAPE, MAE, and R^2.</li>
+                </ul>
+            </div>
+
+            <div class="card-soft">
+                <h3>Feature Engineering</h3>
+                <ul>
+                    <li><strong>Performance Features:</strong> goals, assists, shots,
+                        key passes, defensive actions, per-90 normalized if needed.</li>
+                    <li><strong>Playing Time:</strong> minutes played, games started,
+                        share of available minutes.</li>
+                    <li><strong>Context:</strong> league, club strength, position,
+                        age, age^2 for non-linear pattern.</li>
+                    <li><strong>Potential Extras:</strong> injury history, contract
+                        length, international caps (future extensions).</li>
+                </ul>
+
+                <div class="metric-grid" style="margin-top: 0.8rem;">
+                    <div class="metric-card">
+                        <div class="metric-label">Features</div>
+                        <div class="metric-value">~K</div>
+                        <div class="metric-note">Engineered and selected from raw data.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Training Samples</div>
+                        <div class="metric-value">~M</div>
+                        <div class="metric-note">Player-season rows used for training.</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Primary Model</div>
+                        <div class="metric-value">XGBoost</div>
+                        <div class="metric-note">Tree-based gradient boosting.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     RESULTS / EVALUATION
+     ============================================================ -->
+<section id="results">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-kicker">Results</div>
+            <h2 class="section-title">How well does the model perform?</h2>
+            <p class="section-subtitle">
+                Model performance is evaluated across the full test set and broken down
+                by league and player profile. The emphasis is on understanding where the
+                model is reliable and where its limitations are.
+            </p>
+        </div>
+
+        <div class="two-col">
+            <div class="card">
+                <h3>Global Metrics</h3>
+                <!-- TODO: Insert your actual metrics here -->
+                <ul>
+                    <li><strong>MAPE:</strong> ~XX.X% on the test set.</li>
+                    <li><strong>MAE:</strong> ~X.X million euros (absolute error).</li>
+                    <li><strong>R^2:</strong> ~0.XX explaining variance in market values.</li>
+                </ul>
+
+                <h3>By League (Example)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>League</th>
+                            <th>MAPE</th>
+                            <th>Observation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Premier League</td>
+                            <td>~XX.X%</td>
+                            <td>High data volume, decent stability.</td>
+                        </tr>
+                        <tr>
+                            <td>La Liga</td>
+                            <td>~XX.X%</td>
+                            <td>Good fit, some high-value outliers.</td>
+                        </tr>
+                        <tr>
+                            <td>Bundesliga</td>
+                            <td>~XX.X%</td>
+                            <td>Well-behaved, fewer extreme valuations.</td>
+                        </tr>
+                        <tr>
+                            <td>Serie A</td>
+                            <td>~XX.X%</td>
+                            <td>Some volatility in mid-tier player values.</td>
+                        </tr>
+                        <tr>
+                            <td>Ligue 1</td>
+                            <td>~XX.X%</td>
+                            <td>Challenging at the very top end (for example, PSG stars).</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <p class="table-caption">
+                    TODO: Replace placeholder MAPE values once you have league-wise metrics.
+                </p>
+            </div>
+
+            <div class="card-soft">
+                <h3>Prediction vs. Actual Values</h3>
+                <p>
+                    The scatter plot of predicted vs. actual market values on the test set
+                    shows a clear positive correlation. Deviations increase at very high
+                    market values, which is expected due to fewer samples and higher noise.
+                </p>
+
+                <!-- TODO: Replace with an actual plot you generate using matplotlib or seaborn -->
+                <img src="assets/pred_vs_actual_placeholder.png"
+                     alt="Placeholder for predicted vs. actual market value scatter plot." />
+
+                <p class="muted" style="margin-top: 0.4rem;">
+                    You can generate this graphic in a notebook and export it as a PNG
+                    into <code>assets/pred_vs_actual.png</code>, then update the path above.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     INTERPRETABILITY
+     ============================================================ -->
+<section id="interpretability">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-kicker">Interpretability</div>
+            <h2 class="section-title">Why does the model value a player that way?</h2>
+            <p class="section-subtitle">
+                Beyond raw metrics, the project uses SHAP values and feature importance
+                plots to explain model decisions at both the global and individual levels.
+            </p>
+        </div>
+
+        <div class="two-col">
+            <div class="card">
+                <h3>Global Feature Importance</h3>
+                <p>
+                    SHAP summary plots and feature importance charts highlight which
+                    variables contribute most strongly to market value predictions.
+                    Typical top features include:
+                </p>
+                <ul>
+                    <li>Minutes played and games started.</li>
+                    <li>Goals and assists (especially for attacking positions).</li>
+                    <li>Age (peak age range vs. younger or older players).</li>
+                    <li>League and club strength.</li>
+                </ul>
+
+                <!-- TODO: Replace with a SHAP summary plot image -->
+                <img src="assets/shap_summary_placeholder.png"
+                     alt="Placeholder for SHAP summary plot." />
+            </div>
+
+            <div class="card-soft">
+                <h3>Player-Level Explanations</h3>
+                <p>
+                    For a given player, the SHAP values can be visualized as a bar chart
+                    showing how each feature pushes the predicted value up or down relative
+                    to a baseline. This can be turned into a simple "explanation card":
+                </p>
+
+                <ul>
+                    <li>Positive contributions (for example, high minutes, strong goal output) 
+                        raise the predicted value.</li>
+                    <li>Negative contributions (for example, low playing time, advanced age)
+                        reduce the predicted value.</li>
+                </ul>
+
+                <p class="muted">
+                    This is particularly valuable for scouting, as it makes the model's
+                    reasoning transparent and allows comparison with subjective judgment.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     DEMO SECTION
+     ============================================================ -->
+<section id="demo">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-kicker">Demo</div>
+            <h2 class="section-title">Interactive prediction (optional Streamlit app)</h2>
+            <p class="section-subtitle">
+                This section describes or embeds an optional interactive demo where users
+                can input player statistics and receive a model-driven valuation estimate.
+            </p>
+        </div>
+
+        <div class="card">
+            <h3>How the demo works</h3>
+            <ul>
+                <li>User selects or inputs age, position, league, and core performance statistics.</li>
+                <li>The app preprocesses the input into the same feature format as the training data.</li>
+                <li>The trained XGBoost model generates a predicted market value.</li>
+                <li>Optionally, a SHAP-based explanation is shown alongside the prediction.</li>
+            </ul>
+
+            <!-- TODO: If you build a Streamlit app, host it and embed as iframe -->
+            <!-- Example placeholder: -->
+            <p class="muted">
+                If you create a Streamlit app and deploy it, you can embed it here:
+            </p>
+            <!--
+            <iframe
+                src="https://your-streamlit-app-url.streamlit.app"
+                style="width: 100%; height: 600px; border: none; border-radius: 1rem; overflow: hidden;"
+                loading="lazy"
+            ></iframe>
+            -->
+            <p class="muted">
+                For now, this section acts as a placeholder description of the interactive demo.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     KEY INSIGHTS
+     ============================================================ -->
+<section id="insights">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-kicker">Insights</div>
+            <h2 class="section-title">What the model teaches us about player valuation</h2>
+            <p class="section-subtitle">
+                Beyond prediction accuracy, the model reveals how different factors drive
+                market values across leagues, age groups, and playing positions.
+            </p>
+        </div>
+
+        <div class="insight-list">
+            <div class="insight-item">
+                <div class="insight-title">Peak age window matters</div>
+                <div class="insight-text">
+                    Players in the typical "prime" age band (for example, 23-28) exhibit higher
+                    values for similar performance compared to much younger or older players.
+                </div>
+            </div>
+            <div class="insight-item">
+                <div class="insight-title">Playing time is a strong signal</div>
+                <div class="insight-text">
+                    Minutes played and share of available match time are among the strongest
+                    predictors of market value, reflecting trust from the coaching staff.
+                </div>
+            </div>
+            <div class="insight-item">
+                <div class="insight-title">League effects and visibility</div>
+                <div class="insight-text">
+                    The same performance statistics often map to different values in different
+                    leagues, reflecting competition level, commercial visibility, and club budgets.
+                </div>
+            </div>
+            <div class="insight-item">
+                <div class="insight-title">Attacking output carries a premium</div>
+                <div class="insight-text">
+                    Goals, assists, and key passes tend to drive valuations more aggressively
+                    for attacking players, while defensive metrics matter more for defenders
+                    and defensive midfielders.
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     ROADMAP
+     ============================================================ -->
+<section id="roadmap">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-kicker">Roadmap</div>
+            <h2 class="section-title">Planned improvements and extensions</h2>
+            <p class="section-subtitle">
+                The current version provides a solid baseline for market value prediction. 
+                Future work focuses on richer data, better modeling, and stronger real-world
+                integration.
+            </p>
+        </div>
+
+        <div class="two-col">
+            <div class="card">
+                <h3>Model and Data Enhancements</h3>
+                <ul>
+                    <li>Add granular injury data and contract length where available.</li>
+                    <li>Incorporate advanced metrics (xG, xA, pressing, progressive passes).</li>
+                    <li>Refine league and club strength indicators (for example, Elo ratings).</li>
+                    <li>Experiment with alternative models (CatBoost, LightGBM, ensembles).</li>
+                </ul>
+            </div>
+
+            <div class="card-soft">
+                <h3>Product and Usability</h3>
+                <ul>
+                    <li>Deploy the model behind an API endpoint for external use.</li>
+                    <li>Build a richer web frontend with player search and comparison views.</li>
+                    <li>Integrate multi-season trajectories to estimate future value evolution.</li>
+                    <li>Support a workflow for scouts to annotate and override model outputs.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     ABOUT / AUTHOR
+     ============================================================ -->
+<section id="about">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-kicker">About the Author</div>
+            <h2 class="section-title">Who built this project?</h2>
+            <p class="section-subtitle">
+                Football Scouting ML was developed as a practical, portfolio-grade project
+                combining data science, football analytics, and software engineering.
+            </p>
+        </div>
+
+        <div class="card">
+            <h3>Christoph Schally</h3>
+            <p>
+                I am a student with a strong interest in data analytics, machine learning,
+                and sports. This project brings together my academic background in business
+                information management and my passion for football to build an applied,
+                end-to-end ML system.
+            </p>
+            <ul>
+                <li>Focus areas: data-driven decision making, ML pipelines, and explainable AI.</li>
+                <li>Passionate about football, triathlon, and long-term performance analytics.</li>
+                <li>Comfortable working with Python, Pandas, scikit-learn, XGBoost, and data
+                    visualization tools.</li>
+            </ul>
+
+            <p class="muted">
+                If you are interested in football analytics, data science roles, or simply want
+                to discuss this project, feel free to reach out.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================================
+     CONTACT / FOOTER
+     ============================================================ -->
+<section id="contact">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-kicker">Contact</div>
+            <h2 class="section-title">Get in touch</h2>
+            <p class="section-subtitle">
+                Below are the main ways to explore the project further or contact me directly.
+            </p>
+        </div>
+
+        <div class="card-soft">
+            <ul>
+                <!-- TODO: Replace with your actual links -->
+                <li><strong>GitHub Repository:</strong> 
+                    <a href="https://github.com/Grischaa/Scouting_ML"
+                       target="_blank" rel="noopener noreferrer">
+                        github.com/Grischaa/Scouting_ML
+                    </a>
+                </li>
+                <li><strong>LinkedIn:</strong> 
+                    <a href="https://www.linkedin.com/in/christophschally/"
+                       target="_blank" rel="noopener noreferrer">
+                        linkedin.com/in/christophschally
+                    </a>
+                </li>
+                <li><strong>Email:</strong> 
+                    <!-- You can obfuscate if you worry about spam -->
+                    <a href="mailto:your.email@example.com">your.email@example.com</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container footer-inner">
+        <div>
+            (c) <span id="year"></span> Football Scouting ML - Built by Christoph Schally
+        </div>
+        <div class="footer-links">
+            <a href="#overview">Back to top ^</a>
+        </div>
+    </div>
+</footer>
+
+<script>
+    // Simple script to keep the footer year up to date.
+    document.getElementById("year").textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>

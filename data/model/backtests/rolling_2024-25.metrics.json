@@ -1,0 +1,514 @@
+{
+  "dataset": "data/model/champion_players_clean.parquet",
+  "val_season": "2023/24",
+  "test_season": "2024/25",
+  "trials_per_position": 40,
+  "recency_half_life": 2.0,
+  "under_5m_weight": 1.0,
+  "mid_5m_to_20m_weight": 1.0,
+  "over_20m_weight": 1.0,
+  "optimize_metric": "lowmid_wmape",
+  "interval_q": 0.8,
+  "two_stage_band_model": true,
+  "band_min_samples": 160,
+  "band_blend_alpha": 0.35,
+  "exclude_prefixes": [],
+  "exclude_columns": [],
+  "strict_leakage_guard": true,
+  "drop_incomplete_league_seasons": true,
+  "min_league_season_rows": 40,
+  "min_league_season_completeness": 0.55,
+  "residual_calibration_min_samples": 30,
+  "mape_min_denom_eur": 1000000.0,
+  "positions": [
+    {
+      "split": "val",
+      "position": "GK",
+      "n_samples": 267,
+      "r2": 0.6173285714033645,
+      "mae_eur": 2623198.8687482504,
+      "mape": 0.4875218560766621,
+      "wmape": 0.46297099661612073
+    },
+    {
+      "split": "val",
+      "position": "DF",
+      "n_samples": 1401,
+      "r2": 0.7827175624429347,
+      "mae_eur": 2599709.153667343,
+      "mape": 0.40849888398319045,
+      "wmape": 0.371775591322423
+    },
+    {
+      "split": "val",
+      "position": "MF",
+      "n_samples": 1106,
+      "r2": 0.7563780919669774,
+      "mae_eur": 3224431.7107547033,
+      "mape": 0.4721014378500667,
+      "wmape": 0.3864042551772573
+    },
+    {
+      "split": "val",
+      "position": "FW",
+      "n_samples": 1003,
+      "r2": 0.7702499402185401,
+      "mae_eur": 3459660.1052559437,
+      "mape": 0.4525315515957401,
+      "wmape": 0.3677339930821972
+    },
+    {
+      "split": "test",
+      "position": "GK",
+      "n_samples": 292,
+      "r2": 0.646480824378934,
+      "mae_eur": 2451880.1874376754,
+      "mape": 0.5152495191023029,
+      "wmape": 0.4609183065400991
+    },
+    {
+      "split": "test",
+      "position": "DF",
+      "n_samples": 1402,
+      "r2": 0.7222960184856182,
+      "mae_eur": 2851459.807424699,
+      "mape": 0.4698775023261475,
+      "wmape": 0.4146500274092354
+    },
+    {
+      "split": "test",
+      "position": "MF",
+      "n_samples": 1139,
+      "r2": 0.7491960371524542,
+      "mae_eur": 3359221.286997029,
+      "mape": 0.4934502930439852,
+      "wmape": 0.40161785331873767
+    },
+    {
+      "split": "test",
+      "position": "FW",
+      "n_samples": 1048,
+      "r2": 0.7485458677438086,
+      "mae_eur": 3695657.5122093135,
+      "mape": 0.5741157227749739,
+      "wmape": 0.39616878773634906
+    }
+  ],
+  "overall": {
+    "val": {
+      "n_samples": 3777,
+      "mae_eur": 2964147.5318469442,
+      "mape": 0.3978069113510253,
+      "mape_raw": 0.5692851944554624,
+      "mape_min_denom_eur": 1000000.0,
+      "wmape": 0.37349617608568136,
+      "r2": 0.7665864011647877,
+      "interval_coverage": 0.7995763833730474,
+      "interval_avg_width_eur": 8716230.092125608,
+      "interval_median_width_eur": 2430379.2742774575
+    },
+    "test": {
+      "n_samples": 3881,
+      "mae_eur": 3163242.8954781895,
+      "mape": 0.45335337410930276,
+      "mape_raw": 0.940220875859167,
+      "mape_min_denom_eur": 1000000.0,
+      "wmape": 0.4025403797945533,
+      "r2": 0.7390809571568275,
+      "interval_coverage": 0.7807266168513269,
+      "interval_avg_width_eur": 8684046.214833762,
+      "interval_median_width_eur": 2430379.274277457
+    }
+  },
+  "segments": {
+    "val": [
+      {
+        "split": "val",
+        "segment": "under_5m",
+        "lower_eur": 0.0,
+        "upper_eur": 5000000.0,
+        "n_samples": 2342,
+        "mae_eur": 746893.895804949,
+        "mape": 0.41190228952770835,
+        "mape_raw": 0.6884494608707739,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.48246511031972383,
+        "r2": -0.07244723278473097
+      },
+      {
+        "split": "val",
+        "segment": "5m_to_20m",
+        "lower_eur": 5000000.0,
+        "upper_eur": 20000000.0,
+        "n_samples": 972,
+        "mae_eur": 3821528.0727888476,
+        "mape": 0.3916871434131577,
+        "mape_raw": 0.3916871434131577,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.39275974483222414,
+        "r2": -0.7308696919646109
+      },
+      {
+        "split": "val",
+        "segment": "over_20m",
+        "lower_eur": 20000000.0,
+        "upper_eur": Infinity,
+        "n_samples": 463,
+        "mae_eur": 12379772.002289321,
+        "mape": 0.3393555911476035,
+        "mape_raw": 0.3393555911476035,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.3393224270104165,
+        "r2": 0.10865880808493933
+      }
+    ],
+    "test": [
+      {
+        "split": "test",
+        "segment": "under_5m",
+        "lower_eur": 0.0,
+        "upper_eur": 5000000.0,
+        "n_samples": 2486,
+        "mae_eur": 809266.4027788384,
+        "mape": 0.4838424635834558,
+        "mape_raw": 1.2439119624938435,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.5653329616523544,
+        "r2": -0.2732920333264508
+      },
+      {
+        "split": "test",
+        "segment": "5m_to_20m",
+        "lower_eur": 5000000.0,
+        "upper_eur": 20000000.0,
+        "n_samples": 885,
+        "mae_eur": 4010514.731046948,
+        "mape": 0.42364896624313075,
+        "mape_raw": 0.42364896624313075,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.41619436409199684,
+        "r2": -0.7387414673547272
+      },
+      {
+        "split": "test",
+        "segment": "over_20m",
+        "lower_eur": 20000000.0,
+        "upper_eur": Infinity,
+        "n_samples": 510,
+        "mae_eur": 13167458.55503159,
+        "mape": 0.3562798927932585,
+        "mape_raw": 0.3562798927932585,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.36474954446070884,
+        "r2": 0.021643084306865124
+      }
+    ]
+  },
+  "quality_report": {
+    "n_rows": 17346,
+    "n_columns": 234,
+    "missing_rates": {
+      "market_value_eur": 0.0,
+      "log_market_value": 0.0,
+      "minutes": 0.0,
+      "sofa_minutesPlayed": 0.0,
+      "age": 0.0004035512510088781,
+      "season": 0.0,
+      "league": 0.0,
+      "position_group": 0.0
+    },
+    "duplicate_checks": {
+      "keys": [
+        "season",
+        "league",
+        "club",
+        "position_group",
+        "player_id",
+        "name"
+      ],
+      "duplicate_rate": 0.0
+    },
+    "league_season_rows": [
+      {
+        "league": "Austrian Bundesliga",
+        "season": "2025/26",
+        "n_rows": 130
+      },
+      {
+        "league": "Belgian Pro League",
+        "season": "2022/23",
+        "n_rows": 349
+      },
+      {
+        "league": "Belgian Pro League",
+        "season": "2023/24",
+        "n_rows": 321
+      },
+      {
+        "league": "Belgian Pro League",
+        "season": "2024/25",
+        "n_rows": 321
+      },
+      {
+        "league": "Bundesliga",
+        "season": "2019/20",
+        "n_rows": 350
+      },
+      {
+        "league": "Bundesliga",
+        "season": "2020/21",
+        "n_rows": 344
+      },
+      {
+        "league": "Bundesliga",
+        "season": "2021/22",
+        "n_rows": 334
+      },
+      {
+        "league": "Bundesliga",
+        "season": "2022/23",
+        "n_rows": 343
+      },
+      {
+        "league": "Bundesliga",
+        "season": "2023/24",
+        "n_rows": 334
+      },
+      {
+        "league": "Bundesliga",
+        "season": "2024/25",
+        "n_rows": 339
+      },
+      {
+        "league": "English Premier League",
+        "season": "2019/20",
+        "n_rows": 380
+      },
+      {
+        "league": "English Premier League",
+        "season": "2020/21",
+        "n_rows": 387
+      },
+      {
+        "league": "English Premier League",
+        "season": "2021/22",
+        "n_rows": 390
+      },
+      {
+        "league": "English Premier League",
+        "season": "2022/23",
+        "n_rows": 361
+      },
+      {
+        "league": "English Premier League",
+        "season": "2023/24",
+        "n_rows": 390
+      },
+      {
+        "league": "English Premier League",
+        "season": "2024/25",
+        "n_rows": 303
+      },
+      {
+        "league": "Eredivisie",
+        "season": "2022/23",
+        "n_rows": 331
+      },
+      {
+        "league": "Eredivisie",
+        "season": "2023/24",
+        "n_rows": 336
+      },
+      {
+        "league": "Eredivisie",
+        "season": "2024/25",
+        "n_rows": 343
+      },
+      {
+        "league": "Estonian Meistriliiga",
+        "season": "2024/25",
+        "n_rows": 171
+      },
+      {
+        "league": "Greek Super League",
+        "season": "2022/23",
+        "n_rows": 269
+      },
+      {
+        "league": "Greek Super League",
+        "season": "2023/24",
+        "n_rows": 284
+      },
+      {
+        "league": "Greek Super League",
+        "season": "2024/25",
+        "n_rows": 291
+      },
+      {
+        "league": "LaLiga",
+        "season": "2019/20",
+        "n_rows": 381
+      },
+      {
+        "league": "LaLiga",
+        "season": "2020/21",
+        "n_rows": 408
+      },
+      {
+        "league": "LaLiga",
+        "season": "2021/22",
+        "n_rows": 406
+      },
+      {
+        "league": "LaLiga",
+        "season": "2022/23",
+        "n_rows": 404
+      },
+      {
+        "league": "LaLiga",
+        "season": "2023/24",
+        "n_rows": 396
+      },
+      {
+        "league": "LaLiga",
+        "season": "2024/25",
+        "n_rows": 405
+      },
+      {
+        "league": "Ligue 1",
+        "season": "2019/20",
+        "n_rows": 362
+      },
+      {
+        "league": "Ligue 1",
+        "season": "2020/21",
+        "n_rows": 396
+      },
+      {
+        "league": "Ligue 1",
+        "season": "2021/22",
+        "n_rows": 405
+      },
+      {
+        "league": "Ligue 1",
+        "season": "2022/23",
+        "n_rows": 396
+      },
+      {
+        "league": "Ligue 1",
+        "season": "2023/24",
+        "n_rows": 337
+      },
+      {
+        "league": "Ligue 1",
+        "season": "2024/25",
+        "n_rows": 345
+      },
+      {
+        "league": "Primeira Liga",
+        "season": "2022/23",
+        "n_rows": 331
+      },
+      {
+        "league": "Primeira Liga",
+        "season": "2023/24",
+        "n_rows": 331
+      },
+      {
+        "league": "Primeira Liga",
+        "season": "2024/25",
+        "n_rows": 349
+      },
+      {
+        "league": "Scottish Premiership",
+        "season": "2022/23",
+        "n_rows": 239
+      },
+      {
+        "league": "Scottish Premiership",
+        "season": "2023/24",
+        "n_rows": 234
+      },
+      {
+        "league": "Scottish Premiership",
+        "season": "2024/25",
+        "n_rows": 244
+      },
+      {
+        "league": "Serie A",
+        "season": "2019/20",
+        "n_rows": 411
+      },
+      {
+        "league": "Serie A",
+        "season": "2020/21",
+        "n_rows": 403
+      },
+      {
+        "league": "Serie A",
+        "season": "2021/22",
+        "n_rows": 417
+      },
+      {
+        "league": "Serie A",
+        "season": "2022/23",
+        "n_rows": 418
+      },
+      {
+        "league": "Serie A",
+        "season": "2023/24",
+        "n_rows": 409
+      },
+      {
+        "league": "Serie A",
+        "season": "2024/25",
+        "n_rows": 414
+      },
+      {
+        "league": "Turkish Super Lig",
+        "season": "2022/23",
+        "n_rows": 340
+      },
+      {
+        "league": "Turkish Super Lig",
+        "season": "2023/24",
+        "n_rows": 408
+      },
+      {
+        "league": "Turkish Super Lig",
+        "season": "2024/25",
+        "n_rows": 356
+      }
+    ],
+    "scrape_success_rates": {
+      "contract_scrape_success": 1.0,
+      "injury_scrape_success": 1.0,
+      "transfer_scrape_success": 1.0,
+      "nt_scrape_success": 1.0
+    },
+    "quality_flags": [],
+    "completeness_filter": {
+      "enabled": true,
+      "min_rows": 40,
+      "min_completeness_ratio": 0.55,
+      "dropped_groups": [],
+      "n_rows_before": 17346,
+      "n_rows_after": 17346,
+      "n_rows_dropped": 0
+    }
+  },
+  "residual_calibration": {
+    "enabled": true,
+    "min_samples": 30,
+    "global_adjustment_eur": -129687.75620957254,
+    "n_level1": 48,
+    "n_level2": 43,
+    "n_level3": 12,
+    "n_level4": 3
+  },
+  "artifacts": {
+    "val_predictions_csv": "data\\model\\backtests\\rolling_2024-25_val.csv",
+    "test_predictions_csv": "data\\model\\backtests\\rolling_2024-25.csv",
+    "error_priors_csv": "data\\model\\backtests\\rolling_2024-25.error_priors.csv"
+  }
+}

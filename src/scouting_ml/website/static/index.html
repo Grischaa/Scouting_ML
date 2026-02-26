@@ -3,140 +3,472 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ScoutML Player Radar</title>
-    <link rel="stylesheet" href="assets/styles.css" />
-    <script src="data/players.js" defer></script>
-    <script src="assets/app.js" defer></script>
+    <title>ScoutML - Valuation and Talent Scouting</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/styles.css?v=20260226a" />
+    <script src="assets/app.js?v=20260226a" defer></script>
   </head>
   <body>
-    <header class="hero">
-      <div class="hero__content">
-        <h1>ScoutML Player Radar</h1>
-        <p>
-          Explore Transfermarkt x Sofascore player datasets across leagues.
-          Filter by club, position, age, and more to surface recruitment
-          targets in seconds.
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <header class="app-header">
+      <div class="app-header__left">
+        <p class="kicker">Scouting ML</p>
+        <h1>Valuation and Talent Scouting</h1>
+        <p class="subtitle">
+          One application for two decisions: who is over/undervalued now, and
+          where hidden talent sits in lower-league funnels.
         </p>
-        <p class="hero__meta" id="league-subtitle">
-          Choose a league to get started.
-        </p>
+        <div class="goal-pills">
+          <span class="goal-pill">Market Value Decision Support</span>
+          <span class="goal-pill">Lower-League Talent Funnel</span>
+        </div>
+      </div>
+      <div class="app-header__right card">
+        <label for="api-base">API base</label>
+        <input
+          id="api-base"
+          type="url"
+          spellcheck="false"
+          value="http://localhost:8000"
+          placeholder="http://localhost:8000"
+        />
+        <div class="api-controls">
+          <button id="connect-btn" type="button">Connect</button>
+          <span id="api-status" class="status status--neutral">Not connected</span>
+        </div>
       </div>
     </header>
 
-    <main class="page">
-      <section class="filters">
-        <div class="filter">
-          <label for="league-select">League</label>
-          <select id="league-select" name="league">
-            <option value="">Select a league</option>
-          </select>
-        </div>
-        <div class="filter">
-          <label for="search-input">Search</label>
-          <input
-            type="search"
-            id="search-input"
-            name="search"
-            placeholder="Player or club"
-            autocomplete="off"
-          />
-        </div>
-        <div class="filter">
-          <label for="club-select">Club</label>
-          <select id="club-select" name="club">
-            <option value="">All clubs</option>
-          </select>
-        </div>
-        <div class="filter">
-          <label for="position-select">Position</label>
-          <select id="position-select" name="position">
-            <option value="">All positions</option>
-          </select>
-        </div>
-        <div class="filter">
-          <label for="age-select">Age band</label>
-          <select id="age-select" name="age">
-            <option value="">All</option>
-            <option value="u18">Under 18</option>
-            <option value="18-22">18 – 22</option>
-            <option value="23-26">23 – 26</option>
-            <option value="27-30">27 – 30</option>
-            <option value="30+">30+</option>
-          </select>
-        </div>
-        <div class="filter">
-          <label for="sort-select">Sort by</label>
-          <select id="sort-select" name="sort">
-            <option value="market_value_eur">Market value (€)</option>
-            <option value="sofa_minutesPlayed">Minutes played</option>
-            <option value="sofa_goals">Goals</option>
-            <option value="sofa_assists">Assists</option>
-            <option value="sofa_expectedGoals">Expected goals</option>
-            <option value="sofa_totalDuelsWonPercentage">Duels won %</option>
-            <option value="sofa_accuratePassesPercentage">Pass accuracy %</option>
-          </select>
-        </div>
-        <div class="filter">
-          <label for="sort-direction" class="sr-only">Sort direction</label>
-          <button id="sort-direction" aria-label="Toggle sort direction">
-            ↓ Desc
-          </button>
+    <main class="main-wrap">
+      <nav class="view-tabs card" aria-label="Views">
+        <button class="tab-btn is-active" data-view="overview" type="button">Overview</button>
+        <button class="tab-btn" data-view="workbench" type="button">Valuation Workbench</button>
+        <button class="tab-btn" data-view="funnel" type="button">Talent Funnel</button>
+      </nav>
+
+      <section id="view-overview" class="view view--active">
+        <div class="overview-grid">
+          <article class="card trust-card">
+            <h2>Model Trust Card</h2>
+            <dl class="trust-list">
+              <div><dt>Model Version</dt><dd id="trust-model-version">-</dd></div>
+              <div><dt>Last Updated (UTC)</dt><dd id="trust-updated">-</dd></div>
+              <div><dt>Dataset</dt><dd id="trust-dataset">-</dd></div>
+              <div><dt>Validation/Test</dt><dd id="trust-splits">-</dd></div>
+              <div><dt>Rows (Val/Test)</dt><dd id="trust-rows">-</dd></div>
+            </dl>
+            <div class="artifact-box">
+              <p class="artifact-box__title">Active Artifacts</p>
+              <ul class="artifact-list">
+                <li><span>Test CSV</span><code id="artifact-test">-</code></li>
+                <li><span>Val CSV</span><code id="artifact-val">-</code></li>
+                <li><span>Metrics JSON</span><code id="artifact-metrics">-</code></li>
+              </ul>
+            </div>
+            <p class="trust-note" id="trust-note">Connect API to load artifact metadata.</p>
+          </article>
+
+          <article class="card metrics-card">
+            <h2>Core Metrics</h2>
+            <div class="metrics-grid">
+              <article class="metric">
+                <p class="metric__label">Test R²</p>
+                <p class="metric__value" id="metric-test-r2">-</p>
+              </article>
+              <article class="metric">
+                <p class="metric__label">Test MAE</p>
+                <p class="metric__value" id="metric-test-mae">-</p>
+              </article>
+              <article class="metric">
+                <p class="metric__label">Test MAPE</p>
+                <p class="metric__value" id="metric-test-mape">-</p>
+              </article>
+              <article class="metric">
+                <p class="metric__label">Val R²</p>
+                <p class="metric__value" id="metric-val-r2">-</p>
+              </article>
+              <article class="metric">
+                <p class="metric__label">Val MAE</p>
+                <p class="metric__value" id="metric-val-mae">-</p>
+              </article>
+              <article class="metric">
+                <p class="metric__label">Val MAPE</p>
+                <p class="metric__value" id="metric-val-mape">-</p>
+              </article>
+            </div>
+            <p id="metrics-meta" class="metrics-meta">No metrics loaded yet.</p>
+          </article>
+
+          <article class="card segment-card">
+            <h2>Segment Reliability</h2>
+            <p class="segment-note">Use test split segment metrics before trusting shortlist calls.</p>
+            <div class="table-wrap table-wrap--small">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Segment</th>
+                    <th class="num">R²</th>
+                    <th class="num">MAE</th>
+                    <th class="num">MAPE</th>
+                    <th class="num">WMAPE</th>
+                  </tr>
+                </thead>
+                <tbody id="segment-body">
+                  <tr><td colspan="5">No segment metrics loaded.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="warning" id="segment-warning">-</p>
+          </article>
+
+          <article class="card coverage-card">
+            <h2>League Coverage (Current Split)</h2>
+            <p class="segment-note">
+              Lower-league ready: if non-Big5 data exists in predictions, it appears here automatically.
+            </p>
+            <div class="table-wrap table-wrap--small">
+              <table>
+                <thead>
+                  <tr>
+                    <th>League</th>
+                    <th class="num">Rows</th>
+                    <th class="num">Undervalued %</th>
+                    <th class="num">Avg confidence</th>
+                  </tr>
+                </thead>
+                <tbody id="coverage-body">
+                  <tr><td colspan="4">Connect and load coverage.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
         </div>
       </section>
 
-      <section class="summary">
-        <div class="summary__item">
-          <span class="summary__label">Players</span>
-          <span class="summary__value" id="summary-count">0</span>
-        </div>
-        <div class="summary__item">
-          <span class="summary__label">Avg. market value</span>
-          <span class="summary__value" id="summary-market">€0</span>
-        </div>
-        <div class="summary__item">
-          <span class="summary__label">Avg. xG</span>
-          <span class="summary__value" id="summary-xg">0.00</span>
-        </div>
-        <div class="summary__item">
-          <span class="summary__label">Avg. minutes</span>
-          <span class="summary__value" id="summary-minutes">0</span>
+      <section id="view-workbench" class="view">
+        <div class="layout">
+          <section class="controls card">
+            <div class="control">
+              <label for="mode-select">Mode</label>
+              <select id="mode-select">
+                <option value="predictions">Predictions</option>
+                <option value="shortlist">Shortlist</option>
+              </select>
+            </div>
+            <div class="control">
+              <label for="split-select">Split</label>
+              <select id="split-select">
+                <option value="test">Test</option>
+                <option value="val">Validation</option>
+              </select>
+            </div>
+            <div class="control">
+              <label for="season-select">Season</label>
+              <select id="season-select">
+                <option value="">All seasons</option>
+              </select>
+            </div>
+            <div class="control">
+              <label for="league-select">League</label>
+              <select id="league-select">
+                <option value="">All leagues</option>
+              </select>
+            </div>
+            <div class="control">
+              <label for="position-select">Position</label>
+              <select id="position-select">
+                <option value="">All positions</option>
+                <option value="GK">GK</option>
+                <option value="DF">DF</option>
+                <option value="MF">MF</option>
+                <option value="FW">FW</option>
+              </select>
+            </div>
+            <div class="control control--wide">
+              <label for="search-input">Search (player / club)</label>
+              <input id="search-input" type="search" autocomplete="off" placeholder="e.g. Bellingham, Arsenal" />
+            </div>
+            <div class="control">
+              <label for="min-minutes">Min minutes</label>
+              <input id="min-minutes" type="number" min="0" step="50" value="900" />
+            </div>
+            <div class="control">
+              <label for="max-age">Max age</label>
+              <input id="max-age" type="number" min="-1" max="45" step="1" value="23" />
+            </div>
+            <div class="control">
+              <label for="min-confidence">Min confidence</label>
+              <input id="min-confidence" type="number" step="0.1" value="0.5" />
+            </div>
+            <div class="control">
+              <label for="min-gap">Min conservative gap (€)</label>
+              <input id="min-gap" type="number" min="0" step="100000" value="1000000" />
+            </div>
+            <div class="control">
+              <label for="top-n">Shortlist top N</label>
+              <input id="top-n" type="number" min="1" max="500" step="1" value="100" />
+            </div>
+            <div class="control">
+              <label for="sort-select">Sort by</label>
+              <select id="sort-select">
+                <option value="value_gap_conservative_eur">Conservative gap</option>
+                <option value="value_gap_eur">Value gap</option>
+                <option value="expected_value_eur">Expected value</option>
+                <option value="market_value_eur">Market value</option>
+                <option value="undervaluation_confidence">Confidence</option>
+                <option value="minutes">Minutes</option>
+                <option value="age">Age</option>
+              </select>
+            </div>
+            <div class="control">
+              <label for="sort-direction">Sort direction</label>
+              <select id="sort-direction">
+                <option value="desc">Desc</option>
+                <option value="asc">Asc</option>
+              </select>
+            </div>
+            <div class="control">
+              <label for="limit-input">Rows per page</label>
+              <select id="limit-input">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="250">250</option>
+              </select>
+            </div>
+            <div class="control control--checkbox">
+              <label for="undervalued-only">Only undervalued</label>
+              <input id="undervalued-only" type="checkbox" checked />
+            </div>
+            <div class="control control--actions">
+              <button id="refresh-btn" type="button">Run Query</button>
+              <button id="reset-btn" type="button" class="btn-ghost">Reset</button>
+              <button id="export-btn" type="button" class="btn-ghost">Export CSV</button>
+            </div>
+          </section>
+
+          <section class="results card">
+            <div class="results__header">
+              <h2 id="results-title">Predictions</h2>
+              <div class="results__meta">
+                <span id="result-count">0 rows</span>
+                <span id="result-range">offset 0</span>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table id="results-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Club</th>
+                    <th>League</th>
+                    <th>Pos</th>
+                    <th class="num">Age</th>
+                    <th class="num">Market</th>
+                    <th class="num">Expected</th>
+                    <th class="num">Cons. gap (capped)</th>
+                    <th class="num">Confidence</th>
+                    <th class="num">Minutes</th>
+                  </tr>
+                </thead>
+                <tbody id="results-body">
+                  <tr><td colspan="10">Connect API and run query.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="pagination">
+              <button id="prev-btn" type="button" class="btn-ghost">Previous</button>
+              <button id="next-btn" type="button" class="btn-ghost">Next</button>
+            </div>
+          </section>
+
+          <aside class="details card" id="detail-panel">
+            <h2>Player Detail</h2>
+            <p class="details-placeholder" id="detail-placeholder">
+              Select a row to inspect player-level valuation details.
+            </p>
+            <div id="detail-content" hidden>
+              <h3 id="detail-name"></h3>
+              <p id="detail-meta"></p>
+              <div class="bars">
+                <div class="bar-block">
+                  <span>Market value</span>
+                  <div class="bar-track"><div id="bar-market" class="bar bar--market"></div></div>
+                  <strong id="detail-market">-</strong>
+                </div>
+                <div class="bar-block">
+                  <span>Expected value</span>
+                  <div class="bar-track"><div id="bar-expected" class="bar bar--expected"></div></div>
+                  <strong id="detail-expected">-</strong>
+                </div>
+                <div class="bar-block">
+                  <span>Lower confidence band</span>
+                  <div class="bar-track"><div id="bar-lower" class="bar bar--lower"></div></div>
+                  <strong id="detail-lower">-</strong>
+                </div>
+              </div>
+              <dl id="detail-list" class="detail-list"></dl>
+              <div class="detail-section">
+                <h4>Scouting Summary</h4>
+                <p id="detail-summary" class="detail-summary">Select a player to load scouting summary.</p>
+              </div>
+              <div class="detail-section">
+                <h4>Top Strengths</h4>
+                <ul id="detail-strengths" class="risk-list">
+                  <li class="risk-item risk-item--none">Select a player to load strengths.</li>
+                </ul>
+              </div>
+              <div class="detail-section">
+                <h4>Development Levers</h4>
+                <ul id="detail-levers" class="risk-list">
+                  <li class="risk-item risk-item--none">Select a player to load development levers.</li>
+                </ul>
+              </div>
+              <div class="detail-section">
+                <h4>History Strength</h4>
+                <p id="detail-history" class="detail-summary">Select a player to load history-strength breakdown.</p>
+              </div>
+              <div class="detail-section">
+                <h4>Risk Flags</h4>
+                <ul id="detail-risks" class="risk-list">
+                  <li class="risk-item risk-item--none">Select a player to load risk flags.</li>
+                </ul>
+              </div>
+              <div class="detail-actions">
+                <button id="detail-export-json" type="button" class="btn-ghost">Export Memo JSON</button>
+                <button id="detail-export-csv" type="button" class="btn-ghost">Export Memo CSV</button>
+              </div>
+              <div class="detail-section">
+                <h4>Watchlist</h4>
+                <div class="watchlist-form">
+                  <input id="watchlist-tag" type="text" placeholder="Tag (e.g. u23_non_big5)" />
+                  <input id="watchlist-notes" type="text" placeholder="Scout notes" />
+                </div>
+                <div class="detail-actions">
+                  <button id="watchlist-add-btn" type="button">Add Selected</button>
+                  <button id="watchlist-refresh-btn" type="button" class="btn-ghost">Refresh</button>
+                  <button id="watchlist-export-btn" type="button" class="btn-ghost">Export Watchlist CSV</button>
+                </div>
+                <p id="watchlist-meta" class="metrics-meta">No watchlist loaded.</p>
+                <div class="table-wrap table-wrap--small watchlist-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>League</th>
+                        <th class="num">Gap</th>
+                        <th class="num">Conf.</th>
+                        <th>Tag</th>
+                        <th>Created</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="watchlist-body">
+                      <tr><td colspan="7">No watchlist entries yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </section>
 
-      <section class="table">
-        <table>
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th>Club</th>
-              <th>Pos</th>
-              <th>Age</th>
-              <th class="numeric">Market value</th>
-              <th class="numeric">Minutes</th>
-              <th class="numeric">Goals</th>
-              <th class="numeric">Assists</th>
-              <th class="numeric">xG</th>
-              <th class="numeric">Duels won %</th>
-              <th class="numeric">Pass accuracy %</th>
-            </tr>
-          </thead>
-          <tbody id="players-body">
-            <tr class="placeholder">
-              <td colspan="11">Loading players…</td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="empty-state" id="empty-state" hidden>
-          <p>No players match the current filters. Adjust your search and try again.</p>
+      <section id="view-funnel" class="view">
+        <div class="funnel-grid">
+          <article class="card funnel-controls">
+            <h2>Talent Funnel Builder</h2>
+            <p class="segment-note">Designed for scouting overlooked players. Toggle lower-league-only when you ingest those leagues.</p>
+            <div class="funnel-form">
+              <div class="control">
+                <label for="funnel-split">Split</label>
+                <select id="funnel-split">
+                  <option value="test">Test</option>
+                  <option value="val">Validation</option>
+                </select>
+              </div>
+              <div class="control">
+                <label for="funnel-max-age">Max age</label>
+                <input id="funnel-max-age" type="number" value="23" min="-1" max="40" step="1" />
+              </div>
+              <div class="control">
+                <label for="funnel-min-minutes">Min minutes</label>
+                <input id="funnel-min-minutes" type="number" value="900" min="0" step="50" />
+              </div>
+              <div class="control">
+                <label for="funnel-min-confidence">Min confidence</label>
+                <input id="funnel-min-confidence" type="number" value="0.5" min="0" step="0.1" />
+              </div>
+              <div class="control">
+                <label for="funnel-min-gap">Min conservative gap (€)</label>
+                <input id="funnel-min-gap" type="number" value="1000000" min="0" step="100000" />
+              </div>
+              <div class="control">
+                <label for="funnel-top-n">Top N</label>
+                <input id="funnel-top-n" type="number" value="50" min="1" max="500" step="1" />
+              </div>
+              <div class="control control--checkbox">
+                <label for="funnel-lower-only">Lower leagues only</label>
+                <input id="funnel-lower-only" type="checkbox" />
+              </div>
+            </div>
+            <div class="funnel-actions">
+              <button id="funnel-run-btn" type="button">Build Funnel</button>
+              <button id="funnel-export-btn" type="button" class="btn-ghost">Export Funnel CSV</button>
+            </div>
+            <p id="funnel-meta" class="metrics-meta">No funnel run yet.</p>
+          </article>
+
+          <article class="card funnel-results">
+            <h2>Top Talent Candidates</h2>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>League</th>
+                    <th class="num">Age</th>
+                    <th class="num">Market</th>
+                    <th class="num">Expected</th>
+                    <th class="num">Cons. gap (capped)</th>
+                    <th class="num">Confidence</th>
+                    <th class="num">Score</th>
+                  </tr>
+                </thead>
+                <tbody id="funnel-body">
+                  <tr><td colspan="8">Build funnel to view candidates.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card funnel-leagues">
+            <h2>League Opportunity Board</h2>
+            <div class="table-wrap table-wrap--small">
+              <table>
+                <thead>
+                  <tr>
+                    <th>League</th>
+                    <th class="num">Candidates</th>
+                    <th class="num">Avg cons. gap</th>
+                    <th class="num">Avg confidence</th>
+                    <th class="num">Avg age</th>
+                  </tr>
+                </thead>
+                <tbody id="funnel-league-body">
+                  <tr><td colspan="5">No league board yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
         </div>
       </section>
     </main>
-
-    <footer class="footer">
-      <p>
-        Built with <span aria-hidden="true">⚽</span> by
-        <code>scouting_ml</code>. Data source: Transfermarkt &amp; Sofascore.
-      </p>
-    </footer>
   </body>
 </html>

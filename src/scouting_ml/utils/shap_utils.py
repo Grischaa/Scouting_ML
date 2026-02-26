@@ -1,4 +1,5 @@
 from __future__ import annotations
+import warnings
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -27,8 +28,14 @@ def save_tree_shap_bar(
     if hasattr(transformed, "toarray"):
         transformed = transformed.toarray()
 
-    explainer = shap.TreeExplainer(model)
-    shap_vals = explainer.shap_values(transformed)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="X does not have valid feature names, but LGBMRegressor was fitted with feature names",
+            category=UserWarning,
+        )
+        explainer = shap.TreeExplainer(model)
+        shap_vals = explainer.shap_values(transformed)
 
     feature_names = preprocessor.get_feature_names_out()
     shap_expl = shap.Explanation(values=shap_vals, data=transformed, feature_names=feature_names)

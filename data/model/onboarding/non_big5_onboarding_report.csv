@@ -1,0 +1,9 @@
+league_slug,country,files_total,season_count,latest_season,holdout_available,matched_holdout_slug,holdout_r2,holdout_wmape,domain_shift_mean_abs_z,status,reasons,metrics_json
+austrian_bundesliga,austria,1,1,2025-26,False,,,,,watch,files_total 1 < min_files 2; season_count 1 < min_seasons 2; missing_holdout_metrics,
+belgian_pro_league,belgium,3,3,2024-25,False,,,,,watch,missing_holdout_metrics,
+dutch_eredivisie,netherlands,3,3,2024-25,False,,,,,watch,missing_holdout_metrics,
+estonian_meistriliiga,estonia,1,1,2025,False,,,,,watch,files_total 1 < min_files 2; season_count 1 < min_seasons 2; missing_holdout_metrics,
+greek_super_league,greece,3,3,2024-25,False,,,,,watch,missing_holdout_metrics,
+portuguese_primeira_liga,portugal,3,3,2024-25,False,,,,,watch,missing_holdout_metrics,
+scottish_premiership,scotland,3,3,2024-25,False,,,,,watch,missing_holdout_metrics,
+turkish_super_lig,turkey,3,3,2024-25,False,,,,,watch,missing_holdout_metrics,

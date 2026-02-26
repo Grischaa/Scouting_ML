@@ -1,0 +1,55 @@
+{
+  "runs": 3,
+  "mean_test_r2": 0.7561870002875303,
+  "std_test_r2": 0.01999841210484662,
+  "mean_test_mae_eur": 3031387.3489583363,
+  "std_test_mae_eur": 115801.92707570034,
+  "mean_test_mape": 0.42909328627865434,
+  "std_test_mape": 0.02187333258805279,
+  "mean_test_mape_raw": 0.6978265015918484,
+  "std_test_mape_raw": 0.20997567186899893,
+  "mean_test_wmape": 0.3878259095396272,
+  "std_test_wmape": 0.015736495286291827,
+  "mean_test_lowmid_weighted_wmape": 0.494752581839409,
+  "std_test_lowmid_weighted_wmape": 0.02795152514676422,
+  "mean_test_segment_weighted_wmape": 0.47675575565686074,
+  "std_test_segment_weighted_wmape": 0.02571466684555811,
+  "quality_gate": {
+    "enabled": true,
+    "passed": true,
+    "min_test_r2": 0.6,
+    "max_test_mape": null,
+    "max_test_wmape": 0.43,
+    "max_under5m_wmape": 0.6,
+    "max_lowmid_weighted_wmape": 0.55,
+    "max_segment_weighted_wmape": 0.52,
+    "failures": []
+  },
+  "minimum_test_split_requirements": {
+    "min_test_samples": 300,
+    "min_test_under5m_samples": 50,
+    "min_test_over20m_samples": 25,
+    "skip_incomplete_test_seasons": true
+  },
+  "training_completeness_gate": {
+    "drop_incomplete_league_seasons": true,
+    "min_league_season_rows": 40,
+    "min_league_season_completeness": 0.55,
+    "residual_calibration_min_samples": 30,
+    "mape_min_denom_eur": 1000000.0
+  },
+  "skipped_runs": [
+    {
+      "test_season": "2025/26",
+      "val_season": "2024/25",
+      "reasons": [
+        "test_n_samples=130 < min_test_samples=300",
+        "test_over_20m_n_samples=0 < min_test_over20m_samples=25"
+      ],
+      "test_n_samples": 130,
+      "test_under_5m_n_samples": 117,
+      "test_over_20m_n_samples": 0,
+      "source": "precheck"
+    }
+  ]
+}

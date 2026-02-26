@@ -8,7 +8,7 @@ from catboost import CatBoostRegressor
 
 def make_lgbm(params: Optional[Dict[str, Any]] = None) -> LGBMRegressor:
     base = dict(
-        objective="regression",
+        objective="regression_l1",
         n_estimators=1200,
         learning_rate=0.05,
         max_depth=-1,

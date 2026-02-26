@@ -195,6 +195,170 @@ LEAGUES: Dict[str, LeagueConfig] = {
         ),
     ),
 
+    # --- Western / Southern Europe ----------------------------------------
+    "portuguese_primeira_liga": LeagueConfig(
+        slug="portuguese_primeira_liga",
+        name="Primeira Liga",
+        tm_league_url="https://www.transfermarkt.com/liga-portugal/startseite/wettbewerb/PO1",
+        seasons=["2024/25", "2023/24", "2022/23", "2021/22", "2020/21", "2019/20"],
+        tm_season_ids={
+            "2024/25": 2024,
+            "2023/24": 2023,
+            "2022/23": 2022,
+            "2021/22": 2021,
+            "2020/21": 2020,
+            "2019/20": 2019,
+        },
+        sofa_league_key="Portuguese Primeira Liga",
+        sofa_tournament_id=238,
+        sofa_season_map={
+            "2024/25": "24/25",
+            "2023/24": "23/24",
+            "2022/23": "22/23",
+            "2021/22": "21/22",
+            "2020/21": "20/21",
+            "2019/20": "19/20",
+        },
+        processed_dataset_pattern=str(
+            PROCESSED_DIR / "portuguese_primeira_liga_{season_slug}_with_sofa.csv"
+        ),
+    ),
+    "dutch_eredivisie": LeagueConfig(
+        slug="dutch_eredivisie",
+        name="Eredivisie",
+        tm_league_url="https://www.transfermarkt.com/eredivisie/startseite/wettbewerb/NL1",
+        seasons=["2024/25", "2023/24", "2022/23", "2021/22", "2020/21", "2019/20"],
+        tm_season_ids={
+            "2024/25": 2024,
+            "2023/24": 2023,
+            "2022/23": 2022,
+            "2021/22": 2021,
+            "2020/21": 2020,
+            "2019/20": 2019,
+        },
+        sofa_league_key="Dutch Eredivisie",
+        sofa_tournament_id=37,
+        sofa_season_map={
+            "2024/25": "24/25",
+            "2023/24": "23/24",
+            "2022/23": "22/23",
+            "2021/22": "21/22",
+            "2020/21": "20/21",
+            "2019/20": "19/20",
+        },
+        processed_dataset_pattern=str(
+            PROCESSED_DIR / "dutch_eredivisie_{season_slug}_with_sofa.csv"
+        ),
+    ),
+    "belgian_pro_league": LeagueConfig(
+        slug="belgian_pro_league",
+        name="Belgian Pro League",
+        tm_league_url="https://www.transfermarkt.com/jupiler-pro-league/startseite/wettbewerb/BE1",
+        seasons=["2024/25", "2023/24", "2022/23", "2021/22", "2020/21", "2019/20"],
+        tm_season_ids={
+            "2024/25": 2024,
+            "2023/24": 2023,
+            "2022/23": 2022,
+            "2021/22": 2021,
+            "2020/21": 2020,
+            "2019/20": 2019,
+        },
+        sofa_league_key="Belgian Pro League",
+        sofa_tournament_id=38,
+        sofa_season_map={
+            "2024/25": "24/25",
+            "2023/24": "23/24",
+            "2022/23": "22/23",
+            "2021/22": "21/22",
+            "2020/21": "20/21",
+            "2019/20": "19/20",
+        },
+        processed_dataset_pattern=str(
+            PROCESSED_DIR / "belgian_pro_league_{season_slug}_with_sofa.csv"
+        ),
+    ),
+    "turkish_super_lig": LeagueConfig(
+        slug="turkish_super_lig",
+        name="Turkish Super Lig",
+        tm_league_url="https://www.transfermarkt.com/super-lig/startseite/wettbewerb/TR1",
+        seasons=["2024/25", "2023/24", "2022/23", "2021/22", "2020/21", "2019/20"],
+        tm_season_ids={
+            "2024/25": 2024,
+            "2023/24": 2023,
+            "2022/23": 2022,
+            "2021/22": 2021,
+            "2020/21": 2020,
+            "2019/20": 2019,
+        },
+        sofa_league_key="Turkish Super Lig",
+        sofa_tournament_id=52,
+        sofa_season_map={
+            "2024/25": "24/25",
+            "2023/24": "23/24",
+            "2022/23": "22/23",
+            "2021/22": "21/22",
+            "2020/21": "20/21",
+            "2019/20": "19/20",
+        },
+        processed_dataset_pattern=str(
+            PROCESSED_DIR / "turkish_super_lig_{season_slug}_with_sofa.csv"
+        ),
+    ),
+    "scottish_premiership": LeagueConfig(
+        slug="scottish_premiership",
+        name="Scottish Premiership",
+        tm_league_url="https://www.transfermarkt.com/scottish-premiership/startseite/wettbewerb/SC1",
+        seasons=["2024/25", "2023/24", "2022/23", "2021/22", "2020/21", "2019/20"],
+        tm_season_ids={
+            "2024/25": 2024,
+            "2023/24": 2023,
+            "2022/23": 2022,
+            "2021/22": 2021,
+            "2020/21": 2020,
+            "2019/20": 2019,
+        },
+        sofa_league_key="Scottish Premiership",
+        sofa_tournament_id=36,
+        sofa_season_map={
+            "2024/25": "24/25",
+            "2023/24": "23/24",
+            "2022/23": "22/23",
+            "2021/22": "21/22",
+            "2020/21": "20/21",
+            "2019/20": "19/20",
+        },
+        processed_dataset_pattern=str(
+            PROCESSED_DIR / "scottish_premiership_{season_slug}_with_sofa.csv"
+        ),
+    ),
+    "greek_super_league": LeagueConfig(
+        slug="greek_super_league",
+        name="Greek Super League",
+        tm_league_url="https://www.transfermarkt.com/super-league-1/startseite/wettbewerb/GR1",
+        seasons=["2024/25", "2023/24", "2022/23", "2021/22", "2020/21", "2019/20"],
+        tm_season_ids={
+            "2024/25": 2024,
+            "2023/24": 2023,
+            "2022/23": 2022,
+            "2021/22": 2021,
+            "2020/21": 2020,
+            "2019/20": 2019,
+        },
+        sofa_league_key="Greek Super League",
+        sofa_tournament_id=185,
+        sofa_season_map={
+            "2024/25": "24/25",
+            "2023/24": "23/24",
+            "2022/23": "22/23",
+            "2021/22": "21/22",
+            "2020/21": "20/21",
+            "2019/20": "19/20",
+        },
+        processed_dataset_pattern=str(
+            PROCESSED_DIR / "greek_super_league_{season_slug}_with_sofa.csv"
+        ),
+    ),
+
     # --- Austria & Switzerland --------------------------------------------
     "austrian_bundesliga": LeagueConfig(
         slug="austrian_bundesliga",

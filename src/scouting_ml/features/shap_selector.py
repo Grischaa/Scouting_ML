@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Tuple, Sequence, Set
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -9,23 +10,27 @@ import matplotlib
 matplotlib.use("Agg")
 
 
-def _base_from_feature_name(name: str) -> str:
+def _base_feature_names(preprocessor: ColumnTransformer, numeric_cols: Sequence[str], categorical_cols: Sequence[str]) -> List[str]:
     """
-    Map transformed feature name back to base column name.
-    Examples:
-      'num__age' -> 'age'
-      'cat__league_English Premier League' -> 'league'
-      'cat__age_bucket_u21' -> 'age_bucket'
+    Build a list of base feature names aligned to preprocessor.get_feature_names_out(),
+    without relying on fragile string splitting of one-hot outputs.
     """
-    if name.startswith("num__"):
-        return name.split("__", 1)[1]
-    if name.startswith("cat__"):
-        rest = name.split("__", 1)[1]
-        # remove last _category
-        if "_" in rest:
-            return rest.rsplit("_", 1)[0]
-        return rest
-    return name
+    bases: List[str] = []
+
+    for name, transformer, cols in preprocessor.transformers_:
+        if name == "num":
+            bases.extend(list(cols))
+        elif name == "cat":
+            ohe = transformer
+            if hasattr(transformer, "named_steps"):
+                ohe = transformer.named_steps.get("onehot") or transformer.named_steps.get("oh") or transformer.named_steps.get("encoder") or ohe
+            if hasattr(ohe, "categories_"):
+                for col, cats in zip(categorical_cols, ohe.categories_):
+                    bases.extend([col] * len(cats))
+            else:
+                bases.extend(list(categorical_cols))
+
+    return bases
 
 
 def select_top_features(
@@ -46,8 +51,14 @@ def select_top_features(
     if hasattr(transformed, "toarray"):
         transformed = transformed.toarray()
 
-    explainer = shap.TreeExplainer(model)
-    shap_vals = explainer.shap_values(transformed)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="X does not have valid feature names, but LGBMRegressor was fitted with feature names",
+            category=UserWarning,
+        )
+        explainer = shap.TreeExplainer(model)
+        shap_vals = explainer.shap_values(transformed)
 
     shap_vals_arr = np.array(shap_vals)
     if shap_vals_arr.ndim == 3:
@@ -56,13 +67,25 @@ def select_top_features(
     importances = np.mean(np.abs(shap_vals_arr), axis=0)
 
     feature_names = preprocessor.get_feature_names_out()
+    base_names = _base_feature_names(preprocessor, numeric_cols, categorical_cols)
+    if len(base_names) != len(feature_names):
+        # Fallback to original heuristic if lengths mismatch
+        base_names = []
+        for name in feature_names:
+            if name.startswith("num__"):
+                base_names.append(name.split("__", 1)[1])
+            elif name.startswith("cat__"):
+                base_names.append(name.split("__", 1)[1].split("_", 1)[0])
+            else:
+                base_names.append(name)
+
     order = np.argsort(importances)[::-1]
 
     selected_bases: List[str] = []
     seen: Set[str] = set()
 
     for idx in order:
-        base = _base_from_feature_name(feature_names[idx])
+        base = base_names[idx]
         if base in seen:
             continue
         if base not in numeric_cols and base not in categorical_cols:

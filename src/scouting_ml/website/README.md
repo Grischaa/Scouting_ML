@@ -1,40 +1,57 @@
-# scouting_ml static website
+# Scouting ML Frontend
 
-This directory contains a static scouting dashboard that surfaces Transfermarkt + Sofascore player data. The UI now supports multiple leagues and seasons sourced from the shared `league_registry`.
+This folder contains the static frontend for the market-value backend API:
 
-- `static/index.html` – landing page with filters, summary tiles, and the player table.
-- `static/assets/app.js` – client-side logic for league switching, filtering, sorting, and rendering.
-- `static/assets/styles.css` – Tailwind-inspired glassmorphism styling.
-- `static/data/players.js` – generated payload with the league manifest (`const SCOUTING_DATA = {...}`).
-- `build.py` – helper CLI that regenerates `players.js` from the processed CSVs registered in `league_registry.py`.
+- `static/index.html` - multi-view scouting application shell
+- `static/assets/app.js` - API client + state + valuation/funnel logic
+- `static/assets/styles.css` - responsive dashboard styling
 
-## Previewing locally
+## Main views
 
-Launch any static file server at the repository root and open the site in your browser:
+- `Overview` - model trust card, val/test KPIs, value-segment reliability, league coverage
+- `Valuation Workbench` - filter/sort players and inspect over/undervalued signals
+- `Talent Funnel` - build scouting shortlists with a lower-league-only toggle
 
-```bash
-cd /path/to/Scout_Pred
-python3 -m http.server 8000
+## Run locally
+
+### 1) Start backend API
+
+PowerShell:
+
+```powershell
+$env:PYTHONPATH = "src"
+$env:SCOUTING_API_CORS_ORIGINS = "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500"
+uvicorn scouting_ml.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Now visit <http://localhost:8000/src/scouting_ml/website/static/index.html>.
+### 2) Start a static server
 
-> When opening `index.html` directly with the `file://` protocol, the embedded `players.js` payload still loads because it is bundled as a JavaScript module (no `fetch` required).
-
-## Refreshing the data payload
-
-Rebuild `static/data/players.js` whenever the processed CSVs change:
+From repository root:
 
 ```bash
-PYTHONPATH=src python3 -m scouting_ml.website.build
+python3 -m http.server 8080
 ```
 
-By default the builder iterates over every league registered in `scouting_ml/league_registry.py` (Austrian Bundesliga and Estonian Meistriliiga are pre-configured) and includes those with an existing processed dataset (see `LeagueConfig.guess_processed_dataset`). Use `--league slug --league slug2` to build a subset, `--season` to override the display label, `--limit` to truncate each dataset, and `--dest` to customise the bundle path.
+Open:
 
-> Want to add another competition? Copy the Austrian config in `league_registry.py`, adjust the metadata (Transfermarkt URL, Sofascore keys, processed CSV pattern), generate the processed data, and rerun the builder.
+- `http://localhost:8080/src/scouting_ml/website/static/index.html`
 
-The script requires `pandas`; install the project dependencies via:
+In the UI, set API base to:
 
-```bash
-pip install -r requirements.txt
-```
+- `http://localhost:8000`
+
+## Required artifacts
+
+The frontend uses backend endpoints that read these files by default:
+
+- `data/model/big5_predictions_full_v2.csv`
+- `data/model/big5_predictions_full_v2_val.csv`
+- `data/model/big5_predictions_full_v2.metrics.json`
+
+If you store artifacts elsewhere, set:
+
+- `SCOUTING_TEST_PREDICTIONS_PATH`
+- `SCOUTING_VAL_PREDICTIONS_PATH`
+- `SCOUTING_METRICS_PATH`
+
+before starting `uvicorn`.

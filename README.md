@@ -289,13 +289,12 @@ pip install lightgbm xgboost shap scikit-learn pandas numpy matplotlib
 $env:PYTHONPATH = "src"
 
 python -m scouting_ml.models.train_market_value_full `
-
 --dataset "data/model/big5_players_clean.parquet" `
-
+--val-season "2023/24" `
 --test-season "2024/25" `
-
 --output "data/model/big5_predictions_full_v2.csv" `
-
+--metrics-output "data/model/big5_predictions_full_v2.metrics.json" `
+--recency-half-life 2.0 `
 --trials 60
 
 Outputs then will appear in: 
@@ -303,4 +302,204 @@ Outputs then will appear in:
 data/model/
 
 logs/shap/
+
+### One-command full pipeline
+
+```powershell
+$env:PYTHONPATH = "src"
+
+python -m scouting_ml.scripts.run_full_pipeline `
+  --players-source "data/processed/Clubs combined" `
+  --data-dir "data/processed/Clubs combined" `
+  --external-dir "data/external" `
+  --dataset-output "data/model/big5_players.parquet" `
+  --clean-output "data/model/big5_players_clean.parquet" `
+  --predictions-output "data/model/big5_predictions_full_v2.csv" `
+  --start-season "2019/20" `
+  --end-season "2024/25" `
+  --val-season "2023/24" `
+  --test-season "2024/25" `
+  --trials 40
+```
+
+Optional:
+
+- add `--with-ablation` to automatically run feature-group ablations
+- add `--with-backtest` to automatically run rolling time backtests
+- add `--with-future-targets` to generate `value_growth_next_season` targets
+- add `--fetch-missing-profiles` if you want to fetch missing Transfermarkt profile pages
+- add `--skip-*` flags to skip steps (e.g. `--skip-injuries --skip-contracts`)
+
+### Backend API (FastAPI)
+
+Install API runtime if needed:
+
+```powershell
+pip install fastapi uvicorn
+```
+
+Run locally:
+
+```powershell
+$env:PYTHONPATH = "src"
+$env:SCOUTING_API_CORS_ORIGINS = "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500"
+uvicorn scouting_ml.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Main endpoints:
+
+- `GET /health`
+- `GET /market-value/health`
+- `GET /market-value/metrics`
+- `GET /market-value/model-manifest`
+- `GET /market-value/active-artifacts`
+- `GET /market-value/predictions`
+- `GET /market-value/shortlist`
+- `GET /market-value/scout-targets`
+- `GET /market-value/player/{player_id}`
+- `GET /market-value/player/{player_id}/report`
+- `GET /market-value/watchlist`
+- `POST /market-value/watchlist/items`
+- `DELETE /market-value/watchlist/items/{watch_id}`
+
+### Lock one production model bundle
+
+```powershell
+$env:PYTHONPATH = "src"
+
+python -m scouting_ml.scripts.lock_market_value_artifacts `
+  --test-predictions "data/model/champion_predictions_2024-25.csv" `
+  --val-predictions "data/model/champion_predictions_2024-25_val.csv" `
+  --metrics "data/model/champion_predictions_2024-25.metrics.json" `
+  --manifest-out "data/model/model_manifest.json" `
+  --env-out "data/model/model_artifacts.env" `
+  --label "champion_2024_25"
+```
+
+Then load the lock env before running the API:
+
+```powershell
+Get-Content data/model/model_artifacts.env | ForEach-Object {
+  if ($_ -match '=') {
+    $k, $v = $_ -split '=', 2
+    [System.Environment]::SetEnvironmentVariable($k, $v, 'Process')
+  }
+}
+```
+
+This prevents the API from silently serving stale/default artifacts.
+
+### Build next-season growth target dataset
+
+```powershell
+$env:PYTHONPATH = "src"
+
+python -m scouting_ml.scripts.build_future_value_targets `
+  --input "data/model/big5_players_clean.parquet" `
+  --output "data/model/big5_players_future_targets.parquet" `
+  --min-next-minutes 450
+```
+
+Key added columns:
+
+- `value_growth_next_season_eur`
+- `value_growth_next_season_pct`
+- `value_growth_next_season_log_delta`
+- `value_growth_positive_flag`
+- `value_growth_gt25pct_flag`
+
+### Frontend (Valuation Console)
+
+```powershell
+# terminal 1
+$env:PYTHONPATH = "src"
+$env:SCOUTING_API_CORS_ORIGINS = "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500"
+uvicorn scouting_ml.api.main:app --reload --host 0.0.0.0 --port 8000
+
+# terminal 2 (from repo root)
+python -m http.server 8080
+```
+
+Open:
+
+- `http://localhost:8080/src/scouting_ml/website/static/index.html`
+
+API base in UI should be:
+
+- `http://localhost:8000`
+
+Main UI views:
+
+- `Overview` (model trust card, segment reliability, league coverage)
+- `Valuation Workbench` (over/undervalued analysis by player)
+- `Talent Funnel` (shortlist builder, including a lower-league-only mode)
+
+### External enrichment builders (optional but recommended)
+
+```powershell
+$env:PYTHONPATH = "src"
+
+python -m scouting_ml.scripts.build_player_injuries `
+  --players-source "data/model/big5_players.parquet" `
+  --output "data/external/player_injuries.csv" `
+  --start-season "2019/20" `
+  --end-season "2024/25"
+
+python -m scouting_ml.scripts.build_player_contracts `
+  --players-source "data/model/big5_players.parquet" `
+  --output "data/external/player_contracts.csv" `
+  --start-season "2019/20" `
+  --end-season "2024/25"
+
+python -m scouting_ml.scripts.build_player_transfers `
+  --players-source "data/model/big5_players.parquet" `
+  --output "data/external/player_transfers.csv" `
+  --start-season "2019/20" `
+  --end-season "2024/25"
+
+python -m scouting_ml.scripts.build_national_team_caps `
+  --players-source "data/model/big5_players.parquet" `
+  --output "data/external/national_team_caps.csv" `
+  --start-season "2019/20" `
+  --end-season "2024/25"
+
+python -m scouting_ml.scripts.build_club_league_context `
+  --players-source "data/processed/Clubs combined" `
+  --club-output "data/external/club_context.csv" `
+  --league-output "data/external/league_context.csv" `
+  --start-season "2019/20" `
+  --end-season "2024/25"
+```
+
+Then rebuild:
+
+```powershell
+python -m scouting_ml.models.build_dataset `
+  --data-dir "data/processed/Clubs combined" `
+  --external-dir "data/external" `
+  --output "data/model/big5_players.parquet"
+```
+
+### Automated diagnostics
+
+Run feature-group ablation:
+
+```powershell
+python -m scouting_ml.scripts.run_market_value_ablation `
+  --dataset "data/model/big5_players_clean.parquet" `
+  --val-season "2023/24" `
+  --test-season "2024/25" `
+  --out-dir "data/model/ablation" `
+  --trials 40
+```
+
+Run rolling backtests:
+
+```powershell
+python -m scouting_ml.scripts.run_rolling_backtest `
+  --dataset "data/model/big5_players_clean.parquet" `
+  --out-dir "data/model/backtests" `
+  --min-train-seasons 2 `
+  --trials 40
+```
 

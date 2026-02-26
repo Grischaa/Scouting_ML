@@ -1,0 +1,293 @@
+{
+  "n_rows": 17346,
+  "n_columns": 234,
+  "missing_rates": {
+    "market_value_eur": 0.0,
+    "log_market_value": 0.0,
+    "minutes": 0.0,
+    "sofa_minutesPlayed": 0.0,
+    "age": 0.0004035512510088781,
+    "season": 0.0,
+    "league": 0.0,
+    "position_group": 0.0
+  },
+  "duplicate_checks": {
+    "keys": [
+      "season",
+      "league",
+      "club",
+      "position_group",
+      "player_id",
+      "name"
+    ],
+    "duplicate_rate": 0.0
+  },
+  "league_season_rows": [
+    {
+      "league": "Austrian Bundesliga",
+      "season": "2025/26",
+      "n_rows": 130
+    },
+    {
+      "league": "Belgian Pro League",
+      "season": "2022/23",
+      "n_rows": 349
+    },
+    {
+      "league": "Belgian Pro League",
+      "season": "2023/24",
+      "n_rows": 321
+    },
+    {
+      "league": "Belgian Pro League",
+      "season": "2024/25",
+      "n_rows": 321
+    },
+    {
+      "league": "Bundesliga",
+      "season": "2019/20",
+      "n_rows": 350
+    },
+    {
+      "league": "Bundesliga",
+      "season": "2020/21",
+      "n_rows": 344
+    },
+    {
+      "league": "Bundesliga",
+      "season": "2021/22",
+      "n_rows": 334
+    },
+    {
+      "league": "Bundesliga",
+      "season": "2022/23",
+      "n_rows": 343
+    },
+    {
+      "league": "Bundesliga",
+      "season": "2023/24",
+      "n_rows": 334
+    },
+    {
+      "league": "Bundesliga",
+      "season": "2024/25",
+      "n_rows": 339
+    },
+    {
+      "league": "English Premier League",
+      "season": "2019/20",
+      "n_rows": 380
+    },
+    {
+      "league": "English Premier League",
+      "season": "2020/21",
+      "n_rows": 387
+    },
+    {
+      "league": "English Premier League",
+      "season": "2021/22",
+      "n_rows": 390
+    },
+    {
+      "league": "English Premier League",
+      "season": "2022/23",
+      "n_rows": 361
+    },
+    {
+      "league": "English Premier League",
+      "season": "2023/24",
+      "n_rows": 390
+    },
+    {
+      "league": "English Premier League",
+      "season": "2024/25",
+      "n_rows": 303
+    },
+    {
+      "league": "Eredivisie",
+      "season": "2022/23",
+      "n_rows": 331
+    },
+    {
+      "league": "Eredivisie",
+      "season": "2023/24",
+      "n_rows": 336
+    },
+    {
+      "league": "Eredivisie",
+      "season": "2024/25",
+      "n_rows": 343
+    },
+    {
+      "league": "Estonian Meistriliiga",
+      "season": "2024/25",
+      "n_rows": 171
+    },
+    {
+      "league": "Greek Super League",
+      "season": "2022/23",
+      "n_rows": 269
+    },
+    {
+      "league": "Greek Super League",
+      "season": "2023/24",
+      "n_rows": 284
+    },
+    {
+      "league": "Greek Super League",
+      "season": "2024/25",
+      "n_rows": 291
+    },
+    {
+      "league": "LaLiga",
+      "season": "2019/20",
+      "n_rows": 381
+    },
+    {
+      "league": "LaLiga",
+      "season": "2020/21",
+      "n_rows": 408
+    },
+    {
+      "league": "LaLiga",
+      "season": "2021/22",
+      "n_rows": 406
+    },
+    {
+      "league": "LaLiga",
+      "season": "2022/23",
+      "n_rows": 404
+    },
+    {
+      "league": "LaLiga",
+      "season": "2023/24",
+      "n_rows": 396
+    },
+    {
+      "league": "LaLiga",
+      "season": "2024/25",
+      "n_rows": 405
+    },
+    {
+      "league": "Ligue 1",
+      "season": "2019/20",
+      "n_rows": 362
+    },
+    {
+      "league": "Ligue 1",
+      "season": "2020/21",
+      "n_rows": 396
+    },
+    {
+      "league": "Ligue 1",
+      "season": "2021/22",
+      "n_rows": 405
+    },
+    {
+      "league": "Ligue 1",
+      "season": "2022/23",
+      "n_rows": 396
+    },
+    {
+      "league": "Ligue 1",
+      "season": "2023/24",
+      "n_rows": 337
+    },
+    {
+      "league": "Ligue 1",
+      "season": "2024/25",
+      "n_rows": 345
+    },
+    {
+      "league": "Primeira Liga",
+      "season": "2022/23",
+      "n_rows": 331
+    },
+    {
+      "league": "Primeira Liga",
+      "season": "2023/24",
+      "n_rows": 331
+    },
+    {
+      "league": "Primeira Liga",
+      "season": "2024/25",
+      "n_rows": 349
+    },
+    {
+      "league": "Scottish Premiership",
+      "season": "2022/23",
+      "n_rows": 239
+    },
+    {
+      "league": "Scottish Premiership",
+      "season": "2023/24",
+      "n_rows": 234
+    },
+    {
+      "league": "Scottish Premiership",
+      "season": "2024/25",
+      "n_rows": 244
+    },
+    {
+      "league": "Serie A",
+      "season": "2019/20",
+      "n_rows": 411
+    },
+    {
+      "league": "Serie A",
+      "season": "2020/21",
+      "n_rows": 403
+    },
+    {
+      "league": "Serie A",
+      "season": "2021/22",
+      "n_rows": 417
+    },
+    {
+      "league": "Serie A",
+      "season": "2022/23",
+      "n_rows": 418
+    },
+    {
+      "league": "Serie A",
+      "season": "2023/24",
+      "n_rows": 409
+    },
+    {
+      "league": "Serie A",
+      "season": "2024/25",
+      "n_rows": 414
+    },
+    {
+      "league": "Turkish Super Lig",
+      "season": "2022/23",
+      "n_rows": 340
+    },
+    {
+      "league": "Turkish Super Lig",
+      "season": "2023/24",
+      "n_rows": 408
+    },
+    {
+      "league": "Turkish Super Lig",
+      "season": "2024/25",
+      "n_rows": 356
+    }
+  ],
+  "scrape_success_rates": {
+    "contract_scrape_success": 1.0,
+    "injury_scrape_success": 1.0,
+    "transfer_scrape_success": 1.0,
+    "nt_scrape_success": 1.0
+  },
+  "quality_flags": [],
+  "completeness_filter": {
+    "enabled": true,
+    "min_rows": 40,
+    "min_completeness_ratio": 0.55,
+    "dropped_groups": [],
+    "n_rows_before": 17346,
+    "n_rows_after": 17346,
+    "n_rows_dropped": 0
+  }
+}

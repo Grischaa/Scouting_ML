@@ -13,6 +13,17 @@ def split_by_season(df: pd.DataFrame, test_season: str):
     return train, test
 
 
+def split_train_val_test_by_season(
+    df: pd.DataFrame,
+    val_season: str,
+    test_season: str,
+):
+    train = df[(df["season"] != val_season) & (df["season"] != test_season)].copy()
+    val = df[df["season"] == val_season].copy()
+    test = df[df["season"] == test_season].copy()
+    return train, val, test
+
+
 def infer_numeric_columns(df: pd.DataFrame, blocked: Iterable[str] | None = None) -> List[str]:
     blocked_set: Set[str] = set(blocked or [])
     cols: List[str] = []

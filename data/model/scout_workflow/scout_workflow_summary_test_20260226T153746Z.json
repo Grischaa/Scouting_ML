@@ -1,0 +1,146 @@
+{
+  "generated_at_utc": "2026-02-26T15:38:02.120463+00:00",
+  "split": "test",
+  "predictions_path": "data\\model\\champion_predictions_2024-25.csv",
+  "shortlist_count": 32,
+  "shortlist_csv": "data\\model\\scout_workflow\\scout_workflow_shortlist_test_20260226T153746Z.csv",
+  "shortlist_json": "data\\model\\scout_workflow\\scout_workflow_shortlist_test_20260226T153746Z.json",
+  "memo_count": 25,
+  "memo_dir": "data\\model\\scout_workflow\\memos_test_20260226T153746Z",
+  "memos": [
+    {
+      "rank": 1,
+      "player_id": "erko_tougjas_488280",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\001_erko_tougjas_488280.json"
+    },
+    {
+      "rank": 2,
+      "player_id": "joao_pedro_658670",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\002_joao_pedro_658670.json"
+    },
+    {
+      "rank": 3,
+      "player_id": "mohamed_kone_911985",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\003_mohamed_kone_911985.json"
+    },
+    {
+      "rank": 4,
+      "player_id": "connor_barron_567151",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\004_connor_barron_567151.json"
+    },
+    {
+      "rank": 5,
+      "player_id": "rafik_belghali_864306",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\005_rafik_belghali_864306.json"
+    },
+    {
+      "rank": 6,
+      "player_id": "mihhail_kolobov_707973",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\006_mihhail_kolobov_707973.json"
+    },
+    {
+      "rank": 7,
+      "player_id": "martim_neto_549027",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\007_martim_neto_549027.json"
+    },
+    {
+      "rank": 8,
+      "player_id": "tanel_tammik_493032",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\008_tanel_tammik_493032.json"
+    },
+    {
+      "rank": 9,
+      "player_id": "ringo_meerveld_577455",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\009_ringo_meerveld_577455.json"
+    },
+    {
+      "rank": 10,
+      "player_id": "victory_iboro_1163858",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\010_victory_iboro_1163858.json"
+    },
+    {
+      "rank": 11,
+      "player_id": "bubacarr_tambedou_972352",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\011_bubacarr_tambedou_972352.json"
+    },
+    {
+      "rank": 12,
+      "player_id": "danil_kuraksin_488301",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\012_danil_kuraksin_488301.json"
+    },
+    {
+      "rank": 13,
+      "player_id": "modou_tambedou_1035048",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\013_modou_tambedou_1035048.json"
+    },
+    {
+      "rank": 14,
+      "player_id": "junior_kadile_585958",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\014_junior_kadile_585958.json"
+    },
+    {
+      "rank": 15,
+      "player_id": "enock_otoo_1039787",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\015_enock_otoo_1039787.json"
+    },
+    {
+      "rank": 16,
+      "player_id": "nikola_stulic_595650",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\016_nikola_stulic_595650.json"
+    },
+    {
+      "rank": 17,
+      "player_id": "mats_rots_983677",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\017_mats_rots_983677.json"
+    },
+    {
+      "rank": 18,
+      "player_id": "rommi_siht_899390",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\018_rommi_siht_899390.json"
+    },
+    {
+      "rank": 19,
+      "player_id": "kristo_hussar_529512",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\019_kristo_hussar_529512.json"
+    },
+    {
+      "rank": 20,
+      "player_id": "nacho_ferri_867357",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\020_nacho_ferri_867357.json"
+    },
+    {
+      "rank": 21,
+      "player_id": "leo_greiml_434110",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\021_leo_greiml_434110.json"
+    },
+    {
+      "rank": 22,
+      "player_id": "stelios_andreou_613964",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\022_stelios_andreou_613964.json"
+    },
+    {
+      "rank": 23,
+      "player_id": "jose_marsa_563139",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\023_jose_marsa_563139.json"
+    },
+    {
+      "rank": 24,
+      "player_id": "rodrigo_ribeiro_726701",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\024_rodrigo_ribeiro_726701.json"
+    },
+    {
+      "rank": 25,
+      "player_id": "sander_tovstik_944806",
+      "memo_path": "data\\model\\scout_workflow\\memos_test_20260226T153746Z\\025_sander_tovstik_944806.json"
+    }
+  ],
+  "watchlist_added": 32,
+  "diagnostics": {
+    "ranking_basis": "guardrailed_gap_confidence_history_efficiency",
+    "score_column": "scout_target_score",
+    "precision_at_k": {
+      "available": false,
+      "reason": "missing_future_outcome_label"
+    }
+  }
+}
