@@ -63,3 +63,53 @@ def test_weekly_scout_kpi_report_writes_outputs(tmp_path) -> None:
     csv_path = tmp_path / "reports"
     assert any(path.suffix == ".csv" for path in csv_path.iterdir())
     assert any(path.suffix == ".json" for path in csv_path.iterdir())
+
+
+def test_weekly_scout_kpi_non_big5_filter_excludes_english_premier_league(tmp_path) -> None:
+    rows = []
+    for i in range(40):
+        rows.append(
+            {
+                "player_id": f"ered_{i}",
+                "league": "Eredivisie",
+                "model_position": "FW",
+                "season": "2024/25",
+                "age": 21,
+                "minutes": 1200 + i,
+                "market_value_eur": 4_000_000.0,
+                "scout_target_score": float(100 - i),
+                "future_success": 1 if i < 20 else 0,
+            }
+        )
+    for i in range(40):
+        rows.append(
+            {
+                "player_id": f"epl_{i}",
+                "league": "English Premier League",
+                "model_position": "FW",
+                "season": "2024/25",
+                "age": 21,
+                "minutes": 1200 + i,
+                "market_value_eur": 10_000_000.0,
+                "scout_target_score": float(90 - i),
+                "future_success": 1 if i < 15 else 0,
+            }
+        )
+
+    pred_path = tmp_path / "predictions.csv"
+    pd.DataFrame(rows).to_csv(pred_path, index=False)
+
+    payload = build_weekly_kpi_report(
+        predictions_path=str(pred_path),
+        out_dir=str(tmp_path / "reports"),
+        split="test",
+        k_values=(10, 25),
+        min_minutes=900,
+        max_age=25,
+        non_big5_only=True,
+        cohort_min_labeled=20,
+    )
+
+    league_rows = [row for row in payload["items"] if row["cohort_type"] == "league"]
+    assert any(row["cohort"] == "Eredivisie" for row in league_rows)
+    assert all(row["cohort"] != "English Premier League" for row in league_rows)

@@ -4,8 +4,6 @@ from pathlib import Path
 from typing import List, Optional
 
 import typer
-from ScraperFC import sofascore as sofa_module
-from ScraperFC.sofascore import Sofascore
 
 from scouting_ml.league_registry import (
     LeagueConfig,
@@ -24,13 +22,28 @@ app = typer.Typer(
 )
 
 
+def _load_sofascore_runtime():
+    from ScraperFC import sofascore as sofa_module
+    from ScraperFC.sofascore import Sofascore
+
+    return sofa_module, Sofascore
+
+
 def ensure_league_registered(league_key: str, tournament_id: int | None) -> None:
     if not league_key:
         raise typer.BadParameter("Sofascore league key is required.")
     if tournament_id is None:
         raise typer.BadParameter("Unique tournament id is required to register the league.")
-    if league_key not in sofa_module.comps:
-        sofa_module.comps[league_key] = tournament_id
+    sofa_module, _ = _load_sofascore_runtime()
+    existing = sofa_module.comps.get(league_key)
+    if isinstance(existing, dict):
+        existing["SOFASCORE"] = int(tournament_id)
+        sofa_module.comps[league_key] = existing
+        return
+    if existing is None:
+        sofa_module.comps[league_key] = {"SOFASCORE": int(tournament_id)}
+        return
+    sofa_module.comps[league_key] = {"SOFASCORE": int(tournament_id)}
 
 
 def resolve_league(league: str) -> LeagueConfig | None:
@@ -107,6 +120,7 @@ def pull(
 
     ensure_league_registered(league_key, tournament)
 
+    _, Sofascore = _load_sofascore_runtime()
     sofa = Sofascore()
     seasons = sofa.get_valid_seasons(league_key)
     if sofa_label not in seasons:

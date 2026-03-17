@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -60,6 +63,12 @@ def _band_wmape_from_log(y_log_true: np.ndarray, y_log_pred: np.ndarray) -> floa
     return float(np.mean(scores))
 
 
+def _overall_wmape_from_log(y_log_true: np.ndarray, y_log_pred: np.ndarray) -> float:
+    y_true = np.clip(np.expm1(y_log_true), a_min=0.0, a_max=None)
+    y_pred = np.clip(np.expm1(y_log_pred), a_min=0.0, a_max=None)
+    return _safe_wmape(y_true, y_pred)
+
+
 def _lowmid_wmape_from_log(y_log_true: np.ndarray, y_log_pred: np.ndarray) -> float:
     """
     WMAPE objective focused on scouting-heavy ranges:
@@ -84,6 +93,16 @@ def _lowmid_wmape_from_log(y_log_true: np.ndarray, y_log_pred: np.ndarray) -> fl
     return float(np.mean(scores))
 
 
+def _hybrid_wmape_from_log(y_log_true: np.ndarray, y_log_pred: np.ndarray) -> float:
+    """
+    Blend overall WMAPE with equal-weight band WMAPE so the tuner does not
+    overfit only the low/mid market segments or only the top end.
+    """
+    overall = _overall_wmape_from_log(y_log_true, y_log_pred)
+    by_band = _band_wmape_from_log(y_log_true, y_log_pred)
+    return float((overall * 0.55) + (by_band * 0.45))
+
+
 def tune_lgbm(
     X,
     y,
@@ -94,6 +113,10 @@ def tune_lgbm(
     groups: Optional[np.ndarray] = None,
     sample_weight: Optional[np.ndarray] = None,
     optimize_metric: str = "mae",
+    study_name: Optional[str] = None,
+    storage: Optional[str] = None,
+    study_metadata_path: Optional[str] = None,
+    load_if_exists: bool = True,
 ) -> Dict[str, Any]:
     """
     Optuna tuning for LGBMRegressor on log-target.
@@ -103,6 +126,12 @@ def tune_lgbm(
     weight_arr = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
     splitter, cv_groups = _make_splitter(groups, random_state=random_state)
     metric = optimize_metric.lower().strip()
+    sampler = optuna.samplers.TPESampler(seed=random_state)
+    pruner = optuna.pruners.MedianPruner(n_startup_trials=max(5, min(15, n_trials // 4 or 1)))
+
+    if storage and storage.startswith("sqlite:///"):
+        sqlite_path = Path(storage.removeprefix("sqlite:///"))
+        sqlite_path.parent.mkdir(parents=True, exist_ok=True)
 
     def objective(trial: optuna.trial.Trial) -> float:
         objective_name = trial.suggest_categorical(
@@ -127,12 +156,12 @@ def tune_lgbm(
 
         pre = ColumnTransformer(
             transformers=[
-                ("num", SimpleImputer(strategy="median"), list(numeric_cols)),
+                ("num", SimpleImputer(strategy="median", keep_empty_features=True), list(numeric_cols)),
                 (
                     "cat",
                     Pipeline(
                         steps=[
-                            ("imp", SimpleImputer(strategy="most_frequent")),
+                            ("imp", SimpleImputer(strategy="most_frequent", keep_empty_features=True)),
                             ("oh", OneHotEncoder(handle_unknown="ignore")),
                         ]
                     ),
@@ -166,18 +195,59 @@ def tune_lgbm(
 
             if metric == "rmse":
                 score = np.sqrt(mean_squared_error(y_val, pred))
+            elif metric == "overall_wmape":
+                score = _overall_wmape_from_log(y_val, pred)
             elif metric == "band_wmape":
                 score = _band_wmape_from_log(y_val, pred)
+            elif metric == "hybrid_wmape":
+                score = _hybrid_wmape_from_log(y_val, pred)
             elif metric == "lowmid_wmape":
                 score = _lowmid_wmape_from_log(y_val, pred)
             else:
                 score = mean_absolute_error(y_val, pred)
             fold_scores.append(float(score))
+            trial.report(float(np.mean(fold_scores)), step=len(fold_scores))
+            if trial.should_prune():
+                raise optuna.TrialPruned()
 
         return float(np.mean(fold_scores))
 
-    study = optuna.create_study(direction="minimize")
+    study = optuna.create_study(
+        direction="minimize",
+        study_name=study_name,
+        storage=storage,
+        load_if_exists=load_if_exists if storage or study_name else False,
+        sampler=sampler,
+        pruner=pruner,
+    )
+    study.set_user_attr("optimize_metric", metric)
+    study.set_user_attr("n_trials_requested", int(n_trials))
+    study.set_user_attr("random_state", int(random_state))
+    study.set_user_attr("has_groups", bool(cv_groups is not None))
+    study.set_user_attr("n_numeric_features", int(len(list(numeric_cols))))
+    study.set_user_attr("n_categorical_features", int(len(list(categorical_cols))))
     study.optimize(objective, n_trials=n_trials)
+
+    if study_metadata_path:
+        metadata_path = Path(study_metadata_path)
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata_path.write_text(
+            json.dumps(
+                {
+                    "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "study_name": study.study_name,
+                    "storage": storage,
+                    "direction": study.direction.name,
+                    "best_value": float(study.best_value),
+                    "best_trial_number": int(study.best_trial.number),
+                    "best_params": dict(study.best_trial.params),
+                    "n_trials_completed": len(study.trials),
+                    "user_attrs": dict(study.user_attrs),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
 
     best_params = dict(study.best_trial.params)
     best_params.update({"n_jobs": -1, "random_state": random_state})

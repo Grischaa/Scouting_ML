@@ -93,6 +93,58 @@ def parse_int(text: str) -> int:
     return int(m.group(1)) if m else 0
 
 
+def _injury_bucket(name: str | None) -> str:
+    text = str(name or "").strip().casefold()
+    if not text:
+        return "unknown"
+    if any(tok in text for tok in ("ill", "flu", "virus", "infection", "covid", "sick", "concussion")):
+        return "illness"
+    if any(
+        tok in text
+        for tok in (
+            "hamstring",
+            "muscle",
+            "thigh",
+            "calf",
+            "groin",
+            "adductor",
+            "abductor",
+            "strain",
+            "tear",
+        )
+    ):
+        return "soft_tissue"
+    if any(
+        tok in text
+        for tok in (
+            "knee",
+            "ankle",
+            "foot",
+            "toe",
+            "hip",
+            "back",
+            "achilles",
+            "ligament",
+            "meniscus",
+            "acl",
+            "mcl",
+            "fracture",
+            "broken",
+            "dislocation",
+            "cartilage",
+        )
+    ):
+        return "bone_joint"
+    return "other"
+
+
+def _injury_surgery_flag(name: str | None) -> int:
+    text = str(name or "").strip().casefold()
+    if not text:
+        return 0
+    return int(any(tok in text for tok in ("surgery", "operation", "operated")))
+
+
 def _detect_column_index(headers: Sequence[str], tokens: Sequence[str], fallback: int | None = None) -> int | None:
     for i, header in enumerate(headers):
         h = header.lower()
@@ -227,7 +279,16 @@ def aggregate_player_injuries(
     target_seasons: Sequence[str],
 ) -> Dict[str, dict]:
     agg: Dict[str, dict] = {
-        s: {"injury_days_missed": 0, "injury_games_missed": 0, "injury_count": 0}
+        s: {
+            "injury_days_missed": 0,
+            "injury_games_missed": 0,
+            "injury_count": 0,
+            "injury_long_absence_count": 0,
+            "injury_soft_tissue_count": 0,
+            "injury_bone_joint_count": 0,
+            "injury_illness_count": 0,
+            "injury_surgery_count": 0,
+        }
         for s in target_seasons
     }
     for row in rows:
@@ -237,6 +298,23 @@ def aggregate_player_injuries(
         agg[season]["injury_days_missed"] += int(row.get("days_missed", 0) or 0)
         agg[season]["injury_games_missed"] += int(row.get("games_missed", 0) or 0)
         agg[season]["injury_count"] += 1
+        agg[season]["injury_long_absence_count"] += int(int(row.get("days_missed", 0) or 0) >= 45)
+        bucket = _injury_bucket(row.get("injury_name"))
+        if bucket == "soft_tissue":
+            agg[season]["injury_soft_tissue_count"] += 1
+        elif bucket == "bone_joint":
+            agg[season]["injury_bone_joint_count"] += 1
+        elif bucket == "illness":
+            agg[season]["injury_illness_count"] += 1
+        agg[season]["injury_surgery_count"] += _injury_surgery_flag(row.get("injury_name"))
+    for season in target_seasons:
+        count = int(agg[season]["injury_count"])
+        days = int(agg[season]["injury_days_missed"])
+        games = int(agg[season]["injury_games_missed"])
+        agg[season]["injury_avg_days_per_case"] = float(days / count) if count > 0 else 0.0
+        agg[season]["injury_avg_games_per_case"] = float(games / count) if count > 0 else 0.0
+        agg[season]["injury_repeat_soft_tissue_flag"] = int(agg[season]["injury_soft_tissue_count"] >= 2)
+        agg[season]["injury_repeat_bone_joint_flag"] = int(agg[season]["injury_bone_joint_count"] >= 2)
     return agg
 
 
@@ -308,6 +386,15 @@ def build_player_injuries(
                         "games_missed": pd.NA,
                         "injury_count": pd.NA,
                         "major_injury_flag": pd.NA,
+                        "injury_long_absence_count": pd.NA,
+                        "injury_avg_days_per_case": pd.NA,
+                        "injury_avg_games_per_case": pd.NA,
+                        "injury_repeat_soft_tissue_flag": pd.NA,
+                        "injury_repeat_bone_joint_flag": pd.NA,
+                        "injury_soft_tissue_count": pd.NA,
+                        "injury_bone_joint_count": pd.NA,
+                        "injury_illness_count": pd.NA,
+                        "injury_surgery_count": pd.NA,
                     }
                 )
             else:
@@ -320,6 +407,33 @@ def build_player_injuries(
                         "games_missed": int(games),
                         "injury_count": int(cnt),
                         "major_injury_flag": int(days >= 60),
+                        "injury_long_absence_count": int(
+                            aggregated.get(season, {}).get("injury_long_absence_count", 0)
+                        ),
+                        "injury_avg_days_per_case": float(
+                            aggregated.get(season, {}).get("injury_avg_days_per_case", 0.0)
+                        ),
+                        "injury_avg_games_per_case": float(
+                            aggregated.get(season, {}).get("injury_avg_games_per_case", 0.0)
+                        ),
+                        "injury_repeat_soft_tissue_flag": int(
+                            aggregated.get(season, {}).get("injury_repeat_soft_tissue_flag", 0)
+                        ),
+                        "injury_repeat_bone_joint_flag": int(
+                            aggregated.get(season, {}).get("injury_repeat_bone_joint_flag", 0)
+                        ),
+                        "injury_soft_tissue_count": int(
+                            aggregated.get(season, {}).get("injury_soft_tissue_count", 0)
+                        ),
+                        "injury_bone_joint_count": int(
+                            aggregated.get(season, {}).get("injury_bone_joint_count", 0)
+                        ),
+                        "injury_illness_count": int(
+                            aggregated.get(season, {}).get("injury_illness_count", 0)
+                        ),
+                        "injury_surgery_count": int(
+                            aggregated.get(season, {}).get("injury_surgery_count", 0)
+                        ),
                     }
                 )
             out_rows.append(base)

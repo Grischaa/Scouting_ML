@@ -3,6 +3,7 @@
 .vscode/
 __pycache__/
 *.pyc
+*.egg-info/
 
 # data & secrets
 data/*
@@ -14,7 +15,37 @@ data/*
 # test / cache
 .pytest_cache/
 .ipynb_checkpoints/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # local dbs
 *.duckdb
 *.sqlite
+
+# generated artifacts
+logs/
+catboost_info/
+data/model/optuna/
+data/model/production/
+data/model/ablation/
+data/model/backtests/
+data/model/candidates/
+data/model/provider_promotion/
+data/model/reports/
+data/model/scout_workflow/
+data/model/tm_context_candidate*.csv
+data/model/tm_context_candidate*.json
+data/model/tm_context_candidate*.parquet
+data/model/champion_players*.parquet
+data/model/champion_predictions*.csv
+data/model/champion_predictions*.json
+data/model/champion_predictions*.parquet
+data/model/model_artifacts.env
+data/model/model_manifest.json
+
+# frontend build artifacts
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/

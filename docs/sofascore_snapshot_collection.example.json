@@ -1,0 +1,40 @@
+{
+  "snapshot_date": "2026-03-12",
+  "raw_output_dir": "data/raw/providers",
+  "provider_config_out": "data/raw/providers/sofascore_provider_pipeline_2024-25.generated.json",
+  "summary_out": "data/raw/providers/sofascore_snapshot_summary_2024-25.json",
+  "players_source": "data/processed",
+  "statsbomb": {
+    "open_data_root": "data/raw/statsbomb/bundesliga_2023_24",
+    "competition_ids": [9],
+    "season_ids": [281]
+  },
+  "fixture_context": {
+    "provider": "sofascore",
+    "competitions": [
+      {
+        "name": "premier_league_2024_25",
+        "league": "Premier League",
+        "season": "2024/25",
+        "tournament_id": 17,
+        "season_id": 61627,
+        "segments": ["last"],
+        "max_pages": 30
+      }
+    ]
+  },
+  "player_availability": {
+    "provider": "sofascore",
+    "competitions": [
+      {
+        "name": "premier_league_2024_25",
+        "league": "Premier League",
+        "season": "2024/25",
+        "tournament_id": 17,
+        "season_id": 61627,
+        "segments": ["last"],
+        "max_pages": 30
+      }
+    ]
+  }
+}

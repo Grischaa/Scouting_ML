@@ -235,7 +235,7 @@ def main():
             print(f"[merge] Wrote league stats -> {out.resolve()}")
 
 # -------------------------
-# ✅ NEW: Schema validation
+# Schema validation
 # -------------------------
 
     try:
@@ -256,9 +256,9 @@ def main():
                 df = pd.read_csv(merged_features)
                 validate_schema(df)
             else:
-                print("[validate ⚠️] No merged or clean file found to validate.")
+                print("[validate WARN] No merged or clean file found to validate.")
     except Exception as e:
-        print(f"[validate ❌] Schema validation failed to run: {e}")
+        print(f"[validate ERROR] Schema validation failed to run: {e}")
 
 
 

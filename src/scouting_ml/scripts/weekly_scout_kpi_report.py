@@ -12,11 +12,16 @@ import pandas as pd
 
 
 BIG5_LEAGUES = {
+    "english premier league",
     "premier league",
+    "spanish la liga",
     "la liga",
     "laliga",
+    "italian serie a",
     "serie a",
+    "german bundesliga",
     "bundesliga",
+    "french ligue 1",
     "ligue 1",
 }
 

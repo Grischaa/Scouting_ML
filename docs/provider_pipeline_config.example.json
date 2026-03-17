@@ -1,0 +1,26 @@
+{
+  "snapshot_date": "2026-03-10",
+  "player_links": "data/external/player_provider_links.csv",
+  "club_links": "data/external/club_provider_links.csv",
+  "statsbomb": {
+    "open_data_root": "data/raw/statsbomb/open-data",
+    "competition_ids": [2, 9],
+    "season_ids": [27, 281]
+  },
+  "fixture_context": {
+    "provider": "sportmonks",
+    "input_json": ["data/raw/providers/sportmonks_fixtures_2024-25.json"],
+    "api_url": []
+  },
+  "player_availability": {
+    "provider": "sportmonks",
+    "input_json": ["data/raw/providers/sportmonks_player_availability_2024-25.json"],
+    "api_url": []
+  },
+  "market_context": {
+    "league": "Premier League",
+    "season": "2024/25",
+    "input_json": ["data/raw/providers/odds_premier_league_2024-25.json"],
+    "api_url": []
+  }
+}

@@ -1,22 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
-
-from scouting_ml.models.build_dataset import main as build_dataset_main
-from scouting_ml.models.clean_dataset import clean_dataset
-from scouting_ml.models.train_market_value_full import main as train_market_value_main
-from scouting_ml.scripts.build_club_league_context import build_club_and_league_context
-from scouting_ml.scripts.build_national_team_caps import build_player_national_caps
-from scouting_ml.scripts.build_player_contracts import build_player_contracts
-from scouting_ml.scripts.build_player_injuries import build_player_injuries
-from scouting_ml.scripts.build_player_transfers import build_player_transfers
-from scouting_ml.scripts.build_future_value_targets import build_future_value_targets
-from scouting_ml.scripts.lock_market_value_artifacts import build_lock_bundle
-from scouting_ml.scripts.run_market_value_ablation import run_ablation
-from scouting_ml.scripts.run_rolling_backtest import run_rolling_backtest
-
 
 def _parse_csv_tokens(raw: str | None) -> list[str]:
     if raw is None:
@@ -28,6 +16,117 @@ def _step(label: str) -> None:
     print("\n" + "=" * 70)
     print(f"[pipeline] {label}")
     print("=" * 70)
+
+
+def build_dataset_main(**kwargs) -> None:
+    from scouting_ml.models.build_dataset import main as _build_dataset_main
+
+    _build_dataset_main(**kwargs)
+
+
+def clean_dataset(*args, **kwargs) -> None:
+    from scouting_ml.models.clean_dataset import clean_dataset as _clean_dataset
+
+    _clean_dataset(*args, **kwargs)
+
+
+def _train_market_value_main(**kwargs) -> None:
+    from scouting_ml.models.train_market_value_full import main as train_market_value_main
+
+    train_market_value_main(**kwargs)
+
+
+def build_club_and_league_context(**kwargs) -> None:
+    from scouting_ml.scripts.build_club_league_context import build_club_and_league_context as _build_club_and_league_context
+
+    _build_club_and_league_context(**kwargs)
+
+
+def build_player_national_caps(**kwargs) -> None:
+    from scouting_ml.scripts.build_national_team_caps import build_player_national_caps as _build_player_national_caps
+
+    _build_player_national_caps(**kwargs)
+
+
+def build_player_contracts(**kwargs) -> None:
+    from scouting_ml.scripts.build_player_contracts import build_player_contracts as _build_player_contracts
+
+    _build_player_contracts(**kwargs)
+
+
+def build_player_injuries(**kwargs) -> None:
+    from scouting_ml.scripts.build_player_injuries import build_player_injuries as _build_player_injuries
+
+    _build_player_injuries(**kwargs)
+
+
+def build_player_transfers(**kwargs) -> None:
+    from scouting_ml.scripts.build_player_transfers import build_player_transfers as _build_player_transfers
+
+    _build_player_transfers(**kwargs)
+
+
+def build_provider_external_data(**kwargs) -> None:
+    from scouting_ml.scripts.build_provider_external_data import build_provider_external_data as _build_provider_external_data
+
+    _build_provider_external_data(**kwargs)
+
+
+def build_provider_link_audit(**kwargs) -> None:
+    from scouting_ml.scripts.build_provider_link_audit import build_provider_link_audit as _build_provider_link_audit
+
+    _build_provider_link_audit(**kwargs)
+
+
+def build_future_value_targets(**kwargs) -> None:
+    from scouting_ml.scripts.build_future_value_targets import build_future_value_targets as _build_future_value_targets
+
+    _build_future_value_targets(**kwargs)
+
+
+def build_lock_bundle(**kwargs) -> None:
+    from scouting_ml.scripts.lock_market_value_artifacts import build_lock_bundle as _build_lock_bundle
+
+    _build_lock_bundle(**kwargs)
+
+
+def run_ablation(**kwargs) -> None:
+    from scouting_ml.scripts.run_market_value_ablation import run_ablation as _run_ablation
+
+    _run_ablation(**kwargs)
+
+
+def run_rolling_backtest(**kwargs) -> None:
+    from scouting_ml.scripts.run_rolling_backtest import run_rolling_backtest as _run_rolling_backtest
+
+    _run_rolling_backtest(**kwargs)
+
+
+def _artifact_meta(path: str | Path) -> dict[str, object]:
+    resolved = Path(path)
+    exists = resolved.exists()
+    return {
+        "path": str(resolved.resolve()),
+        "exists": exists,
+        "size_bytes": int(resolved.stat().st_size) if exists else None,
+    }
+
+
+def _require_artifact(path: str | Path, label: str) -> dict[str, object]:
+    meta = _artifact_meta(path)
+    if not meta["exists"]:
+        raise FileNotFoundError(f"Expected {label} artifact was not created: {path}")
+    return meta
+
+
+def _load_json_snapshot(path: str | Path) -> dict | list | None:
+    target = Path(path)
+    if not target.exists():
+        return None
+    try:
+        return json.loads(target.read_text(encoding="utf-8"))
+    except Exception:
+        return None
 
 
 def run_full_pipeline(
@@ -102,6 +201,9 @@ def run_full_pipeline(
     skip_transfers: bool,
     skip_national: bool,
     skip_context: bool,
+    provider_config_json: str | None,
+    provider_audit_json: str | None,
+    provider_audit_csv: str | None,
     skip_dataset_build: bool,
     skip_clean: bool,
     skip_train: bool,
@@ -110,9 +212,33 @@ def run_full_pipeline(
     lock_env_out: str,
     lock_label: str,
     lock_strict_artifacts: bool,
-) -> None:
+    save_shap_artifacts: bool = True,
+    holdout_trials: int | None = None,
+    optuna_study_namespace: str | None = None,
+    optuna_load_if_exists: bool = True,
+    summary_json: str | None = None,
+) -> dict[str, object]:
     ext_dir = Path(external_dir)
     ext_dir.mkdir(parents=True, exist_ok=True)
+
+    if provider_config_json:
+        _step("Build provider external features")
+        build_provider_external_data(
+            config_path=provider_config_json,
+            external_dir=str(ext_dir),
+        )
+        audit_json = provider_audit_json or str(ext_dir / "provider_link_audit.json")
+        audit_csv = provider_audit_csv or str(ext_dir / "provider_link_audit.csv")
+        build_provider_link_audit(
+            players_source=players_source,
+            external_dir=str(ext_dir),
+            player_links=str(ext_dir / "player_provider_links.csv"),
+            club_links=str(ext_dir / "club_provider_links.csv"),
+            out_json=audit_json,
+            out_csv=audit_csv,
+        )
+    else:
+        print("[pipeline] skip provider external feature build")
 
     if not skip_injuries:
         _step("Build player injuries")
@@ -226,7 +352,7 @@ def run_full_pipeline(
 
     if not skip_train:
         _step("Train and evaluate main market-value model")
-        train_market_value_main(
+        _train_market_value_main(
             dataset_path=clean_output,
             val_season=val_season,
             test_season=test_season,
@@ -253,6 +379,10 @@ def run_full_pipeline(
             min_league_season_completeness=min_league_season_completeness,
             residual_calibration_min_samples=residual_calibration_min_samples,
             mape_min_denom_eur=mape_min_denom_eur,
+            save_shap_artifacts=save_shap_artifacts,
+            holdout_n_optuna_trials=holdout_trials,
+            optuna_study_namespace=optuna_study_namespace,
+            optuna_load_if_exists=optuna_load_if_exists,
         )
     else:
         print("[pipeline] skip train")
@@ -332,6 +462,96 @@ def run_full_pipeline(
     if with_future_targets:
         print(f"[pipeline] future-target dataset: {future_targets_output}")
     print(f"[pipeline] predictions: {predictions_output}")
+    output = Path(predictions_output)
+    val_output = output.with_name(f"{output.stem}_val{output.suffix or '.csv'}")
+    metrics_output = output.with_suffix(".metrics.json")
+    artifacts: dict[str, dict[str, object]] = {}
+
+    if not skip_dataset_build:
+        artifacts["dataset"] = _require_artifact(dataset_output, "dataset")
+    else:
+        artifacts["dataset"] = _artifact_meta(dataset_output)
+
+    if not skip_clean:
+        artifacts["clean_dataset"] = _require_artifact(clean_output, "clean dataset")
+    else:
+        artifacts["clean_dataset"] = _artifact_meta(clean_output)
+
+    if with_future_targets:
+        artifacts["future_targets"] = _require_artifact(future_targets_output, "future target")
+    else:
+        artifacts["future_targets"] = _artifact_meta(future_targets_output)
+
+    if not skip_train:
+        artifacts["test_predictions"] = _require_artifact(output, "test predictions")
+        artifacts["val_predictions"] = _require_artifact(val_output, "validation predictions")
+        artifacts["metrics"] = _require_artifact(metrics_output, "metrics")
+    else:
+        artifacts["test_predictions"] = _artifact_meta(output)
+        artifacts["val_predictions"] = _artifact_meta(val_output)
+        artifacts["metrics"] = _artifact_meta(metrics_output)
+
+    if with_ablation:
+        artifacts["ablation_bundle"] = _artifact_meta(Path(ablation_out_dir) / f"ablation_bundle_{test_season.replace('/', '-')}.json")
+
+    if with_backtest:
+        artifacts["backtest_summary"] = _artifact_meta(Path(backtest_out_dir) / "rolling_backtest_summary.json")
+
+    if provider_config_json:
+        audit_json = provider_audit_json or str(Path(external_dir) / "provider_link_audit.json")
+        artifacts["provider_audit_json"] = _require_artifact(audit_json, "provider audit json")
+        audit_csv = provider_audit_csv or str(Path(external_dir) / "provider_link_audit.csv")
+        artifacts["provider_audit_csv"] = _require_artifact(audit_csv, "provider audit csv")
+
+    if lock_artifacts:
+        artifacts["lock_manifest"] = _require_artifact(lock_manifest_out, "lock manifest")
+        artifacts["lock_env"] = _require_artifact(lock_env_out, "lock env")
+    else:
+        artifacts["lock_manifest"] = _artifact_meta(lock_manifest_out)
+        artifacts["lock_env"] = _artifact_meta(lock_env_out)
+
+    summary: dict[str, object] = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": "ok",
+        "inputs": {
+            "players_source": str(Path(players_source).resolve()),
+            "data_dir": str(Path(data_dir).resolve()),
+            "external_dir": str(Path(external_dir).resolve()),
+            "val_season": val_season,
+            "test_season": test_season,
+            "start_season": start_season,
+            "end_season": end_season,
+            "trials": int(trials),
+            "holdout_trials": int(holdout_trials) if holdout_trials is not None else None,
+            "optimize_metric": optimize_metric,
+            "provider_config_json": str(Path(provider_config_json).resolve()) if provider_config_json else None,
+        },
+        "flags": {
+            "with_future_targets": bool(with_future_targets),
+            "with_ablation": bool(with_ablation),
+            "with_backtest": bool(with_backtest),
+            "lock_artifacts": bool(lock_artifacts),
+            "skip_dataset_build": bool(skip_dataset_build),
+            "skip_clean": bool(skip_clean),
+            "skip_train": bool(skip_train),
+        },
+        "artifacts": artifacts,
+        "snapshots": {
+            "metrics": _load_json_snapshot(metrics_output),
+            "backtest": _load_json_snapshot(Path(backtest_out_dir) / "rolling_backtest_summary.json") if with_backtest else None,
+            "ablation": _load_json_snapshot(Path(ablation_out_dir) / f"ablation_bundle_{test_season.replace('/', '-')}.json")
+            if with_ablation
+            else None,
+        },
+    }
+
+    if summary_json:
+        out_path = Path(summary_json)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        print(f"[pipeline] wrote summary -> {out_path}")
+
+    return summary
 
 
 def main() -> None:
@@ -411,6 +631,18 @@ def main() -> None:
         type=float,
         default=1_000_000.0,
         help="MAPE denominator floor in EUR for training/evaluation metrics.",
+    )
+    parser.add_argument(
+        "--save-shap-artifacts",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write SHAP PNG artifacts during training and holdout evaluation.",
+    )
+    parser.add_argument(
+        "--holdout-trials",
+        type=int,
+        default=None,
+        help="Optional Optuna trial budget for holdout reruns. Defaults to --trials.",
     )
     parser.add_argument("--exclude-prefixes", default="")
     parser.add_argument("--exclude-columns", default="")
@@ -504,6 +736,13 @@ def main() -> None:
     parser.add_argument("--skip-transfers", action="store_true")
     parser.add_argument("--skip-national", action="store_true")
     parser.add_argument("--skip-context", action="store_true")
+    parser.add_argument(
+        "--provider-config-json",
+        default="",
+        help="Optional provider snapshot config JSON. See docs/provider_pipeline_config.example.json.",
+    )
+    parser.add_argument("--provider-audit-json", default="")
+    parser.add_argument("--provider-audit-csv", default="")
     parser.add_argument("--skip-dataset-build", action="store_true")
     parser.add_argument("--skip-clean", action="store_true")
     parser.add_argument("--skip-train", action="store_true")
@@ -516,10 +755,26 @@ def main() -> None:
     parser.add_argument("--lock-env-out", default="data/model/model_artifacts.env")
     parser.add_argument("--lock-label", default="market_value_champion")
     parser.add_argument(
+        "--optuna-study-namespace",
+        default="",
+        help="Optional suffix to isolate Optuna studies for this run.",
+    )
+    parser.add_argument(
+        "--optuna-load-if-exists",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Reuse existing Optuna studies when present.",
+    )
+    parser.add_argument(
         "--lock-strict-artifacts",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Write strict artifact serving flag into lock env file.",
+    )
+    parser.add_argument(
+        "--summary-json",
+        default="",
+        help="Optional structured run summary JSON for the full pipeline.",
     )
 
     args = parser.parse_args()
@@ -554,6 +809,7 @@ def main() -> None:
         min_league_season_completeness=args.min_league_season_completeness,
         residual_calibration_min_samples=args.residual_calibration_min_samples,
         mape_min_denom_eur=args.mape_min_denom_eur,
+        save_shap_artifacts=args.save_shap_artifacts,
         exclude_prefixes=_parse_csv_tokens(args.exclude_prefixes),
         exclude_columns=_parse_csv_tokens(args.exclude_columns),
         max_players=args.max_players,
@@ -596,6 +852,9 @@ def main() -> None:
         skip_transfers=args.skip_transfers,
         skip_national=args.skip_national,
         skip_context=args.skip_context,
+        provider_config_json=args.provider_config_json or None,
+        provider_audit_json=args.provider_audit_json or None,
+        provider_audit_csv=args.provider_audit_csv or None,
         skip_dataset_build=args.skip_dataset_build,
         skip_clean=args.skip_clean,
         skip_train=args.skip_train,
@@ -604,6 +863,10 @@ def main() -> None:
         lock_env_out=args.lock_env_out,
         lock_label=args.lock_label,
         lock_strict_artifacts=args.lock_strict_artifacts,
+        holdout_trials=args.holdout_trials,
+        optuna_study_namespace=args.optuna_study_namespace or None,
+        optuna_load_if_exists=args.optuna_load_if_exists,
+        summary_json=args.summary_json or None,
     )
 
 

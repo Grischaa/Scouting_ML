@@ -26,7 +26,7 @@ def clean_dataset(input_path: str, output_path: str, min_minutes: float = 450.0)
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(output_path, index=False)
-    print(f"[clean] wrote {len(df):,} rows → {output_path}")
+    print(f"[clean] wrote {len(df):,} rows -> {output_path}")
 
 
 if __name__ == "__main__":

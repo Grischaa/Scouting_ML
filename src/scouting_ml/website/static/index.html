@@ -3,44 +3,73 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ScoutML - Valuation and Talent Scouting</title>
+    <title>ScoutML - Recruitment Intelligence</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="assets/styles.css?v=20260226a" />
-    <script src="assets/app.js?v=20260226a" defer></script>
+    <link rel="stylesheet" href="assets/styles.css?v=20260317_recruitment_revamp1" />
+    <script src="assets/app.js?v=20260317_recruitment_revamp1" defer></script>
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
+    <div class="bg-orb bg-orb--amber" aria-hidden="true"></div>
+    <div class="bg-orb bg-orb--teal" aria-hidden="true"></div>
 
     <header class="app-header">
-      <div class="app-header__left">
-        <p class="kicker">Scouting ML</p>
-        <h1>Valuation and Talent Scouting</h1>
-        <p class="subtitle">
-          One application for two decisions: who is over/undervalued now, and
-          where hidden talent sits in lower-league funnels.
-        </p>
-        <div class="goal-pills">
-          <span class="goal-pill">Market Value Decision Support</span>
-          <span class="goal-pill">Lower-League Talent Funnel</span>
+      <div class="app-header__left card card--hero">
+        <div class="hero-panel">
+          <div class="hero-panel__copy">
+            <p class="kicker">Scouting ML</p>
+            <h1>Recruitment Intelligence for Smaller Clubs and Consultants</h1>
+            <p class="subtitle">
+              One scouting console for practical recruitment work: price players
+              responsibly, find undervalued non-Big5 targets, and turn shortlist
+              ideas into actionable scouting memos.
+            </p>
+            <div class="goal-pills">
+              <span class="goal-pill">Non-Big5 Opportunity Mapping</span>
+              <span class="goal-pill">Recruitment Board + Watchlist</span>
+              <span class="goal-pill">Consultant-Ready Player Memos</span>
+            </div>
+          </div>
+          <div class="hero-panel__rail">
+            <article class="hero-insight">
+              <span class="hero-insight__eyebrow">Price responsibly</span>
+              <p>Use the valuation champion to stay disciplined on fair value and conservative gap.</p>
+            </article>
+            <article class="hero-insight">
+              <span class="hero-insight__eyebrow">Prioritize upside</span>
+              <p>Use the future shortlist champion to rank outside-Big-5 players worth real follow-up.</p>
+            </article>
+            <article class="hero-insight">
+              <span class="hero-insight__eyebrow">Leave with action</span>
+              <p>Convert a board hit into a memo, watchlist entry, or export pack without switching tools.</p>
+            </article>
+          </div>
         </div>
       </div>
-      <div class="app-header__right card">
-        <label for="api-base">API base</label>
-        <input
-          id="api-base"
-          type="url"
-          spellcheck="false"
-          value="http://localhost:8000"
-          placeholder="http://localhost:8000"
-        />
-        <div class="api-controls">
-          <button id="connect-btn" type="button">Connect</button>
-          <span id="api-status" class="status status--neutral">Not connected</span>
+      <div class="app-header__right card card--control">
+        <div class="connect-panel">
+          <div class="connect-panel__header">
+            <p class="kicker">Runtime</p>
+            <h2>API Link</h2>
+            <p class="card-intro">Point the app at the live backend and the board, funnel, and memo will populate from the same source.</p>
+          </div>
+          <label for="api-base">API base</label>
+          <input
+            id="api-base"
+            type="url"
+            spellcheck="false"
+            value="http://localhost:8000"
+            placeholder="http://localhost:8000"
+          />
+          <div class="api-controls">
+            <button id="connect-btn" type="button">Connect</button>
+            <span id="api-status" class="status status--neutral">Not connected</span>
+          </div>
         </div>
       </div>
     </header>
@@ -48,14 +77,45 @@
     <main class="main-wrap">
       <nav class="view-tabs card" aria-label="Views">
         <button class="tab-btn is-active" data-view="overview" type="button">Overview</button>
-        <button class="tab-btn" data-view="workbench" type="button">Valuation Workbench</button>
-        <button class="tab-btn" data-view="funnel" type="button">Talent Funnel</button>
+        <button class="tab-btn" data-view="workbench" type="button">Recruitment Board</button>
+        <button class="tab-btn" data-view="funnel" type="button">Target Funnel</button>
       </nav>
 
       <section id="view-overview" class="view view--active">
         <div class="overview-grid">
+          <article class="card overview-quickstart">
+            <h2>Simple Workflow</h2>
+            <p class="card-intro">
+              Use this page once to check model trust. Day-to-day recruitment work should happen in the board and memo.
+            </p>
+            <div class="workflow-steps">
+              <div class="workflow-step">
+                <span class="workflow-step__index">1</span>
+                <div>
+                  <h3>Check Trust</h3>
+                  <p>Use the valuation champion for pricing discipline and the shortlist champion for ranking.</p>
+                </div>
+              </div>
+              <div class="workflow-step">
+                <span class="workflow-step__index">2</span>
+                <div>
+                  <h3>Set A Brief</h3>
+                  <p>Start with role, age corridor, budget, and contract pressure. Only open advanced filters if needed.</p>
+                </div>
+              </div>
+              <div class="workflow-step">
+                <span class="workflow-step__index">3</span>
+                <div>
+                  <h3>Open The Memo</h3>
+                  <p>Use player detail for the decision, then export a club CSV or memo pack when the shortlist is ready.</p>
+                </div>
+              </div>
+            </div>
+          </article>
+
           <article class="card trust-card">
-            <h2>Model Trust Card</h2>
+            <h2>Active Model Stack</h2>
+            <p class="card-intro">Read this as: which model prices the player, which model ranks the shortlist, and when each one was last refreshed.</p>
             <dl class="trust-list">
               <div><dt>Model Version</dt><dd id="trust-model-version">-</dd></div>
               <div><dt>Last Updated (UTC)</dt><dd id="trust-updated">-</dd></div>
@@ -71,11 +131,20 @@
                 <li><span>Metrics JSON</span><code id="artifact-metrics">-</code></li>
               </ul>
             </div>
+            <div class="artifact-box">
+              <p class="artifact-box__title">Champion Routing</p>
+              <ul class="artifact-list">
+                <li><span>Valuation</span><code id="champion-valuation">-</code></li>
+                <li><span>Shortlist</span><code id="champion-shortlist">-</code></li>
+                <li><span>Runtime</span><code id="champion-runtime">-</code></li>
+              </ul>
+            </div>
             <p class="trust-note" id="trust-note">Connect API to load artifact metadata.</p>
           </article>
 
           <article class="card metrics-card">
-            <h2>Core Metrics</h2>
+            <h2>Core Metrics (Valuation Champion)</h2>
+            <p class="card-intro">These numbers are about pricing discipline, not future breakout ranking.</p>
             <div class="metrics-grid">
               <article class="metric">
                 <p class="metric__label">Test R²</p>
@@ -130,7 +199,7 @@
           <article class="card coverage-card">
             <h2>League Coverage (Current Split)</h2>
             <p class="segment-note">
-              Lower-league ready: if non-Big5 data exists in predictions, it appears here automatically.
+              Coverage tells you where the shortlist is grounded in real forward evidence and where you should stay conservative.
             </p>
             <div class="table-wrap table-wrap--small">
               <table>
@@ -140,12 +209,59 @@
                     <th class="num">Rows</th>
                     <th class="num">Undervalued %</th>
                     <th class="num">Avg confidence</th>
+                    <th>Status</th>
+                    <th>Coverage note</th>
                   </tr>
                 </thead>
                 <tbody id="coverage-body">
-                  <tr><td colspan="4">Connect and load coverage.</td></tr>
+                  <tr><td colspan="6">Connect and load coverage.</td></tr>
                 </tbody>
               </table>
+            </div>
+          </article>
+
+          <article class="card benchmark-card">
+            <h2>League Benchmarks</h2>
+            <p class="card-intro">Use this to decide where shortlist output is credible and where you need more caution.</p>
+            <p id="benchmark-meta" class="segment-note">Connect API to load holdout benchmark summary.</p>
+            <div class="table-wrap table-wrap--small table-wrap--benchmark">
+              <table>
+                <thead>
+                  <tr>
+                    <th>League</th>
+                    <th>Status</th>
+                    <th class="num">R²</th>
+                    <th class="num">WMAPE</th>
+                    <th class="num">Shift Z</th>
+                  </tr>
+                </thead>
+                <tbody id="benchmark-body">
+                  <tr><td colspan="5">No benchmark data loaded.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card research-card">
+            <h2>Research Snapshot</h2>
+            <p class="card-intro">This is the current research posture behind the live recruitment workflow.</p>
+            <div class="snapshot-grid">
+              <article class="snapshot-card">
+                <p class="snapshot-card__label">Best overall ablation</p>
+                <p class="snapshot-card__value" id="experiment-best-overall">-</p>
+              </article>
+              <article class="snapshot-card">
+                <p class="snapshot-card__label">Best under-20m ablation</p>
+                <p class="snapshot-card__value" id="experiment-best-cheap">-</p>
+              </article>
+              <article class="snapshot-card">
+                <p class="snapshot-card__label">Onboarding status</p>
+                <p class="snapshot-card__value" id="experiment-onboarding">-</p>
+              </article>
+              <article class="snapshot-card">
+                <p class="snapshot-card__label">Weakest full slice</p>
+                <p class="snapshot-card__value" id="experiment-weakest">-</p>
+              </article>
             </div>
           </article>
         </div>
@@ -154,113 +270,180 @@
       <section id="view-workbench" class="view">
         <div class="layout">
           <section class="controls card">
-            <div class="control">
-              <label for="mode-select">Mode</label>
-              <select id="mode-select">
-                <option value="predictions">Predictions</option>
-                <option value="shortlist">Shortlist</option>
-              </select>
+            <div class="panel-header">
+              <div>
+                <h2>Set Recruitment Brief</h2>
+                <p class="panel-help">Use the visible fields first. Open advanced filters only when you need a very specific slice.</p>
+              </div>
             </div>
-            <div class="control">
-              <label for="split-select">Split</label>
-              <select id="split-select">
-                <option value="test">Test</option>
-                <option value="val">Validation</option>
-              </select>
+
+            <div class="controls__grid controls__grid--brief">
+              <div class="control">
+                <label for="mode-select">Mode</label>
+                <select id="mode-select">
+                  <option value="shortlist" selected>Recruitment shortlist</option>
+                  <option value="predictions">Valuation board</option>
+                </select>
+              </div>
+              <div class="control">
+                <label for="split-select">Split</label>
+                <select id="split-select">
+                  <option value="test">Test</option>
+                  <option value="val">Validation</option>
+                </select>
+              </div>
+              <div class="control">
+                <label for="role-need-select">Role need</label>
+                <select id="role-need-select">
+                  <option value="">Any role</option>
+                  <option value="GK">Goalkeeper</option>
+                  <option value="CB">Centre-back</option>
+                  <option value="FB">Fullback / Wing-back</option>
+                  <option value="DM">Defensive Midfielder</option>
+                  <option value="CM">Central Midfielder</option>
+                  <option value="AM">Attacking Midfielder</option>
+                  <option value="W">Winger</option>
+                  <option value="SS">Second Striker</option>
+                  <option value="ST">Striker</option>
+                </select>
+              </div>
+              <div class="control">
+                <label for="budget-band">Budget</label>
+                <select id="budget-band">
+                  <option value="">Any budget</option>
+                  <option value="2000000">Micro deal (≤ €2m)</option>
+                  <option value="5000000">Affordable (≤ €5m)</option>
+                  <option value="10000000" selected>Smaller-club (≤ €10m)</option>
+                  <option value="20000000">Stretch (≤ €20m)</option>
+                </select>
+              </div>
+              <div class="control">
+                <label for="min-age">Min age</label>
+                <input id="min-age" type="number" min="-1" max="40" step="1" value="18" />
+              </div>
+              <div class="control">
+                <label for="max-age">Max age</label>
+                <input id="max-age" type="number" min="-1" max="45" step="1" value="23" />
+              </div>
+              <div class="control">
+                <label for="max-contract-years">Max contract years</label>
+                <select id="max-contract-years">
+                  <option value="">Any contract</option>
+                  <option value="1">≤ 1 year</option>
+                  <option value="2" selected>≤ 2 years</option>
+                  <option value="3">≤ 3 years</option>
+                </select>
+              </div>
+              <div class="control">
+                <label for="min-minutes">Min minutes</label>
+                <input id="min-minutes" type="number" min="0" step="50" value="900" />
+              </div>
+              <div class="control control--checkbox control--checkbox-inline">
+                <label for="outside-big5-only">Outside Big 5 only</label>
+                <input id="outside-big5-only" type="checkbox" checked />
+              </div>
             </div>
-            <div class="control">
-              <label for="season-select">Season</label>
-              <select id="season-select">
-                <option value="">All seasons</option>
-              </select>
+
+            <div class="controls__grid controls__grid--search">
+              <div class="control control--wide control--full">
+                <label for="search-input">Search player or club</label>
+                <input id="search-input" type="search" autocomplete="off" placeholder="e.g. Rafik Belghali or Cercle Brugge" />
+              </div>
             </div>
-            <div class="control">
-              <label for="league-select">League</label>
-              <select id="league-select">
-                <option value="">All leagues</option>
-              </select>
-            </div>
-            <div class="control">
-              <label for="position-select">Position</label>
-              <select id="position-select">
-                <option value="">All positions</option>
-                <option value="GK">GK</option>
-                <option value="DF">DF</option>
-                <option value="MF">MF</option>
-                <option value="FW">FW</option>
-              </select>
-            </div>
-            <div class="control control--wide">
-              <label for="search-input">Search (player / club)</label>
-              <input id="search-input" type="search" autocomplete="off" placeholder="e.g. Bellingham, Arsenal" />
-            </div>
-            <div class="control">
-              <label for="min-minutes">Min minutes</label>
-              <input id="min-minutes" type="number" min="0" step="50" value="900" />
-            </div>
-            <div class="control">
-              <label for="max-age">Max age</label>
-              <input id="max-age" type="number" min="-1" max="45" step="1" value="23" />
-            </div>
-            <div class="control">
-              <label for="min-confidence">Min confidence</label>
-              <input id="min-confidence" type="number" step="0.1" value="0.5" />
-            </div>
-            <div class="control">
-              <label for="min-gap">Min conservative gap (€)</label>
-              <input id="min-gap" type="number" min="0" step="100000" value="1000000" />
-            </div>
-            <div class="control">
-              <label for="top-n">Shortlist top N</label>
-              <input id="top-n" type="number" min="1" max="500" step="1" value="100" />
-            </div>
-            <div class="control">
-              <label for="sort-select">Sort by</label>
-              <select id="sort-select">
-                <option value="value_gap_conservative_eur">Conservative gap</option>
-                <option value="value_gap_eur">Value gap</option>
-                <option value="expected_value_eur">Expected value</option>
-                <option value="market_value_eur">Market value</option>
-                <option value="undervaluation_confidence">Confidence</option>
-                <option value="minutes">Minutes</option>
-                <option value="age">Age</option>
-              </select>
-            </div>
-            <div class="control">
-              <label for="sort-direction">Sort direction</label>
-              <select id="sort-direction">
-                <option value="desc">Desc</option>
-                <option value="asc">Asc</option>
-              </select>
-            </div>
-            <div class="control">
-              <label for="limit-input">Rows per page</label>
-              <select id="limit-input">
-                <option value="25">25</option>
-                <option value="50" selected>50</option>
-                <option value="100">100</option>
-                <option value="250">250</option>
-              </select>
-            </div>
-            <div class="control control--checkbox">
-              <label for="undervalued-only">Only undervalued</label>
-              <input id="undervalued-only" type="checkbox" checked />
-            </div>
+
+            <details class="filter-panel">
+              <summary>Advanced filters</summary>
+              <div class="controls__grid controls__grid--advanced">
+                <div class="control">
+                  <label for="season-select">Season</label>
+                  <select id="season-select">
+                    <option value="">All seasons</option>
+                  </select>
+                </div>
+                <div class="control">
+                  <label for="league-select">League</label>
+                  <select id="league-select">
+                    <option value="">All leagues</option>
+                  </select>
+                </div>
+                <div class="control">
+                  <label for="position-select">Position family</label>
+                  <select id="position-select">
+                    <option value="">All positions</option>
+                    <option value="GK">GK</option>
+                    <option value="DF">DF</option>
+                    <option value="MF">MF</option>
+                    <option value="FW">FW</option>
+                  </select>
+                </div>
+                <div class="control">
+                  <label for="min-confidence">Min confidence</label>
+                  <input id="min-confidence" type="number" step="0.1" value="0.5" />
+                </div>
+                <div class="control">
+                  <label for="min-gap">Min conservative gap (€)</label>
+                  <input id="min-gap" type="number" min="0" step="100000" value="1000000" />
+                </div>
+                <div class="control">
+                  <label for="top-n">Shortlist top N</label>
+                  <input id="top-n" type="number" min="1" max="500" step="1" value="100" />
+                </div>
+                <div class="control">
+                  <label for="sort-select">Sort by</label>
+                  <select id="sort-select">
+                    <option value="value_gap_conservative_eur">Conservative gap</option>
+                    <option value="value_gap_eur">Value gap</option>
+                    <option value="expected_value_eur">Expected value</option>
+                    <option value="market_value_eur">Market value</option>
+                    <option value="undervaluation_confidence">Confidence</option>
+                    <option value="minutes">Minutes</option>
+                    <option value="age">Age</option>
+                  </select>
+                </div>
+                <div class="control">
+                  <label for="sort-direction">Sort direction</label>
+                  <select id="sort-direction">
+                    <option value="desc">Desc</option>
+                    <option value="asc">Asc</option>
+                  </select>
+                </div>
+                <div class="control">
+                  <label for="limit-input">Rows per page</label>
+                  <select id="limit-input">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                    <option value="250">250</option>
+                  </select>
+                </div>
+                <div class="control control--checkbox control--checkbox-inline">
+                  <label for="undervalued-only">Only undervalued</label>
+                  <input id="undervalued-only" type="checkbox" checked />
+                </div>
+              </div>
+            </details>
+
             <div class="control control--actions">
               <button id="refresh-btn" type="button">Run Query</button>
               <button id="reset-btn" type="button" class="btn-ghost">Reset</button>
-              <button id="export-btn" type="button" class="btn-ghost">Export CSV</button>
+              <button id="export-btn" type="button" class="btn-ghost">Export Club CSV</button>
+              <button id="export-pack-btn" type="button" class="btn-ghost">Export Window Pack JSON</button>
             </div>
           </section>
 
           <section class="results card">
+            <p class="results-kicker">Board</p>
+            <p class="results-guide">Run the board, shortlist the strongest options, then click one player to open the memo.</p>
             <div class="results__header">
-              <h2 id="results-title">Predictions</h2>
+              <h2 id="results-title">Recruitment Board</h2>
               <div class="results__meta">
                 <span id="result-count">0 rows</span>
                 <span id="result-range">offset 0</span>
               </div>
             </div>
+            <p id="results-note" class="segment-note results-note">
+              Connect API to load ranking diagnostics and score provenance.
+            </p>
             <div class="table-wrap">
               <table id="results-table">
                 <thead>
@@ -289,118 +472,250 @@
           </section>
 
           <aside class="details card" id="detail-panel">
-            <h2>Player Detail</h2>
+            <p class="results-kicker">Memo</p>
+            <div class="detail-header">
+              <div>
+                <h2>Recruitment Memo</h2>
+                <p class="detail-header__note">Start with overview. Only open fit or due diligence if the player survives the first pass.</p>
+              </div>
+              <button id="detail-open-profile" type="button" class="btn-ghost">Open Profile</button>
+            </div>
             <p class="details-placeholder" id="detail-placeholder">
-              Select a row to inspect player-level valuation details.
+              Select a player from the board to open a clean recruitment memo.
             </p>
             <div id="detail-content" hidden>
               <h3 id="detail-name"></h3>
               <p id="detail-meta"></p>
-              <div class="bars">
-                <div class="bar-block">
-                  <span>Market value</span>
-                  <div class="bar-track"><div id="bar-market" class="bar bar--market"></div></div>
-                  <strong id="detail-market">-</strong>
+              <div class="detail-tabbar" id="detail-tabbar">
+                <button class="detail-tab is-active" type="button" data-detail-tab="overview">Overview</button>
+                <button class="detail-tab" type="button" data-detail-tab="stats">Stats</button>
+                <button class="detail-tab" type="button" data-detail-tab="tactical">Fit</button>
+                <button class="detail-tab" type="button" data-detail-tab="risk">Due Diligence</button>
+              </div>
+              <section class="detail-panel-section is-active" data-detail-panel="overview">
+                <div class="bars">
+                  <div class="bar-block">
+                    <span>Market value</span>
+                    <div class="bar-track"><div id="bar-market" class="bar bar--market"></div></div>
+                    <strong id="detail-market">-</strong>
+                  </div>
+                  <div class="bar-block">
+                    <span>Expected value</span>
+                    <div class="bar-track"><div id="bar-expected" class="bar bar--expected"></div></div>
+                    <strong id="detail-expected">-</strong>
+                  </div>
+                  <div class="bar-block">
+                    <span>Lower confidence band</span>
+                    <div class="bar-track"><div id="bar-lower" class="bar bar--lower"></div></div>
+                    <strong id="detail-lower">-</strong>
+                  </div>
                 </div>
-                <div class="bar-block">
-                  <span>Expected value</span>
-                  <div class="bar-track"><div id="bar-expected" class="bar bar--expected"></div></div>
-                  <strong id="detail-expected">-</strong>
+                <dl id="detail-list" class="detail-list"></dl>
+                <details class="detail-group" open>
+                  <summary>Recruitment call</summary>
+                  <div class="detail-group__body">
+                    <div class="detail-section">
+                      <h4>Call Summary</h4>
+                      <p id="detail-summary" class="detail-summary">Select a player to load scouting summary.</p>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Role Evidence</h4>
+                      <p id="detail-role-summary" class="detail-summary">Select a player to inspect the position-specific metric lens.</p>
+                      <ul id="detail-role-metrics" class="risk-list">
+                        <li class="risk-item risk-item--none">Select a player to load position-specific evidence.</li>
+                      </ul>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Why It Ranks</h4>
+                      <div id="detail-badges" class="badge-row">
+                        <span class="badge-chip badge-chip--neutral">No player selected</span>
+                      </div>
+                      <p id="detail-score-driver" class="detail-summary">Select a player to inspect ranking context.</p>
+                      <ul id="detail-why-ranked" class="risk-list">
+                        <li class="risk-item risk-item--none">Select a player to see why the current ranking placed him here.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </details>
+                <details class="detail-group">
+                  <summary>Upside and caution</summary>
+                  <div class="detail-group__body">
+                    <div class="detail-section">
+                      <h4>Data / League Warnings</h4>
+                      <p id="detail-coverage-summary" class="detail-summary">Select a player to inspect league and data coverage warnings.</p>
+                      <ul id="detail-coverage-list" class="risk-list">
+                        <li class="risk-item risk-item--none">No player selected.</li>
+                      </ul>
+                    </div>
+                    <div class="detail-section detail-section--split">
+                      <div>
+                        <h4>Top Strengths</h4>
+                        <ul id="detail-strengths" class="risk-list">
+                          <li class="risk-item risk-item--none">Select a player to load strengths.</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h4>Weaknesses</h4>
+                        <ul id="detail-weaknesses" class="risk-list">
+                          <li class="risk-item risk-item--none">Select a player to load weaknesses.</li>
+                        </ul>
+                      </div>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Development Levers</h4>
+                      <ul id="detail-levers" class="risk-list">
+                        <li class="risk-item risk-item--none">Select a player to load development levers.</li>
+                      </ul>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Evidence Depth</h4>
+                      <p id="detail-history" class="detail-summary">Select a player to load history-strength breakdown.</p>
+                    </div>
+                  </div>
+                </details>
+              </section>
+
+              <section class="detail-panel-section" data-detail-panel="stats">
+                <div class="detail-section">
+                  <h4>Available Stats</h4>
+                  <p id="detail-stats-summary" class="detail-summary">Select a player to inspect grouped stat coverage.</p>
                 </div>
-                <div class="bar-block">
-                  <span>Lower confidence band</span>
-                  <div class="bar-track"><div id="bar-lower" class="bar bar--lower"></div></div>
-                  <strong id="detail-lower">-</strong>
+                <div id="detail-stat-groups" class="stat-groups">
+                  <p class="details-placeholder">No stats loaded yet.</p>
                 </div>
-              </div>
-              <dl id="detail-list" class="detail-list"></dl>
-              <div class="detail-section">
-                <h4>Scouting Summary</h4>
-                <p id="detail-summary" class="detail-summary">Select a player to load scouting summary.</p>
-              </div>
-              <div class="detail-section">
-                <h4>Top Strengths</h4>
-                <ul id="detail-strengths" class="risk-list">
-                  <li class="risk-item risk-item--none">Select a player to load strengths.</li>
-                </ul>
-              </div>
-              <div class="detail-section">
-                <h4>Development Levers</h4>
-                <ul id="detail-levers" class="risk-list">
-                  <li class="risk-item risk-item--none">Select a player to load development levers.</li>
-                </ul>
-              </div>
-              <div class="detail-section">
-                <h4>History Strength</h4>
-                <p id="detail-history" class="detail-summary">Select a player to load history-strength breakdown.</p>
-              </div>
-              <div class="detail-section">
-                <h4>Player Archetype</h4>
-                <p id="detail-archetype" class="detail-summary">Select a player to estimate archetype fit.</p>
-                <ul id="detail-archetype-candidates" class="risk-list">
-                  <li class="risk-item risk-item--none">No archetype candidates loaded.</li>
-                </ul>
-              </div>
-              <div class="detail-section">
-                <h4>Formation Fit</h4>
-                <ul id="detail-formations" class="risk-list">
-                  <li class="risk-item risk-item--none">Select a player to estimate formation fit.</li>
-                </ul>
-              </div>
-              <div class="detail-section">
-                <h4>Role Radar</h4>
-                <div class="radar-wrap">
-                  <svg
-                    id="detail-radar"
-                    class="radar-chart"
-                    viewBox="0 0 320 320"
-                    role="img"
-                    aria-label="Player role radar profile"
-                  ></svg>
-                </div>
-                <p id="detail-radar-meta" class="detail-summary">Select a player to render radar profile.</p>
-              </div>
-              <div class="detail-section">
-                <h4>Risk Flags</h4>
-                <ul id="detail-risks" class="risk-list">
-                  <li class="risk-item risk-item--none">Select a player to load risk flags.</li>
-                </ul>
-              </div>
-              <div class="detail-actions">
-                <button id="detail-export-json" type="button" class="btn-ghost">Export Memo JSON</button>
-                <button id="detail-export-csv" type="button" class="btn-ghost">Export Memo CSV</button>
-              </div>
-              <div class="detail-section">
-                <h4>Watchlist</h4>
-                <div class="watchlist-form">
-                  <input id="watchlist-tag" type="text" placeholder="Tag (e.g. u23_non_big5)" />
-                  <input id="watchlist-notes" type="text" placeholder="Scout notes" />
-                </div>
-                <div class="detail-actions">
-                  <button id="watchlist-add-btn" type="button">Add Selected</button>
-                  <button id="watchlist-refresh-btn" type="button" class="btn-ghost">Refresh</button>
-                  <button id="watchlist-export-btn" type="button" class="btn-ghost">Export Watchlist CSV</button>
-                </div>
-                <p id="watchlist-meta" class="metrics-meta">No watchlist loaded.</p>
-                <div class="table-wrap table-wrap--small watchlist-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>League</th>
-                        <th class="num">Gap</th>
-                        <th class="num">Conf.</th>
-                        <th>Tag</th>
-                        <th>Created</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody id="watchlist-body">
-                      <tr><td colspan="7">No watchlist entries yet.</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              </section>
+
+              <section class="detail-panel-section" data-detail-panel="tactical">
+                <details class="detail-group" open>
+                  <summary>Role and system fit</summary>
+                  <div class="detail-group__body">
+                    <div class="detail-section">
+                      <h4>Player Archetype</h4>
+                      <p id="detail-archetype" class="detail-summary">Select a player to estimate archetype fit.</p>
+                      <ul id="detail-archetype-candidates" class="risk-list">
+                        <li class="risk-item risk-item--none">No archetype candidates loaded.</li>
+                      </ul>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Formation Fit</h4>
+                      <p id="detail-formation-summary" class="detail-summary">Select a player to estimate formation fit.</p>
+                      <ul id="detail-formations" class="risk-list">
+                        <li class="risk-item risk-item--none">Select a player to estimate formation fit.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </details>
+                <details class="detail-group">
+                  <summary>Comparables and external signals</summary>
+                  <div class="detail-group__body">
+                    <div class="detail-section">
+                      <h4>External Tactical Signals</h4>
+                      <p id="detail-provider-tactical-summary" class="detail-summary">Select a player to load external tactical provider context.</p>
+                      <ul id="detail-provider-tactical" class="risk-list">
+                        <li class="risk-item risk-item--none">No external tactical provider signals loaded.</li>
+                      </ul>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Similar Players</h4>
+                      <p id="detail-similar-summary" class="detail-summary">Select a player to load similar-player matches.</p>
+                      <ul id="detail-similar" class="risk-list">
+                        <li class="risk-item risk-item--none">No similar players loaded.</li>
+                      </ul>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Role Radar</h4>
+                      <div class="radar-wrap">
+                        <svg
+                          id="detail-radar"
+                          class="radar-chart"
+                          viewBox="0 0 320 320"
+                          role="img"
+                          aria-label="Player role radar profile"
+                        ></svg>
+                      </div>
+                      <p id="detail-radar-meta" class="detail-summary">Select a player to render radar profile.</p>
+                    </div>
+                  </div>
+                </details>
+              </section>
+
+              <section class="detail-panel-section" data-detail-panel="risk">
+                <details class="detail-group" open>
+                  <summary>Decision risk</summary>
+                  <div class="detail-group__body">
+                    <div class="detail-section">
+                      <h4>Model Guardrails</h4>
+                      <p id="detail-confidence" class="detail-summary">Select a player to inspect model guardrails.</p>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Risk Flags</h4>
+                      <ul id="detail-risks" class="risk-list">
+                        <li class="risk-item risk-item--none">Select a player to load risk flags.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </details>
+                <details class="detail-group">
+                  <summary>Availability and schedule context</summary>
+                  <div class="detail-group__body">
+                    <div class="detail-section">
+                      <h4>Availability Context</h4>
+                      <p id="detail-availability-summary" class="detail-summary">Select a player to load provider availability context.</p>
+                      <ul id="detail-availability-list" class="risk-list">
+                        <li class="risk-item risk-item--none">No provider availability signals loaded.</li>
+                      </ul>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Schedule Context</h4>
+                      <p id="detail-market-context-summary" class="detail-summary">Select a player to load schedule and market context.</p>
+                      <ul id="detail-market-context-list" class="risk-list">
+                        <li class="risk-item risk-item--none">No schedule or market context loaded.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </details>
+                <details class="detail-group">
+                  <summary>Next action and export</summary>
+                  <div class="detail-group__body">
+                    <div class="detail-actions">
+                      <button id="detail-export-json" type="button" class="btn-ghost">Export Memo JSON</button>
+                      <button id="detail-export-csv" type="button" class="btn-ghost">Export Memo CSV</button>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Watchlist</h4>
+                      <div class="watchlist-form">
+                        <input id="watchlist-tag" type="text" placeholder="Tag (e.g. summer_window_non_big5)" />
+                        <input id="watchlist-notes" type="text" placeholder="Recruitment notes / next action" />
+                      </div>
+                      <div class="detail-actions">
+                        <button id="watchlist-add-btn" type="button">Add Selected</button>
+                        <button id="watchlist-refresh-btn" type="button" class="btn-ghost">Refresh</button>
+                        <button id="watchlist-export-btn" type="button" class="btn-ghost">Export Watchlist CSV</button>
+                        <button id="watchlist-export-json-btn" type="button" class="btn-ghost">Export Memo Pack JSON</button>
+                      </div>
+                      <p id="watchlist-meta" class="metrics-meta">No watchlist loaded.</p>
+                      <div class="table-wrap table-wrap--small watchlist-wrap">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              <th>League</th>
+                              <th class="num">Gap</th>
+                              <th class="num">Conf.</th>
+                              <th>Tag</th>
+                              <th>Created</th>
+                              <th>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody id="watchlist-body">
+                            <tr><td colspan="7">No watchlist entries yet.</td></tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              </section>
             </div>
           </aside>
         </div>
@@ -409,8 +724,12 @@
       <section id="view-funnel" class="view">
         <div class="funnel-grid">
           <article class="card funnel-controls">
-            <h2>Talent Funnel Builder</h2>
-            <p class="segment-note">Designed for scouting overlooked players. Toggle lower-league-only when you ingest those leagues.</p>
+            <div class="panel-header">
+              <div>
+                <h2>Build Target Funnel</h2>
+                <p class="panel-help">Use the same recruitment brief, then let the funnel rank the strongest outside-Big-5 leads.</p>
+              </div>
+            </div>
             <div class="funnel-form">
               <div class="control">
                 <label for="funnel-split">Split</label>
@@ -420,30 +739,73 @@
                 </select>
               </div>
               <div class="control">
+                <label for="funnel-role-need">Role need</label>
+                <select id="funnel-role-need">
+                  <option value="">Any role</option>
+                  <option value="GK">Goalkeeper</option>
+                  <option value="CB">Centre-back</option>
+                  <option value="FB">Fullback / Wing-back</option>
+                  <option value="DM">Defensive Midfielder</option>
+                  <option value="CM">Central Midfielder</option>
+                  <option value="AM">Attacking Midfielder</option>
+                  <option value="W">Winger</option>
+                  <option value="SS">Second Striker</option>
+                  <option value="ST">Striker</option>
+                </select>
+              </div>
+              <div class="control">
+                <label for="funnel-budget-band">Budget</label>
+                <select id="funnel-budget-band">
+                  <option value="">Any budget</option>
+                  <option value="2000000">Micro deal (≤ €2m)</option>
+                  <option value="5000000">Affordable (≤ €5m)</option>
+                  <option value="10000000" selected>Smaller-club (≤ €10m)</option>
+                  <option value="20000000">Stretch (≤ €20m)</option>
+                </select>
+              </div>
+              <div class="control">
+                <label for="funnel-min-age">Min age</label>
+                <input id="funnel-min-age" type="number" value="18" min="-1" max="40" step="1" />
+              </div>
+              <div class="control">
                 <label for="funnel-max-age">Max age</label>
                 <input id="funnel-max-age" type="number" value="23" min="-1" max="40" step="1" />
+              </div>
+              <div class="control">
+                <label for="funnel-max-contract-years">Max contract years</label>
+                <select id="funnel-max-contract-years">
+                  <option value="">Any contract</option>
+                  <option value="1">≤ 1 year</option>
+                  <option value="2" selected>≤ 2 years</option>
+                  <option value="3">≤ 3 years</option>
+                </select>
               </div>
               <div class="control">
                 <label for="funnel-min-minutes">Min minutes</label>
                 <input id="funnel-min-minutes" type="number" value="900" min="0" step="50" />
               </div>
               <div class="control">
-                <label for="funnel-min-confidence">Min confidence</label>
-                <input id="funnel-min-confidence" type="number" value="0.5" min="0" step="0.1" />
-              </div>
-              <div class="control">
-                <label for="funnel-min-gap">Min conservative gap (€)</label>
-                <input id="funnel-min-gap" type="number" value="1000000" min="0" step="100000" />
-              </div>
-              <div class="control">
                 <label for="funnel-top-n">Top N</label>
                 <input id="funnel-top-n" type="number" value="50" min="1" max="500" step="1" />
               </div>
-              <div class="control control--checkbox">
-                <label for="funnel-lower-only">Lower leagues only</label>
-                <input id="funnel-lower-only" type="checkbox" />
+              <div class="control control--checkbox control--checkbox-inline">
+                <label for="funnel-lower-only">Outside Big 5 only</label>
+                <input id="funnel-lower-only" type="checkbox" checked />
               </div>
             </div>
+            <details class="filter-panel">
+              <summary>Advanced funnel filters</summary>
+              <div class="controls__grid controls__grid--advanced">
+                <div class="control">
+                  <label for="funnel-min-confidence">Min confidence</label>
+                  <input id="funnel-min-confidence" type="number" value="0.5" min="0" step="0.1" />
+                </div>
+                <div class="control">
+                  <label for="funnel-min-gap">Min conservative gap (€)</label>
+                  <input id="funnel-min-gap" type="number" value="1000000" min="0" step="100000" />
+                </div>
+              </div>
+            </details>
             <div class="funnel-actions">
               <button id="funnel-run-btn" type="button">Build Funnel</button>
               <button id="funnel-export-btn" type="button" class="btn-ghost">Export Funnel CSV</button>
@@ -452,6 +814,8 @@
           </article>
 
           <article class="card funnel-results">
+            <p class="results-kicker">Funnel</p>
+            <p class="results-guide">Set the same brief, run the funnel, then use the league board below to decide where to scout deeper.</p>
             <h2>Top Talent Candidates</h2>
             <div class="table-wrap">
               <table>
@@ -485,10 +849,11 @@
                     <th class="num">Avg cons. gap</th>
                     <th class="num">Avg confidence</th>
                     <th class="num">Avg age</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody id="funnel-league-body">
-                  <tr><td colspan="5">No league board yet.</td></tr>
+                  <tr><td colspan="6">No league board yet.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -496,5 +861,26 @@
         </div>
       </section>
     </main>
+
+    <div id="profile-modal" class="profile-modal" hidden>
+      <div id="profile-modal-scrim" class="profile-modal__scrim"></div>
+      <section class="profile-modal__dialog card" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+        <div class="profile-modal__header">
+          <div>
+            <p class="kicker">Full Player Profile</p>
+            <h2 id="profile-modal-title">Player Profile</h2>
+            <p id="profile-modal-meta" class="detail-summary">Select a player to inspect the full profile.</p>
+          </div>
+          <div class="detail-actions">
+            <button id="profile-modal-export-json" type="button" class="btn-ghost">Export JSON</button>
+            <button id="profile-modal-export-csv" type="button" class="btn-ghost">Export CSV</button>
+            <button id="profile-modal-close-btn" type="button" class="btn-ghost">Close</button>
+          </div>
+        </div>
+        <div id="profile-modal-body" class="profile-modal__body">
+          <p class="detail-summary">Select a player to inspect the full profile.</p>
+        </div>
+      </section>
+    </div>
   </body>
 </html>

@@ -170,7 +170,8 @@ def build_shortlist(
         * history_factor
     )
 
-    sort_cols = ["scout_score", "ranking_gap_eur", "value_gap_conservative_eur", "undervaluation_confidence"]
+    score_col = "future_scout_blend_score" if "future_scout_blend_score" in work.columns else "scout_score"
+    sort_cols = [score_col, "ranking_gap_eur", "value_gap_conservative_eur", "undervaluation_confidence"]
     shortlist = work.sort_values(sort_cols, ascending=False).head(top_n).copy()
 
     output = Path(output_path)
@@ -181,9 +182,13 @@ def build_shortlist(
     diagnostics = {
         "total_candidates": int(len(work)),
         "count": int(len(shortlist)),
-        "ranking_basis": "guardrailed_gap_confidence_history",
-        "score_column": "scout_score",
-        "precision_at_k": _precision_at_k(work, score_col="scout_score", top_n=int(top_n)),
+        "ranking_basis": (
+            "future_target_tuned_blend"
+            if score_col == "future_scout_blend_score"
+            else "guardrailed_gap_confidence_history"
+        ),
+        "score_column": score_col,
+        "precision_at_k": _precision_at_k(work, score_col=score_col, top_n=int(top_n)),
     }
     if diagnostics["precision_at_k"].get("available"):
         rows = diagnostics["precision_at_k"].get("rows", [])

@@ -111,11 +111,11 @@ def _safe_slug(text: str) -> str:
     return out or "unknown"
 
 
-def _collect_candidates(source_dir: Path, season_root: Path, country_root: Path) -> list[Path]:
+def _collect_candidates(source_dir: Path, combined_dir: Path, season_root: Path, country_root: Path) -> list[Path]:
     files = sorted(source_dir.rglob(FILE_PATTERN))
     out: list[Path] = []
     for p in files:
-        if _is_under(p, season_root) or _is_under(p, country_root):
+        if _is_under(p, combined_dir) or _is_under(p, season_root) or _is_under(p, country_root):
             continue
         parsed = _parse_filename(p.name)
         if parsed is None:
@@ -130,7 +130,12 @@ def _canonicalize(
     season_root: Path,
     country_root: Path,
 ) -> list[CanonicalFile]:
-    files = _collect_candidates(source_dir=source_dir, season_root=season_root, country_root=country_root)
+    files = _collect_candidates(
+        source_dir=source_dir,
+        combined_dir=combined_dir,
+        season_root=season_root,
+        country_root=country_root,
+    )
     if not files:
         return []
 

@@ -4,6 +4,9 @@ import pandas as pd
 import pytest
 
 from scouting_ml.models.train_market_value_full import (
+    _maybe_save_tree_shap_bar,
+    _drop_low_coverage_features,
+    _holdout_optuna_namespace,
     _validate_no_leakage_features,
     apply_confidence_scoring,
 )
@@ -49,3 +52,74 @@ def test_confidence_scoring_adds_fair_value_and_score_columns() -> None:
     assert "interval_contains_truth" in out.columns
     assert out.loc[0, "fair_value_eur"] == pytest.approx(out.loc[0, "expected_value_eur"])
     assert out.loc[0, "undervaluation_score"] >= 0.0
+
+
+def test_drop_low_coverage_features_uses_stricter_provider_threshold() -> None:
+    train = pd.DataFrame(
+        {
+            "age": [20, 21, 22, 23],
+            "contract_years_left": [2.0, None, 3.0, None],
+            "sb_completed_passes_per90": [1.0, None, None, None],
+            "league": ["A", "A", "A", "A"],
+        }
+    )
+
+    keep_num, keep_cat = _drop_low_coverage_features(
+        train,
+        numeric_cols=["age", "contract_years_left", "sb_completed_passes_per90"],
+        categorical_cols=["league"],
+        pos="FW",
+        min_feature_coverage=0.10,
+        min_provider_feature_coverage=0.50,
+    )
+
+    assert "age" in keep_num
+    assert "contract_years_left" in keep_num
+    assert "sb_completed_passes_per90" not in keep_num
+    assert "league" in keep_cat
+
+
+def test_maybe_save_tree_shap_bar_respects_flag(tmp_path, monkeypatch) -> None:
+    calls: list[str] = []
+
+    def fake_save_tree_shap_bar(model, preprocessor, X, out_path) -> None:
+        calls.append(str(out_path))
+
+    monkeypatch.setattr(
+        "scouting_ml.models.train_market_value_full.save_tree_shap_bar",
+        fake_save_tree_shap_bar,
+    )
+
+    frame = pd.DataFrame({"feature": [1.0, 2.0, 3.0]})
+    out_path = tmp_path / "shap.png"
+
+    _maybe_save_tree_shap_bar(
+        enabled=False,
+        model=object(),
+        preprocessor=object(),
+        X=frame,
+        out_path=out_path,
+        pos="DF",
+    )
+    assert calls == []
+
+    _maybe_save_tree_shap_bar(
+        enabled=True,
+        model=object(),
+        preprocessor=object(),
+        X=frame,
+        out_path=out_path,
+        pos="DF",
+    )
+    assert calls == [str(out_path)]
+
+
+def test_holdout_optuna_namespace_is_unique_per_league() -> None:
+    assert (
+        _holdout_optuna_namespace("cheap_aggressive_prod60", "Primeira Liga")
+        == "cheap_aggressive_prod60_holdout_primeira_liga"
+    )
+    assert (
+        _holdout_optuna_namespace(None, "Turkish Super Lig")
+        == "holdout_turkish_super_lig"
+    )

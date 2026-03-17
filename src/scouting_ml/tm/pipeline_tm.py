@@ -272,7 +272,7 @@ def _fetch_or_load_profile(link: str, player_id: str, sleep_s: float = 0.7, forc
         html_bytes = fetch(link)  # your tm_scraper.fetch
         text = html_bytes.decode("utf-8", errors="ignore")
 
-        # ✅ SAVE RAW so we can inspect
+        # Save raw HTML so debugging survives retried fetches.
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(text, encoding="utf-8", errors="ignore")
 
@@ -280,7 +280,7 @@ def _fetch_or_load_profile(link: str, player_id: str, sleep_s: float = 0.7, forc
         if looks_like_consent(text):
             dbg = Path("data/raw/tm/_last_player_debug.html")
             dbg.write_text(text, encoding="utf-8", errors="ignore")
-            print(f"[enrich] ⚠ got consent/bot page for {player_id} -> wrote {dbg}")
+            print(f"[enrich] WARN got consent/bot page for {player_id} -> wrote {dbg}")
     else:
         # cached good page
         pass
@@ -693,15 +693,15 @@ def main():
     if args.format in {"csv", "both"}:
         out_csv = out_dir / f"{stem}.csv"
         df.to_csv(out_csv, index=False)
-        print(f"[pipeline] ✅ Saved CSV: {out_csv.resolve()}")
+        print(f"[pipeline] Saved CSV: {out_csv.resolve()}")
 
     if args.format in {"parquet", "both"}:
         out_parquet = out_dir / f"{stem}.parquet"
         try:
             df.to_parquet(out_parquet, index=False)
-            print(f"[pipeline] ✅ Saved Parquet: {out_parquet.resolve()}")
+            print(f"[pipeline] Saved Parquet: {out_parquet.resolve()}")
         except ImportError:
-            print("[pipeline] ⚠️ Skipped Parquet (engine missing). Install: pip install pyarrow  (or fastparquet)")
+            print("[pipeline] WARN skipped Parquet (engine missing). Install: pip install pyarrow or fastparquet")
 
 
 if __name__ == "__main__":

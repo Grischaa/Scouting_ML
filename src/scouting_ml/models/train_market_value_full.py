@@ -71,6 +71,8 @@ LEAKAGE_TOKEN_PATTERNS = (
     "post_season",
 )
 
+PROVIDER_PREFIXES = ("sb_", "avail_", "fixture_", "odds_")
+
 
 @dataclass
 class PositionMetrics:
@@ -84,10 +86,10 @@ class PositionMetrics:
 
 
 def build_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransformer:
-    numeric_proc = SimpleImputer(strategy="median")
+    numeric_proc = SimpleImputer(strategy="median", keep_empty_features=True)
     cat_proc = Pipeline(
         steps=[
-            ("imp", SimpleImputer(strategy="most_frequent")),
+            ("imp", SimpleImputer(strategy="most_frequent", keep_empty_features=True)),
             ("oh", OneHotEncoder(handle_unknown="ignore")),
         ]
     )
@@ -101,6 +103,21 @@ def build_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransf
     if hasattr(pre, "set_output"):
         pre.set_output(transform="default")
     return pre
+
+
+def _maybe_save_tree_shap_bar(
+    *,
+    enabled: bool,
+    model: Any,
+    preprocessor: ColumnTransformer,
+    X: pd.DataFrame,
+    out_path: Path,
+    pos: str,
+) -> None:
+    if not enabled:
+        print(f"[{pos}] skip SHAP artifact export")
+        return
+    save_tree_shap_bar(model, preprocessor, X, out_path)
 
 
 def _parse_csv_tokens(raw: str | None) -> list[str]:
@@ -129,6 +146,18 @@ def _filter_features(
 def _slugify(value: str) -> str:
     out = re.sub(r"[^a-zA-Z0-9]+", "_", str(value).strip().lower())
     return out.strip("_") or "unknown"
+
+
+def _holdout_optuna_namespace(
+    base_namespace: str | None,
+    holdout_league: str,
+) -> str | None:
+    league_slug = _slugify(holdout_league)
+    if not league_slug:
+        return base_namespace
+    if not base_namespace:
+        return f"holdout_{league_slug}"
+    return f"{base_namespace}_holdout_{league_slug}"
 
 
 def _normalize_league_tokens(raw: Sequence[str] | None) -> set[str]:
@@ -180,6 +209,113 @@ def _validate_no_leakage_features(
             + ", ".join(forbidden)
         )
     return forbidden
+
+
+def _drop_train_empty_features(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    *,
+    numeric_cols: Sequence[str],
+    categorical_cols: Sequence[str],
+    pos: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[str], list[str]]:
+    keep_numeric: list[str] = []
+    dropped_numeric: list[str] = []
+    for col in numeric_cols:
+        if col not in train_df.columns:
+            continue
+        series = pd.to_numeric(train_df[col], errors="coerce")
+        if series.notna().any():
+            keep_numeric.append(col)
+        else:
+            dropped_numeric.append(col)
+
+    keep_categorical: list[str] = []
+    dropped_categorical: list[str] = []
+    for col in categorical_cols:
+        if col not in train_df.columns:
+            continue
+        series = train_df[col]
+        non_empty = (
+            series.dropna()
+            .astype(str)
+            .str.strip()
+            .replace({"nan": "", "None": ""})
+        )
+        if non_empty.ne("").any():
+            keep_categorical.append(col)
+        else:
+            dropped_categorical.append(col)
+
+    dropped = dropped_numeric + dropped_categorical
+    if dropped:
+        print(
+            f"[{pos}] dropped {len(dropped)} train-empty feature(s): "
+            + ", ".join(dropped[:12])
+            + (" ..." if len(dropped) > 12 else "")
+        )
+
+    return (
+        train_df,
+        val_df,
+        test_df,
+        keep_numeric,
+        keep_categorical,
+    )
+
+
+def _drop_low_coverage_features(
+    train_df: pd.DataFrame,
+    *,
+    numeric_cols: Sequence[str],
+    categorical_cols: Sequence[str],
+    pos: str,
+    min_feature_coverage: float,
+    min_provider_feature_coverage: float,
+) -> tuple[list[str], list[str]]:
+    min_feature_coverage = float(np.clip(min_feature_coverage, 0.0, 1.0))
+    min_provider_feature_coverage = float(np.clip(min_provider_feature_coverage, 0.0, 1.0))
+
+    keep_numeric: list[str] = []
+    dropped_numeric: list[str] = []
+    for col in numeric_cols:
+        if col not in train_df.columns:
+            continue
+        coverage = float(pd.to_numeric(train_df[col], errors="coerce").notna().mean())
+        threshold = min_provider_feature_coverage if col.startswith(PROVIDER_PREFIXES) else min_feature_coverage
+        if coverage >= threshold:
+            keep_numeric.append(col)
+        else:
+            dropped_numeric.append(col)
+
+    keep_categorical: list[str] = []
+    dropped_categorical: list[str] = []
+    for col in categorical_cols:
+        if col not in train_df.columns:
+            continue
+        cleaned = (
+            train_df[col]
+            .astype(str)
+            .str.strip()
+            .replace({"nan": "", "NaN": "", "None": "", "<NA>": ""})
+        )
+        coverage = float(cleaned.ne("").mean())
+        threshold = min_provider_feature_coverage if col.startswith(PROVIDER_PREFIXES) else min_feature_coverage
+        if coverage >= threshold:
+            keep_categorical.append(col)
+        else:
+            dropped_categorical.append(col)
+
+    dropped = dropped_numeric + dropped_categorical
+    if dropped:
+        print(
+            f"[{pos}] dropped {len(dropped)} low-coverage feature(s): "
+            + ", ".join(dropped[:12])
+            + (" ..." if len(dropped) > 12 else "")
+        )
+
+    return keep_numeric, keep_categorical
 
 
 def _drop_duplicate_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -593,8 +729,8 @@ def compute_position_metrics(
     n_samples = int(len(y_true_lin))
     print(
         f"[{split}:{pos}] n={n_samples} | "
-        f"R² {metrics['r2']*100:,.2f}% | "
-        f"MAE €{metrics['mae_eur']:,.0f} | "
+        f"R2 {metrics['r2']*100:,.2f}% | "
+        f"MAE EUR {metrics['mae_eur']:,.0f} | "
         f"MAPE {metrics['mape']*100:,.2f}% | "
         f"WMAPE {metrics['wmape']*100:,.2f}%"
     )
@@ -893,6 +1029,7 @@ def train_for_position(
     val_season: str,
     test_season: str,
     shap_dir: Path,
+    save_shap_artifacts: bool = True,
     n_optuna_trials: int = 60,
     recency_half_life: float = 2.0,
     under_5m_weight: float = 1.0,
@@ -900,15 +1037,19 @@ def train_for_position(
     over_20m_weight: float = 1.0,
     exclude_prefixes: Sequence[str] | None = None,
     exclude_columns: Sequence[str] | None = None,
-    optimize_metric: str = "lowmid_wmape",
+    optimize_metric: str = "hybrid_wmape",
     strict_leakage_guard: bool = True,
     two_stage_band_model: bool = True,
     band_min_samples: int = 120,
     band_blend_alpha: float = 0.70,
     mape_min_denom_eur: float = 1_000_000.0,
+    min_feature_coverage: float = 0.01,
+    min_provider_feature_coverage: float = 0.05,
     train_exclude_leagues: Sequence[str] | None = None,
     val_exclude_leagues: Sequence[str] | None = None,
     test_include_leagues: Sequence[str] | None = None,
+    optuna_study_namespace: str | None = None,
+    optuna_load_if_exists: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame, List[PositionMetrics]] | None:
     df_pos_raw = df_raw[df_raw["position_group"] == pos].copy()
     if len(df_pos_raw) < 250:
@@ -970,6 +1111,23 @@ def train_for_position(
         print(f"[{pos}] excluded {removed} features via --exclude-* filters")
     num_cols = [c for c in num_cols if c in feat_cols]
     cat_cols = [c for c in cat_cols if c in feat_cols]
+    train_df, val_df, test_df, num_cols, cat_cols = _drop_train_empty_features(
+        train_df,
+        val_df,
+        test_df,
+        numeric_cols=num_cols,
+        categorical_cols=cat_cols,
+        pos=pos,
+    )
+    num_cols, cat_cols = _drop_low_coverage_features(
+        train_df,
+        numeric_cols=num_cols,
+        categorical_cols=cat_cols,
+        pos=pos,
+        min_feature_coverage=min_feature_coverage,
+        min_provider_feature_coverage=min_provider_feature_coverage,
+    )
+    feat_cols = num_cols + cat_cols
 
     if not feat_cols:
         print(f"[warn] no features for {pos}, skipping.")
@@ -1002,6 +1160,10 @@ def train_for_position(
     sample_weight = np.where(np.isfinite(sample_weight), sample_weight, 1.0)
     sample_weight = np.clip(sample_weight, a_min=1e-6, a_max=None)
 
+    study_name = (
+        f"market_value_{pos.lower()}_{val_season.replace('/', '-')}_{test_season.replace('/', '-')}_{optimize_metric}"
+        + (f"_{_slugify(optuna_study_namespace)}" if optuna_study_namespace else "")
+    )
     best_lgbm_params = tune_lgbm(
         X_train_frame,
         y_train,
@@ -1011,6 +1173,10 @@ def train_for_position(
         groups=groups,
         sample_weight=sample_weight,
         optimize_metric=optimize_metric,
+        study_name=study_name,
+        storage="sqlite:///data/model/optuna/studies.db",
+        study_metadata_path=str(shap_dir / f"optuna_{pos.lower()}_study.json"),
+        load_if_exists=optuna_load_if_exists,
     )
 
     pre_full = build_preprocessor(num_cols, cat_cols)
@@ -1040,7 +1206,14 @@ def train_for_position(
     if pos == "GK":
         lgbm = make_lgbm(best_lgbm_params)
         lgbm.fit(X_train, y_train, sample_weight=sample_weight)
-        save_tree_shap_bar(lgbm, pre_sel, train_df[sel_cols], shap_dir / f"shap_{pos}.png")
+        _maybe_save_tree_shap_bar(
+            enabled=save_shap_artifacts,
+            model=lgbm,
+            preprocessor=pre_sel,
+            X=train_df[sel_cols],
+            out_path=shap_dir / f"shap_{pos}.png",
+            pos=pos,
+        )
         val_log_pred = _safe_model_predict(lgbm, X_val)
         test_log_pred = _safe_model_predict(lgbm, X_test)
     else:
@@ -1052,7 +1225,14 @@ def train_for_position(
         xgb.fit(X_train, y_train, sample_weight=sample_weight)
         cat.fit(X_train, y_train, sample_weight=sample_weight)
 
-        save_tree_shap_bar(lgbm, pre_sel, train_df[sel_cols], shap_dir / f"shap_{pos}.png")
+        _maybe_save_tree_shap_bar(
+            enabled=save_shap_artifacts,
+            model=lgbm,
+            preprocessor=pre_sel,
+            X=train_df[sel_cols],
+            out_path=shap_dir / f"shap_{pos}.png",
+            pos=pos,
+        )
 
         P_train = np.vstack(
             [
@@ -1112,7 +1292,7 @@ def train_for_position(
         # Stage 1: classify value band to route the downstream regressor.
         if len(np.unique(band_train_true)) >= 2:
             band_clf = LogisticRegression(
-                max_iter=1500,
+                max_iter=3000,
                 class_weight="balanced",
                 random_state=42,
             )
@@ -1182,7 +1362,7 @@ def train_for_position(
                 "using base model only"
             )
 
-        # Stage 3: dedicated low-value expert (< €20m) to improve scouting-heavy segment.
+        # Stage 3: dedicated low-value expert (< EUR 20m) to improve the scouting-heavy segment.
         low_value_threshold_eur = 20_000_000.0
         low_value_labels = ("under_5m", "5m_to_20m")
         low_value_min_samples = max(int(band_min_samples), 220)
@@ -1215,7 +1395,7 @@ def train_for_position(
                 test_low_value_model_used[low_mask_test] = 1
 
             print(
-                f"[{pos}] low-value expert routed (<€20m) | "
+                f"[{pos}] low-value expert routed (<EUR20m) | "
                 f"val_used={val_low_value_model_used.mean()*100:.1f}% "
                 f"test_used={test_low_value_model_used.mean()*100:.1f}% "
                 f"(alpha={low_value_alpha:.2f})"
@@ -1279,7 +1459,9 @@ def _run_league_holdout_suite(
     test_season: str,
     output_path: Path,
     shap_dir: Path,
+    save_shap_artifacts: bool,
     n_optuna_trials: int,
+    holdout_n_optuna_trials: int,
     recency_half_life: float,
     under_5m_weight: float,
     mid_5m_to_20m_weight: float,
@@ -1293,6 +1475,10 @@ def _run_league_holdout_suite(
     band_min_samples: int,
     band_blend_alpha: float,
     mape_min_denom_eur: float,
+    min_feature_coverage: float,
+    min_provider_feature_coverage: float,
+    optuna_study_namespace: str | None,
+    optuna_load_if_exists: bool,
 ) -> list[dict[str, Any]]:
     holdout_results: list[dict[str, Any]] = []
     if not holdout_leagues:
@@ -1316,6 +1502,10 @@ def _run_league_holdout_suite(
         print("======================")
         val_parts: list[pd.DataFrame] = []
         test_parts: list[pd.DataFrame] = []
+        holdout_namespace = _holdout_optuna_namespace(
+            optuna_study_namespace,
+            holdout_league,
+        )
 
         for pos in POSITIONS:
             result = train_for_position(
@@ -1324,7 +1514,8 @@ def _run_league_holdout_suite(
                 val_season,
                 test_season,
                 shap_dir,
-                n_optuna_trials=n_optuna_trials,
+                save_shap_artifacts=save_shap_artifacts,
+                n_optuna_trials=holdout_n_optuna_trials,
                 recency_half_life=recency_half_life,
                 under_5m_weight=under_5m_weight,
                 mid_5m_to_20m_weight=mid_5m_to_20m_weight,
@@ -1337,9 +1528,13 @@ def _run_league_holdout_suite(
                 band_min_samples=band_min_samples,
                 band_blend_alpha=band_blend_alpha,
                 mape_min_denom_eur=mape_min_denom_eur,
+                min_feature_coverage=min_feature_coverage,
+                min_provider_feature_coverage=min_provider_feature_coverage,
                 train_exclude_leagues=[holdout_league],
                 val_exclude_leagues=[holdout_league],
                 test_include_leagues=[holdout_league],
+                optuna_study_namespace=holdout_namespace,
+                optuna_load_if_exists=optuna_load_if_exists,
             )
             if result is None:
                 continue
@@ -1405,8 +1600,8 @@ def _run_league_holdout_suite(
         holdout_results.append(holdout_payload)
         print(
             f"[holdout:{holdout_league}] n={len(test_frame)} | "
-            f"R² {holdout_overall['r2']*100:,.2f}% | "
-            f"MAE €{holdout_overall['mae_eur']:,.0f} | "
+            f"R2 {holdout_overall['r2']*100:,.2f}% | "
+            f"MAE EUR {holdout_overall['mae_eur']:,.0f} | "
             f"MAPE {holdout_overall['mape']*100:,.2f}%"
         )
 
@@ -1427,7 +1622,7 @@ def main(
     over_20m_weight: float = 1.0,
     exclude_prefixes: Sequence[str] | None = None,
     exclude_columns: Sequence[str] | None = None,
-    optimize_metric: str = "lowmid_wmape",
+    optimize_metric: str = "hybrid_wmape",
     strict_leakage_guard: bool = True,
     interval_q: float = 0.8,
     two_stage_band_model: bool = True,
@@ -1441,6 +1636,12 @@ def main(
     min_league_season_completeness: float = 0.55,
     residual_calibration_min_samples: int = 30,
     mape_min_denom_eur: float = 1_000_000.0,
+    min_feature_coverage: float = 0.01,
+    min_provider_feature_coverage: float = 0.05,
+    save_shap_artifacts: bool = True,
+    holdout_n_optuna_trials: int | None = None,
+    optuna_study_namespace: str | None = None,
+    optuna_load_if_exists: bool = True,
 ) -> None:
     if val_season == test_season:
         raise ValueError("--val-season must be different from --test-season.")
@@ -1460,6 +1661,14 @@ def main(
         raise ValueError("--residual-calibration-min-samples must be >= 1.")
     if float(mape_min_denom_eur) < 0:
         raise ValueError("--mape-min-denom-eur must be >= 0.")
+    if not (0.0 <= float(min_feature_coverage) <= 1.0):
+        raise ValueError("--min-feature-coverage must be in [0.0, 1.0].")
+    if not (0.0 <= float(min_provider_feature_coverage) <= 1.0):
+        raise ValueError("--min-provider-feature-coverage must be in [0.0, 1.0].")
+    if holdout_n_optuna_trials is not None and int(holdout_n_optuna_trials) < 1:
+        raise ValueError("--holdout-trials must be >= 1.")
+
+    holdout_trial_budget = int(holdout_n_optuna_trials or n_optuna_trials)
 
     print(
         "[train] value-segment weights: "
@@ -1468,7 +1677,14 @@ def main(
         f"over_20m={over_20m_weight:.3f}"
     )
     print(f"[train] optimize metric: {optimize_metric}")
-    print(f"[train] MAPE denominator floor: €{float(mape_min_denom_eur):,.0f}")
+    print(f"[train] MAPE denominator floor: EUR {float(mape_min_denom_eur):,.0f}")
+    print(
+        "[train] feature coverage gates: "
+        f"global>={float(min_feature_coverage):.3f}, "
+        f"provider>={float(min_provider_feature_coverage):.3f}"
+    )
+    print(f"[train] save SHAP artifacts: {bool(save_shap_artifacts)}")
+    print(f"[train] holdout trial budget: {holdout_trial_budget}")
     print(f"[train] conformal interval q: {interval_q:.2f}")
     print(
         "[train] two-stage band model: "
@@ -1540,6 +1756,7 @@ def main(
             val_season,
             test_season,
             shap_dir,
+            save_shap_artifacts=save_shap_artifacts,
             n_optuna_trials=n_optuna_trials,
             recency_half_life=recency_half_life,
             under_5m_weight=under_5m_weight,
@@ -1553,6 +1770,10 @@ def main(
             band_min_samples=band_min_samples,
             band_blend_alpha=band_blend_alpha,
             mape_min_denom_eur=mape_min_denom_eur,
+            min_feature_coverage=min_feature_coverage,
+            min_provider_feature_coverage=min_provider_feature_coverage,
+            optuna_study_namespace=optuna_study_namespace,
+            optuna_load_if_exists=optuna_load_if_exists,
         )
         if result is None:
             continue
@@ -1614,6 +1835,10 @@ def main(
         "min_league_season_completeness": float(min_league_season_completeness),
         "residual_calibration_min_samples": int(residual_calibration_min_samples),
         "mape_min_denom_eur": float(mape_min_denom_eur),
+        "min_feature_coverage": float(min_feature_coverage),
+        "min_provider_feature_coverage": float(min_provider_feature_coverage),
+        "save_shap_artifacts": bool(save_shap_artifacts),
+        "holdout_n_optuna_trials": holdout_trial_budget,
         "positions": [],
         "overall": {},
         "segments": {},
@@ -1643,8 +1868,8 @@ def main(
     ):
         print(
             f"{metric.split:>4} | {metric.position:>2} | n={metric.n_samples:>4} | "
-            f"R² {metric.r2*100:6.2f}% | "
-            f"MAE €{metric.mae:,.0f} | "
+            f"R2 {metric.r2*100:6.2f}% | "
+            f"MAE EUR {metric.mae:,.0f} | "
             f"MAPE {metric.mape*100:6.2f}% | "
             f"WMAPE {metric.wmape*100:6.2f}%"
         )
@@ -1670,8 +1895,8 @@ def main(
         print("--------------------------------------")
         print(
             f"{split_name:>4} ALL | "
-            f"R² {split_metrics['r2']*100:6.2f}% | "
-            f"MAE €{split_metrics['mae_eur']:,.0f} | "
+            f"R2 {split_metrics['r2']*100:6.2f}% | "
+            f"MAE EUR {split_metrics['mae_eur']:,.0f} | "
             f"MAPE {split_metrics['mape']*100:6.2f}% | "
             f"WMAPE {split_metrics['wmape']*100:6.2f}%"
         )
@@ -1679,7 +1904,7 @@ def main(
             print(
                 f"       interval q={interval_q:.2f} | "
                 f"coverage {interval_stats['interval_coverage']*100:6.2f}% | "
-                f"avg width €{interval_stats['interval_avg_width_eur']:,.0f}"
+                f"avg width EUR {interval_stats['interval_avg_width_eur']:,.0f}"
             )
         metrics_payload["overall"][split_name] = {
             "n_samples": int(len(frame)),
@@ -1701,8 +1926,8 @@ def main(
                 continue
             print(
                 f"  - {row['segment']}: n={n} | "
-                f"R² {row['r2']*100:6.2f}% | "
-                f"MAE €{row['mae_eur']:,.0f} | "
+                f"R2 {row['r2']*100:6.2f}% | "
+                f"MAE EUR {row['mae_eur']:,.0f} | "
                 f"MAPE {row['mape']*100:6.2f}% | "
                 f"WMAPE {row['wmape']*100:6.2f}%"
             )
@@ -1714,7 +1939,9 @@ def main(
         test_season=test_season,
         output_path=output,
         shap_dir=shap_dir,
+        save_shap_artifacts=save_shap_artifacts,
         n_optuna_trials=n_optuna_trials,
+        holdout_n_optuna_trials=holdout_trial_budget,
         recency_half_life=recency_half_life,
         under_5m_weight=under_5m_weight,
         mid_5m_to_20m_weight=mid_5m_to_20m_weight,
@@ -1726,9 +1953,13 @@ def main(
         interval_q=interval_q,
         two_stage_band_model=two_stage_band_model,
         band_min_samples=band_min_samples,
-        band_blend_alpha=band_blend_alpha,
-        mape_min_denom_eur=mape_min_denom_eur,
-    )
+            band_blend_alpha=band_blend_alpha,
+            mape_min_denom_eur=mape_min_denom_eur,
+            min_feature_coverage=min_feature_coverage,
+            min_provider_feature_coverage=min_provider_feature_coverage,
+            optuna_study_namespace=optuna_study_namespace,
+            optuna_load_if_exists=optuna_load_if_exists,
+        )
     if holdout_results:
         metrics_payload["league_holdout"] = holdout_results
         metrics_payload["artifacts"]["holdout_count"] = len(holdout_results)
@@ -1744,11 +1975,11 @@ def main(
     quality_path = Path(quality_output_path)
     _write_json(quality_path, quality_report)
 
-    print(f"\n[done] wrote validation predictions → {val_output}")
-    print(f"[done] wrote test predictions → {output}")
-    print(f"[done] wrote error priors → {error_prior_path}")
-    print(f"[done] wrote metrics → {metrics_path}")
-    print(f"[done] wrote quality report → {quality_path}")
+    print(f"\n[done] wrote validation predictions -> {val_output}")
+    print(f"[done] wrote test predictions -> {output}")
+    print(f"[done] wrote error priors -> {error_prior_path}")
+    print(f"[done] wrote metrics -> {metrics_path}")
+    print(f"[done] wrote quality report -> {quality_path}")
 
 
 if __name__ == "__main__":
@@ -1787,19 +2018,19 @@ if __name__ == "__main__":
         "--under-5m-weight",
         type=float,
         default=1.0,
-        help="Training weight multiplier for rows with market value < €5m.",
+        help="Training weight multiplier for rows with market value < EUR 5m.",
     )
     parser.add_argument(
         "--mid-5m-20m-weight",
         type=float,
         default=1.0,
-        help="Training weight multiplier for rows with market value in [€5m, €20m).",
+        help="Training weight multiplier for rows with market value in [EUR 5m, EUR 20m).",
     )
     parser.add_argument(
         "--over-20m-weight",
         type=float,
         default=1.0,
-        help="Training weight multiplier for rows with market value >= €20m.",
+        help="Training weight multiplier for rows with market value >= EUR 20m.",
     )
     parser.add_argument(
         "--exclude-prefixes",
@@ -1813,9 +2044,21 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--optimize-metric",
-        default="lowmid_wmape",
-        choices=["mae", "rmse", "band_wmape", "lowmid_wmape"],
+        default="hybrid_wmape",
+        choices=["mae", "rmse", "overall_wmape", "band_wmape", "lowmid_wmape", "hybrid_wmape"],
         help="Optuna objective metric.",
+    )
+    parser.add_argument(
+        "--min-feature-coverage",
+        type=float,
+        default=0.01,
+        help="Drop features with non-null train coverage below this threshold.",
+    )
+    parser.add_argument(
+        "--min-provider-feature-coverage",
+        type=float,
+        default=0.05,
+        help="Drop provider features with train coverage below this threshold.",
     )
     parser.add_argument(
         "--interval-q",
@@ -1892,6 +2135,18 @@ if __name__ == "__main__":
         default=1_000_000.0,
         help="MAPE denominator floor in EUR to reduce tiny-value distortion.",
     )
+    parser.add_argument(
+        "--save-shap-artifacts",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write SHAP PNG artifacts during training.",
+    )
+    parser.add_argument(
+        "--holdout-trials",
+        type=int,
+        default=None,
+        help="Optional Optuna trial budget for holdout-league reruns. Defaults to --trials.",
+    )
     args = parser.parse_args()
 
     main(
@@ -1922,4 +2177,8 @@ if __name__ == "__main__":
         min_league_season_completeness=args.min_league_season_completeness,
         residual_calibration_min_samples=args.residual_calibration_min_samples,
         mape_min_denom_eur=args.mape_min_denom_eur,
+        min_feature_coverage=args.min_feature_coverage,
+        min_provider_feature_coverage=args.min_provider_feature_coverage,
+        save_shap_artifacts=args.save_shap_artifacts,
+        holdout_n_optuna_trials=args.holdout_trials,
     )

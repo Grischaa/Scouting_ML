@@ -29,6 +29,39 @@ def _parse_int_tokens(raw: str | None, *, default: list[int]) -> list[int]:
     return sorted({*values}) if values else list(default)
 
 
+def _artifact_meta(path: str | Path | None) -> dict[str, object] | None:
+    if path in (None, ""):
+        return None
+    resolved = Path(path)
+    exists = resolved.exists()
+    return {
+        "path": str(resolved.resolve()),
+        "exists": exists,
+        "size_bytes": int(resolved.stat().st_size) if exists else None,
+    }
+
+
+def _require_artifact(path: str | Path | None, label: str) -> dict[str, object] | None:
+    meta = _artifact_meta(path)
+    if meta is None:
+        return None
+    if not meta["exists"]:
+        raise FileNotFoundError(f"Expected {label} artifact was not created: {path}")
+    return meta
+
+
+def _load_json_snapshot(path: str | Path | None) -> dict | list | None:
+    if path in (None, ""):
+        return None
+    target = Path(path)
+    if not target.exists():
+        return None
+    try:
+        return json.loads(target.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def run_weekly_scout_ops(
     *,
     predictions: str,
@@ -61,18 +94,25 @@ def run_weekly_scout_ops(
     workflow_write_watchlist: bool = True,
     workflow_watchlist_path: str | None = "data/model/scout_watchlist.jsonl",
     workflow_watchlist_tag: str | None = "u23_non_big5",
+    summary_json: str | None = None,
 ) -> dict[str, Any]:
     k_values = k_values or [10, 25, 50]
-    generated_at = datetime.now(timezone.utc).isoformat()
+    started_at = datetime.now(timezone.utc)
     summary: dict[str, Any] = {
-        "generated_at_utc": generated_at,
+        "generated_at_utc": started_at.isoformat(),
         "inputs": {
-            "predictions": predictions,
+            "predictions": str(Path(predictions).resolve()),
             "split": split,
             "min_minutes": float(min_minutes),
             "max_age": None if max_age is None else float(max_age),
             "non_big5_only": bool(non_big5_only),
         },
+        "flags": {
+            "workflow_write_watchlist": bool(workflow_write_watchlist),
+            "non_big5_only": bool(non_big5_only),
+        },
+        "artifacts": {},
+        "snapshots": {},
         "steps": {},
         "status": "ok",
     }
@@ -144,7 +184,29 @@ def run_weekly_scout_ops(
     out_dir = Path(workflow_out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    summary_path = out_dir / f"weekly_ops_summary_{split}_{stamp}.json"
+    summary_path = Path(summary_json) if summary_json else out_dir / f"weekly_ops_summary_{split}_{stamp}.json"
+    artifacts = {
+        "weekly_kpi_csv": _require_artifact(kpi_payload.get("out_csv"), "weekly KPI csv"),
+        "weekly_kpi_json": _require_artifact(kpi_payload.get("out_json"), "weekly KPI json"),
+        "onboarding_json": _require_artifact(onboarding_out_json, "onboarding json"),
+        "onboarding_csv": _require_artifact(onboarding_out_csv, "onboarding csv"),
+        "workflow_shortlist_csv": _require_artifact(workflow_payload.get("shortlist_csv"), "workflow shortlist csv"),
+        "workflow_shortlist_json": _require_artifact(workflow_payload.get("shortlist_json"), "workflow shortlist json"),
+        "workflow_summary_json": _require_artifact(workflow_payload.get("summary_json"), "workflow summary json"),
+        "workflow_memo_dir": _require_artifact(workflow_payload.get("memo_dir"), "workflow memo dir"),
+        "watchlist_path": _artifact_meta(workflow_watchlist_path) if workflow_write_watchlist else _artifact_meta(None),
+    }
+    finished_at = datetime.now(timezone.utc)
+    summary["generated_at_utc"] = finished_at.isoformat()
+    summary["started_at_utc"] = started_at.isoformat()
+    summary["finished_at_utc"] = finished_at.isoformat()
+    summary["duration_seconds"] = (finished_at - started_at).total_seconds()
+    summary["artifacts"] = artifacts
+    summary["snapshots"] = {
+        "weekly_kpi": _load_json_snapshot(kpi_payload.get("out_json")),
+        "onboarding": _load_json_snapshot(onboarding_out_json),
+        "workflow": _load_json_snapshot(workflow_payload.get("summary_json")),
+    }
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     summary["summary_json"] = str(summary_path)
 
@@ -191,6 +253,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--workflow-write-watchlist", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--workflow-watchlist-path", default="data/model/scout_watchlist.jsonl")
     parser.add_argument("--workflow-watchlist-tag", default="u23_non_big5")
+    parser.add_argument("--summary-json", default="")
     return parser.parse_args()
 
 
@@ -227,6 +290,7 @@ def main() -> None:
         workflow_write_watchlist=args.workflow_write_watchlist,
         workflow_watchlist_path=args.workflow_watchlist_path,
         workflow_watchlist_tag=args.workflow_watchlist_tag,
+        summary_json=args.summary_json or None,
     )
 
 

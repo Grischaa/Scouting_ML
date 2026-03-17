@@ -1,6 +1,6 @@
 # Scouting ML Frontend
 
-This folder contains the static frontend for the market-value backend API:
+This folder contains the static frontend for the recruitment-intelligence backend API aimed at smaller clubs and consultants hunting undervalued non-Big5 players:
 
 - `static/index.html` - multi-view scouting application shell
 - `static/assets/app.js` - API client + state + valuation/funnel logic
@@ -8,9 +8,16 @@ This folder contains the static frontend for the market-value backend API:
 
 ## Main views
 
-- `Overview` - model trust card, val/test KPIs, value-segment reliability, league coverage
-- `Valuation Workbench` - filter/sort players and inspect over/undervalued signals
-- `Talent Funnel` - build scouting shortlists with a lower-league-only toggle
+- `Overview` - model trust card, valuation-vs-shortlist champion routing, val/test KPIs, value-segment reliability, league coverage
+- `Recruitment Board` - move between valuation and shortlist modes, then filter by age corridor, role need, budget band, contract years left, and outside-Big-5 focus
+- `Target Funnel` - build non-Big5 scouting shortlists with the same smaller-club filters used on the board
+
+## Recruitment exports
+
+- `Export Club CSV` - compact shortlist export for club discussion or analyst review
+- `Export Window Pack JSON` - consultant-style pack with active filters, champion routing, and current board rows
+- `Export Memo JSON/CSV` - player-level memo export from the detail panel
+- `Export Memo Pack JSON` - watchlist-oriented bulk pack for consultant delivery
 
 ## Run locally
 
@@ -39,6 +46,15 @@ Open:
 In the UI, set API base to:
 
 - `http://localhost:8000`
+
+Recommended first workflow:
+
+1. connect the API
+2. review `Overview`
+3. use `Recruitment Board` in shortlist mode and tighten the age / budget / contract / role filters
+4. move strongest targets into the watchlist
+5. export a `Window Pack JSON` or `Memo Pack JSON` for club / consultant delivery
+6. use `Target Funnel` for outside-Big-5 sourcing
 
 ## Required artifacts
 

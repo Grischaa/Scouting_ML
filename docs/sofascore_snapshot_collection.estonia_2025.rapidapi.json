@@ -1,0 +1,43 @@
+{
+  "snapshot_date": "2026-03-12",
+  "base_url": "https://sofascore.p.rapidapi.com",
+  "rps": 1.0,
+  "retries": 6,
+  "backoff": 1.0,
+  "raw_output_dir": "data/raw/providers",
+  "provider_config_out": "data/raw/providers/sofascore_provider_pipeline_estonia_2025.generated.json",
+  "summary_out": "data/raw/providers/sofascore_snapshot_summary_estonia_2025.json",
+  "players_source": "data/processed/_with_sofa/estonian_meistriliiga_2025_with_sofa.csv",
+  "fixture_context": {
+    "provider": "sofascore",
+    "competitions": [
+      {
+        "name": "estonian_meistriliiga_2025",
+        "league": "Estonian Meistriliiga",
+        "season": "2025",
+        "tournament_id": 178,
+        "season_id": 71438,
+        "events_mode": "team_schedule",
+        "team_schedule_max_pages": 8,
+        "segments": ["last"],
+        "max_pages": 16
+      }
+    ]
+  },
+  "player_availability": {
+    "provider": "sofascore",
+    "competitions": [
+      {
+        "name": "estonian_meistriliiga_2025",
+        "league": "Estonian Meistriliiga",
+        "season": "2025",
+        "tournament_id": 178,
+        "season_id": 71438,
+        "events_mode": "team_schedule",
+        "team_schedule_max_pages": 8,
+        "segments": ["last"],
+        "max_pages": 16
+      }
+    ]
+  }
+}

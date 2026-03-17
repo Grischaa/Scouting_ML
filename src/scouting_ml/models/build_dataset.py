@@ -45,6 +45,19 @@ EXTERNAL_LEAKAGE_TOKENS = (
     "value_diff",
 )
 
+EXTERNAL_PREFIXES = (
+    "contract_",
+    "injury_",
+    "transfer_",
+    "nt_",
+    "clubctx_",
+    "leaguectx_",
+    "sb_",
+    "avail_",
+    "fixture_",
+    "odds_",
+)
+
 
 def load_merged_files(files: List[Path]) -> pd.DataFrame:
     frames = []
@@ -257,6 +270,39 @@ def _merge_external_contexts(df: pd.DataFrame, external_dir: Path | None) -> pd.
                 ("league_country", "season"),
             ],
         ),
+        (
+            "statsbomb_player_season_features.csv",
+            "sb_",
+            [
+                ("player_id", "season"),
+                ("transfermarkt_id", "season"),
+            ],
+        ),
+        (
+            "player_availability.csv",
+            "avail_",
+            [
+                ("player_id", "season"),
+                ("transfermarkt_id", "season"),
+                ("name", "dob", "season"),
+            ],
+        ),
+        (
+            "fixture_context.csv",
+            "fixture_",
+            [
+                ("league", "season", "club"),
+                ("league_country", "season", "club"),
+            ],
+        ),
+        (
+            "market_context.csv",
+            "odds_",
+            [
+                ("league", "season", "club"),
+                ("league_country", "season", "club"),
+            ],
+        ),
     ]
 
     for filename, prefix, key_options in specs:
@@ -280,6 +326,244 @@ def _merge_external_contexts(df: pd.DataFrame, external_dir: Path | None) -> pd.
     if "injury_days_missed" in out.columns and "minutes" in out.columns:
         mins = pd.to_numeric(out["minutes"], errors="coerce").replace({0: np.nan})
         out["injury_days_per_1000_min"] = pd.to_numeric(out["injury_days_missed"], errors="coerce") / (mins / 1000.0)
+
+    return out
+
+
+def _meaningful_presence(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_numeric(series, errors="coerce").notna()
+    return (
+        series.astype(str)
+        .str.strip()
+        .replace({"nan": "", "NaN": "", "None": "", "<NA>": ""})
+        .ne("")
+    )
+
+
+def _safe_numeric_series(frame: pd.DataFrame, col: str) -> pd.Series:
+    if col not in frame.columns:
+        return pd.Series(np.nan, index=frame.index, dtype="float64")
+    return pd.to_numeric(frame[col], errors="coerce")
+
+
+def _rowwise_non_null_share(frame: pd.DataFrame, cols: Sequence[str]) -> pd.Series:
+    if not cols:
+        return pd.Series(0.0, index=frame.index, dtype="float64")
+    presence = pd.DataFrame({_col: _meaningful_presence(frame[_col]) for _col in cols}, index=frame.index)
+    return presence.mean(axis=1).astype(float)
+
+
+def _add_external_presence_and_context_features(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+
+    for prefix in EXTERNAL_PREFIXES:
+        cols = [c for c in out.columns if c.startswith(prefix)]
+        if not cols:
+            continue
+        share_col = f"{prefix}non_null_share".replace("__", "_")
+        flag_col = f"{prefix}has_data".replace("__", "_")
+        share = _rowwise_non_null_share(out, cols)
+        out[share_col] = share
+        out[flag_col] = (share > 0).astype(int)
+
+    profile_prefixes = ("contract_", "injury_", "transfer_", "nt_")
+    provider_prefixes = ("sb_", "avail_", "fixture_", "odds_")
+    context_prefixes = ("clubctx_", "leaguectx_")
+
+    out["profile_external_coverage_share"] = _rowwise_non_null_share(
+        out,
+        [c for c in out.columns if c.startswith(profile_prefixes)],
+    )
+    out["provider_external_coverage_share"] = _rowwise_non_null_share(
+        out,
+        [c for c in out.columns if c.startswith(provider_prefixes)],
+    )
+    out["environment_context_coverage_share"] = _rowwise_non_null_share(
+        out,
+        [c for c in out.columns if c.startswith(context_prefixes)],
+    )
+
+    contract_years_left = _safe_numeric_series(out, "contract_years_left")
+    contract_joined_year = _safe_numeric_series(out, "contract_joined_year")
+    injury_days_per_1000 = _safe_numeric_series(out, "injury_days_per_1000_min")
+    injury_count = _safe_numeric_series(out, "injury_count").fillna(0.0)
+    injury_major = _safe_numeric_series(out, "injury_major_injury_flag").fillna(0.0)
+    injury_soft_tissue = _safe_numeric_series(out, "injury_soft_tissue_count").fillna(0.0)
+    injury_bone_joint = _safe_numeric_series(out, "injury_bone_joint_count").fillna(0.0)
+    injury_illness = _safe_numeric_series(out, "injury_illness_count").fillna(0.0)
+    injury_surgery = _safe_numeric_series(out, "injury_surgery_count").fillna(0.0)
+    transfer_count_3y = _safe_numeric_series(out, "transfer_count_3y").fillna(0.0)
+    transfer_paid_moves_3y = _safe_numeric_series(out, "transfer_paid_moves_3y").fillna(0.0)
+    transfer_loans_3y = _safe_numeric_series(out, "transfer_loans_3y").fillna(0.0)
+    transfer_fees_3y = _safe_numeric_series(out, "transfer_total_fees_3y_eur").fillna(0.0)
+    transfer_max_fee = _safe_numeric_series(out, "transfer_max_fee_career_eur").fillna(0.0)
+    transfer_last_fee = _safe_numeric_series(out, "transfer_last_transfer_fee_eur")
+    transfer_last_loan = _safe_numeric_series(out, "transfer_last_transfer_is_loan").fillna(0.0)
+    nt_caps = _safe_numeric_series(out, "nt_total_caps").fillna(0.0)
+    nt_senior_caps = _safe_numeric_series(out, "nt_senior_caps").fillna(0.0)
+    nt_full = _safe_numeric_series(out, "nt_is_full_international").fillna(0.0)
+    club_strength = _safe_numeric_series(out, "clubctx_club_strength_proxy").fillna(0.0)
+    league_strength = _safe_numeric_series(out, "leaguectx_league_strength_index").fillna(0.0)
+    uefa_total = _safe_numeric_series(out, "uefa_coeff_5yr_total").fillna(0.0)
+    club_goals_per90 = _safe_numeric_series(out, "clubctx_club_goals_per90").fillna(0.0)
+    club_xg_per90 = _safe_numeric_series(out, "clubctx_club_xg_per90").fillna(0.0)
+    odds_rank = _safe_numeric_series(out, "odds_implied_strength_rank")
+    fixture_minutes_share = _safe_numeric_series(out, "avail_minutes_share")
+    avail_start_share = _safe_numeric_series(out, "avail_start_share")
+    avail_full_match_share = _safe_numeric_series(out, "avail_full_match_share")
+    avail_unused_bench_share = _safe_numeric_series(out, "avail_unused_bench_share")
+    avail_captain_share = _safe_numeric_series(out, "avail_captain_share")
+    avail_appearance_share = _safe_numeric_series(out, "avail_appearance_share")
+    avail_rating_mean = _safe_numeric_series(out, "avail_rating_mean")
+    fixture_points_per_match = _safe_numeric_series(out, "fixture_points_per_match")
+    fixture_goal_diff_per_match = _safe_numeric_series(out, "fixture_goal_diff_per_match")
+    fixture_clean_sheet_share = _safe_numeric_series(out, "fixture_clean_sheet_share")
+    fixture_failed_to_score_share = _safe_numeric_series(out, "fixture_failed_to_score_share")
+    fixture_scoring_environment = _safe_numeric_series(out, "fixture_scoring_environment")
+    injury_avg_days_per_case = _safe_numeric_series(out, "injury_avg_days_per_case")
+    injury_avg_games_per_case = _safe_numeric_series(out, "injury_avg_games_per_case")
+    injury_long_absence_count = _safe_numeric_series(out, "injury_long_absence_count").fillna(0.0)
+    injury_repeat_soft_tissue_flag = _safe_numeric_series(out, "injury_repeat_soft_tissue_flag").fillna(0.0)
+    injury_repeat_bone_joint_flag = _safe_numeric_series(out, "injury_repeat_bone_joint_flag").fillna(0.0)
+
+    out["contract_expiring_within_1y"] = (
+        contract_years_left.notna() & (contract_years_left <= 1.0)
+    ).astype(int)
+    out["contract_long_term_flag"] = (
+        contract_years_left.notna() & (contract_years_left >= 3.0)
+    ).astype(int)
+    out["contract_security_score"] = contract_years_left.clip(lower=0.0, upper=5.0) / 5.0
+    if contract_joined_year.notna().any() and "season_end_year" in out.columns:
+        club_tenure = _safe_numeric_series(out, "season_end_year") - contract_joined_year
+        out["club_tenure_years"] = club_tenure.where(club_tenure >= 0.0)
+        out["recent_arrival_flag"] = (
+            out["club_tenure_years"].notna() & (pd.to_numeric(out["club_tenure_years"], errors="coerce") <= 1.0)
+        ).astype(int)
+    if "contract_agent_name" in out.columns:
+        out["contract_agent_known_flag"] = (
+            out["contract_agent_name"]
+            .astype(str)
+            .str.strip()
+            .replace({"nan": "", "NaN": "", "None": "", "<NA>": ""})
+            .ne("")
+        ).astype(int)
+    if "contract_loan_flag" in out.columns:
+        out["contract_loan_context_flag"] = (
+            pd.to_numeric(out["contract_loan_flag"], errors="coerce").fillna(0.0) > 0.0
+        ).astype(int)
+
+    injury_count_nonzero = injury_count.replace({0.0: np.nan})
+    out["injury_soft_tissue_share"] = (injury_soft_tissue / injury_count_nonzero).clip(lower=0.0, upper=1.0)
+    out["injury_structural_share"] = (injury_bone_joint / injury_count_nonzero).clip(lower=0.0, upper=1.0)
+    out["injury_illness_share"] = (injury_illness / injury_count_nonzero).clip(lower=0.0, upper=1.0)
+    out["injury_surgery_flag"] = (injury_surgery > 0.0).astype(int)
+    out["injury_profile_risk_score"] = (
+        out["injury_structural_share"].fillna(0.0) * 0.50
+        + out["injury_soft_tissue_share"].fillna(0.0) * 0.25
+        + out["injury_surgery_flag"].fillna(0.0) * 0.25
+    )
+
+    out["availability_risk_score"] = (
+        np.log1p(injury_days_per_1000.clip(lower=0.0).fillna(0.0)) * 0.55
+        + np.log1p(injury_count.clip(lower=0.0)) * 0.20
+        + injury_major.clip(lower=0.0, upper=1.0) * 0.25
+        + out["injury_profile_risk_score"].fillna(0.0) * 0.35
+        + np.log1p(injury_avg_days_per_case.clip(lower=0.0).fillna(0.0)) * 0.12
+        + np.log1p(injury_avg_games_per_case.clip(lower=0.0).fillna(0.0)) * 0.08
+        + np.log1p(injury_long_absence_count.clip(lower=0.0)) * 0.10
+        + injury_repeat_soft_tissue_flag.clip(lower=0.0, upper=1.0) * 0.10
+        + injury_repeat_bone_joint_flag.clip(lower=0.0, upper=1.0) * 0.12
+    )
+    out["durability_score"] = 1.0 / (1.0 + out["availability_risk_score"].fillna(0.0))
+
+    out["transfer_activity_score"] = (
+        np.log1p(transfer_count_3y.clip(lower=0.0)) * 0.5
+        + np.log1p((transfer_fees_3y / 1_000_000.0).clip(lower=0.0)) * 0.3
+        + np.log1p((transfer_max_fee / 1_000_000.0).clip(lower=0.0)) * 0.2
+    )
+    out["transfer_instability_flag"] = (
+        (transfer_count_3y >= 2.0) | (_safe_numeric_series(out, "transfer_loans_3y").fillna(0.0) >= 1.0)
+    ).astype(int)
+    transfer_count_nonzero = transfer_count_3y.replace({0.0: np.nan})
+    out["transfer_recent_paid_share_3y"] = (transfer_paid_moves_3y / transfer_count_nonzero).clip(lower=0.0, upper=1.0)
+    out["transfer_recent_loan_share_3y"] = (transfer_loans_3y / transfer_count_nonzero).clip(lower=0.0, upper=1.0)
+    out["transfer_last_move_paid_flag"] = (
+        transfer_last_fee.fillna(0.0).gt(0.0) & transfer_last_loan.fillna(0.0).le(0.0)
+    ).astype(int)
+    if "transfer_last_transfer_fee_text" in out.columns:
+        out["transfer_last_move_free_flag"] = (
+            out["transfer_last_transfer_fee_text"]
+            .astype(str)
+            .str.casefold()
+            .str.contains(r"free|abl.sefrei", regex=True, na=False)
+            | (
+                transfer_last_fee.fillna(0.0).le(0.0)
+                & transfer_last_loan.fillna(0.0).le(0.0)
+                & out["transfer_last_transfer_fee_text"].astype(str).str.strip().ne("")
+            )
+        ).astype(int)
+
+    out["international_exposure_score"] = (
+        np.log1p(nt_caps.clip(lower=0.0)) * 0.45
+        + np.log1p(nt_senior_caps.clip(lower=0.0)) * 0.40
+        + nt_full.clip(lower=0.0, upper=1.0) * 0.15
+    )
+
+    context_elite_parts = [
+        np.log1p(nt_caps.clip(lower=0.0)),
+        club_strength.clip(lower=0.0),
+        league_strength.clip(lower=0.0),
+        np.log1p(uefa_total.clip(lower=0.0)),
+        np.log1p((transfer_max_fee / 1_000_000.0).clip(lower=0.0)),
+    ]
+    out["elite_context_score"] = sum(context_elite_parts) / float(len(context_elite_parts))
+    out["elite_transfer_signal"] = np.log1p((transfer_max_fee / 1_000_000.0).clip(lower=0.0))
+    out["club_attacking_environment_score"] = club_goals_per90 + club_xg_per90
+
+    if odds_rank.notna().any():
+        out["odds_strength_score"] = 1.0 / odds_rank.clip(lower=1.0)
+    if fixture_minutes_share.notna().any():
+        out["availability_trust_score"] = fixture_minutes_share.clip(lower=0.0, upper=1.0)
+    if (
+        avail_start_share.notna().any()
+        or avail_full_match_share.notna().any()
+        or avail_appearance_share.notna().any()
+    ):
+        out["availability_selection_score"] = (
+            avail_start_share.fillna(0.0) * 0.40
+            + avail_full_match_share.fillna(0.0) * 0.25
+            + avail_appearance_share.fillna(0.0) * 0.20
+            + fixture_minutes_share.fillna(0.0).clip(lower=0.0, upper=1.0) * 0.10
+            + avail_captain_share.fillna(0.0) * 0.05
+            - avail_unused_bench_share.fillna(0.0) * 0.20
+        )
+    if avail_rating_mean.notna().any():
+        out["availability_performance_hint"] = avail_rating_mean.clip(lower=0.0) / 10.0
+    if (
+        fixture_points_per_match.notna().any()
+        or fixture_goal_diff_per_match.notna().any()
+        or fixture_clean_sheet_share.notna().any()
+    ):
+        out["fixture_team_form_score"] = (
+            fixture_points_per_match.fillna(0.0).clip(lower=0.0) / 3.0 * 0.45
+            + fixture_goal_diff_per_match.fillna(0.0).clip(lower=-2.0, upper=2.0).add(2.0).div(4.0) * 0.30
+            + fixture_clean_sheet_share.fillna(0.0) * 0.15
+            - fixture_failed_to_score_share.fillna(0.0) * 0.10
+        )
+        out["fixture_environment_score"] = (
+            fixture_scoring_environment.fillna(0.0).clip(lower=0.0, upper=6.0) / 6.0 * 0.45
+            + fixture_clean_sheet_share.fillna(0.0) * 0.20
+            + (1.0 - fixture_failed_to_score_share.fillna(0.0).clip(lower=0.0, upper=1.0)) * 0.35
+        )
+
+    out["high_value_readiness_score"] = (
+        out["elite_context_score"].fillna(0.0) * 0.45
+        + out["international_exposure_score"].fillna(0.0) * 0.20
+        + out["contract_security_score"].fillna(0.0) * 0.15
+        + out["durability_score"].fillna(0.0) * 0.10
+        + out["club_attacking_environment_score"].fillna(0.0) * 0.10
+    )
 
     return out
 
@@ -424,6 +708,7 @@ def add_model_features(df: pd.DataFrame, external_dir: Path | None = Path("data/
 
     result = _add_uefa_coefficients(result)
     result = add_history_strength_features(result)
+    result = _add_external_presence_and_context_features(result)
 
     return result
 
@@ -442,7 +727,7 @@ def main(
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(output_path, index=False)
-    print(f"[dataset] wrote {len(df):,} rows → {output_path}")
+    print(f"[dataset] wrote {len(df):,} rows -> {output_path}")
 
 
 if __name__ == "__main__":
@@ -456,7 +741,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--external-dir",
         default="data/external",
-        help="Optional directory for enrichment CSVs (player_contracts/player_injuries/player_transfers/national_team_caps/club_context/league_context).",
+        help=(
+            "Optional directory for enrichment CSVs "
+            "(player_contracts/player_injuries/player_transfers/national_team_caps/"
+            "club_context/league_context/statsbomb_player_season_features/"
+            "player_availability/fixture_context/market_context)."
+        ),
     )
     args = parser.parse_args()
     main(args.data_dir, args.output, args.external_dir)

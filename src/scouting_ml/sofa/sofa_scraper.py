@@ -164,6 +164,7 @@ class SofaClient:
                 r = self._client.request(method, path, params=params)
                 if r.status_code in (429, 503):
                     # backoff + jitter
+                    last_exc = RuntimeError(f"HTTP {r.status_code} on {path}")
                     delay = self.cfg.backoff * attempt + random.uniform(0.05, 0.35)
                     logger.warning(f"[sofa] {r.status_code} on {path}; retrying in {delay:.2f}s")
                     time.sleep(delay)

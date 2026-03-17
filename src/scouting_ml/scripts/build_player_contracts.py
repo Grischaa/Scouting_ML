@@ -286,6 +286,7 @@ def parse_contract_fields(html: bytes) -> dict:
     release_clause = find_value(["release clause", "ausstiegsklausel"])
     agent_name = find_value(["player agent", "agent", "berater"])
     loan_from = find_value(["on loan from", "leihe von"])
+    joined_on = find_value(["joined", "im verein seit"])
 
     return {
         "contract_until": contract_until if contract_until not in {"-", "—"} else "",
@@ -294,6 +295,8 @@ def parse_contract_fields(html: bytes) -> dict:
         "release_clause_eur": parse_money_to_eur(release_clause),
         "agent_name": agent_name,
         "loan_flag": int(bool(loan_from)),
+        "joined_on": joined_on if joined_on not in {"-", "—"} else "",
+        "joined_year": parse_contract_year(joined_on),
     }
 
 
@@ -375,6 +378,8 @@ def build_player_contracts(
             "release_clause_eur": None,
             "agent_name": "",
             "loan_flag": 0,
+            "joined_on": "",
+            "joined_year": None,
         }
         source_type = "cache"
 
@@ -409,6 +414,8 @@ def build_player_contracts(
                     "release_clause_eur": parsed["release_clause_eur"] if scrape_success else pd.NA,
                     "agent_name": parsed["agent_name"] if scrape_success else pd.NA,
                     "loan_flag": parsed["loan_flag"] if scrape_success else pd.NA,
+                    "joined_on": parsed["joined_on"] if scrape_success else pd.NA,
+                    "joined_year": parsed["joined_year"] if scrape_success else pd.NA,
                     "contract_source_url": profile_link,
                     "contract_source_type": source_type,
                     "contract_scrape_success": scrape_success,

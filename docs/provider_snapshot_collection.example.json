@@ -1,0 +1,54 @@
+{
+  "snapshot_date": "2026-03-12",
+  "raw_output_dir": "data/raw/providers",
+  "provider_config_out": "data/raw/providers/provider_pipeline_2024-25.generated.json",
+  "summary_out": "data/raw/providers/provider_snapshot_summary_2024-25.json",
+  "player_links": "data/external/player_provider_links.csv",
+  "club_links": "data/external/club_provider_links.csv",
+  "statsbomb": {
+    "open_data_root": "data/raw/statsbomb/bundesliga_2023_24",
+    "competition_ids": [9],
+    "season_ids": [281]
+  },
+  "fixture_context": {
+    "provider": "sportmonks",
+    "requests": [
+      {
+        "name": "premier_league_fixtures",
+        "endpoint": "REPLACE_WITH_FIXTURE_ENDPOINT",
+        "params": {
+          "season": "2024/25",
+          "include": "participants;scores;league;season"
+        }
+      }
+    ]
+  },
+  "player_availability": {
+    "provider": "sportmonks",
+    "requests": [
+      {
+        "name": "premier_league_availability",
+        "endpoint": "REPLACE_WITH_AVAILABILITY_ENDPOINT",
+        "params": {
+          "season": "2024/25"
+        }
+      }
+    ]
+  },
+  "market_context": {
+    "league": "Premier League",
+    "season": "2024/25",
+    "requests": [
+      {
+        "name": "premier_league_odds",
+        "endpoint": "REPLACE_WITH_ODDS_ENDPOINT",
+        "params": {
+          "regions": "eu",
+          "markets": "h2h,totals",
+          "oddsFormat": "decimal",
+          "dateFormat": "iso"
+        }
+      }
+    ]
+  }
+}

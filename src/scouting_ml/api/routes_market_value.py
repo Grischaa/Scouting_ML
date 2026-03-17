@@ -12,9 +12,11 @@ from scouting_ml.services.market_value_service import (
     add_watchlist_item,
     delete_watchlist_item,
     get_active_artifacts,
+    get_benchmark_report,
     get_model_manifest,
     get_metrics,
     get_player_advanced_profile,
+    get_player_profile,
     get_player_history_strength,
     get_player_report,
     get_player_prediction,
@@ -52,6 +54,10 @@ class ModelManifestResponse(BaseModel):
 
 
 class ActiveArtifactsResponse(BaseModel):
+    payload: Dict[str, Any]
+
+
+class BenchmarkReportResponse(BaseModel):
     payload: Dict[str, Any]
 
 
@@ -93,6 +99,11 @@ class PlayerReportResponse(BaseModel):
 
 
 class PlayerAdvancedProfileResponse(BaseModel):
+    split: str
+    profile: Dict[str, Any]
+
+
+class PlayerProfileResponse(BaseModel):
     split: str
     profile: Dict[str, Any]
 
@@ -142,13 +153,13 @@ class WatchlistDeleteResponse(BaseModel):
 
 
 @router.get("/health", response_model=HealthResponse, summary="Check market-value artifact health")
-def market_value_health() -> HealthResponse:
+async def market_value_health() -> HealthResponse:
     """Return backend readiness and artifact status for market-value endpoints."""
     return HealthResponse(**health_payload())
 
 
 @router.get("/metrics", response_model=MetricsResponse, summary="Get training/evaluation metrics")
-def market_value_metrics() -> MetricsResponse:
+async def market_value_metrics() -> MetricsResponse:
     """Return JSON metrics payload produced by train_market_value_full."""
     try:
         payload = get_metrics()
@@ -160,7 +171,7 @@ def market_value_metrics() -> MetricsResponse:
 
 
 @router.get("/model-manifest", response_model=ModelManifestResponse, summary="Get model registry manifest")
-def market_value_model_manifest() -> ModelManifestResponse:
+async def market_value_model_manifest() -> ModelManifestResponse:
     """Return model artifact manifest (file-backed or derived from current artifacts)."""
     try:
         payload = get_model_manifest()
@@ -176,7 +187,7 @@ def market_value_model_manifest() -> ModelManifestResponse:
     response_model=ActiveArtifactsResponse,
     summary="Get resolved artifact paths and hashes",
 )
-def market_value_active_artifacts() -> ActiveArtifactsResponse:
+async def market_value_active_artifacts() -> ActiveArtifactsResponse:
     """Return currently active predictions/metrics artifact paths and SHA256 hashes."""
     try:
         payload = get_active_artifacts()
@@ -187,15 +198,36 @@ def market_value_active_artifacts() -> ActiveArtifactsResponse:
     return ActiveArtifactsResponse(payload=payload)
 
 
+@router.get(
+    "/benchmarks",
+    response_model=BenchmarkReportResponse,
+    summary="Get multi-league benchmark summary",
+)
+async def market_value_benchmarks() -> BenchmarkReportResponse:
+    """Return aggregated benchmark/reporting payload for holdouts, onboarding, and ablations."""
+    try:
+        payload = get_benchmark_report()
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=500, detail=f"Failed to load benchmark report: {exc}") from exc
+    return BenchmarkReportResponse(payload=payload)
+
+
 @router.get("/predictions", response_model=PredictionListResponse, summary="Query prediction rows")
-def market_value_predictions(
+async def market_value_predictions(
     split: Literal["test", "val"] = Query("test"),
     season: Optional[str] = Query(None),
     league: Optional[str] = Query(None),
     club: Optional[str] = Query(None),
     position: Optional[str] = Query(None, description="GK/DF/MF/FW"),
+    role_keys: Optional[str] = Query(None, description="Comma-separated role keys, e.g. CB,DM,W,ST"),
     min_minutes: Optional[float] = Query(None, ge=0),
+    min_age: Optional[float] = Query(None, ge=0),
     max_age: Optional[float] = Query(None, ge=0),
+    max_market_value_eur: Optional[float] = Query(None, ge=0),
+    max_contract_years_left: Optional[float] = Query(None, ge=0),
+    non_big5_only: bool = Query(False),
     undervalued_only: bool = Query(False),
     min_confidence: Optional[float] = Query(None),
     min_value_gap_eur: Optional[float] = Query(None),
@@ -217,8 +249,13 @@ def market_value_predictions(
             league=league,
             club=club,
             position=position,
+            role_keys=[r.strip().upper() for r in role_keys.split(",") if r.strip()] if role_keys else None,
             min_minutes=min_minutes,
+            min_age=min_age,
             max_age=max_age,
+            max_market_value_eur=max_market_value_eur,
+            max_contract_years_left=max_contract_years_left,
+            non_big5_only=non_big5_only,
             undervalued_only=undervalued_only,
             min_confidence=min_confidence,
             min_value_gap_eur=min_value_gap_eur,
@@ -236,12 +273,17 @@ def market_value_predictions(
 
 
 @router.get("/shortlist", response_model=ShortlistResponse, summary="Get confidence-aware scouting shortlist")
-def market_value_shortlist(
+async def market_value_shortlist(
     split: Literal["test", "val"] = Query("test"),
     top_n: int = Query(100, ge=1, le=1000),
     min_minutes: float = Query(900, ge=0),
+    min_age: Optional[float] = Query(None, ge=0),
     max_age: int = Query(25, description="Set -1 to disable."),
     positions: Optional[str] = Query(None, description="Comma-separated positions, e.g. FW,MF"),
+    role_keys: Optional[str] = Query(None, description="Comma-separated role keys, e.g. CB,DM,W,ST"),
+    non_big5_only: bool = Query(False),
+    max_market_value_eur: Optional[float] = Query(None, ge=0),
+    max_contract_years_left: Optional[float] = Query(None, ge=0),
 ) -> ShortlistResponse:
     """Return ranked shortlist of conservatively undervalued players."""
     try:
@@ -250,8 +292,13 @@ def market_value_shortlist(
             split=split,
             top_n=top_n,
             min_minutes=min_minutes,
+            min_age=min_age,
             max_age=None if max_age < 0 else float(max_age),
             positions=pos_list,
+            role_keys=[r.strip().upper() for r in role_keys.split(",") if r.strip()] if role_keys else None,
+            non_big5_only=non_big5_only,
+            max_market_value_eur=max_market_value_eur,
+            max_contract_years_left=max_contract_years_left,
         )
     except ArtifactNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -267,17 +314,21 @@ def market_value_shortlist(
     response_model=ScoutTargetsResponse,
     summary="Get top undervalued scouting targets (supports non-Big5 filter)",
 )
-def market_value_scout_targets(
+async def market_value_scout_targets(
     split: Literal["test", "val"] = Query("test"),
     top_n: int = Query(100, ge=1, le=1000),
     min_minutes: float = Query(900, ge=0),
+    min_age: Optional[float] = Query(None, ge=0),
     max_age: int = Query(23, description="Set -1 to disable."),
     min_confidence: float = Query(0.50, ge=0.0),
     min_value_gap_eur: float = Query(1_000_000.0, ge=0.0),
     min_expected_value_eur: Optional[float] = Query(None, ge=0.0),
     max_expected_value_eur: Optional[float] = Query(None, ge=0.0),
+    max_market_value_eur: Optional[float] = Query(None, ge=0.0),
+    max_contract_years_left: Optional[float] = Query(None, ge=0.0),
     non_big5_only: bool = Query(True),
     positions: Optional[str] = Query(None, description="Comma-separated positions, e.g. FW,MF"),
+    role_keys: Optional[str] = Query(None, description="Comma-separated role keys, e.g. CB,DM,W,ST"),
     include_leagues: Optional[str] = Query(
         None,
         description="Comma-separated league names to force-include.",
@@ -296,15 +347,19 @@ def market_value_scout_targets(
             split=split,
             top_n=top_n,
             min_minutes=min_minutes,
+            min_age=min_age,
             max_age=None if max_age < 0 else float(max_age),
             min_confidence=min_confidence,
             min_value_gap_eur=min_value_gap_eur,
             positions=pos_list,
+            role_keys=[r.strip().upper() for r in role_keys.split(",") if r.strip()] if role_keys else None,
             non_big5_only=non_big5_only,
             include_leagues=include_list,
             exclude_leagues=exclude_list,
             min_expected_value_eur=min_expected_value_eur,
             max_expected_value_eur=max_expected_value_eur,
+            max_market_value_eur=max_market_value_eur,
+            max_contract_years_left=max_contract_years_left,
         )
     except ArtifactNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -320,7 +375,7 @@ def market_value_scout_targets(
     response_model=WatchlistListResponse,
     summary="List saved watchlist entries",
 )
-def market_value_watchlist(
+async def market_value_watchlist(
     split: Optional[Literal["test", "val"]] = Query(None),
     tag: Optional[str] = Query(None),
     player_id: Optional[str] = Query(None),
@@ -346,7 +401,7 @@ def market_value_watchlist(
     response_model=WatchlistItemResponse,
     summary="Add a player to persisted watchlist",
 )
-def market_value_watchlist_add(payload: WatchlistAddRequest) -> WatchlistItemResponse:
+async def market_value_watchlist_add(payload: WatchlistAddRequest) -> WatchlistItemResponse:
     """Persist a watchlist entry with player snapshot and summary text."""
     try:
         item = add_watchlist_item(
@@ -371,7 +426,7 @@ def market_value_watchlist_add(payload: WatchlistAddRequest) -> WatchlistItemRes
     response_model=WatchlistDeleteResponse,
     summary="Delete watchlist entry by id",
 )
-def market_value_watchlist_delete(watch_id: str) -> WatchlistDeleteResponse:
+async def market_value_watchlist_delete(watch_id: str) -> WatchlistDeleteResponse:
     """Delete one watchlist item by watch_id."""
     try:
         payload = delete_watchlist_item(watch_id=watch_id)
@@ -385,7 +440,7 @@ def market_value_watchlist_delete(watch_id: str) -> WatchlistDeleteResponse:
     response_model=PlayerReportsResponse,
     summary="Get precise scouting breakdowns for many players",
 )
-def market_value_player_reports(
+async def market_value_player_reports(
     split: Literal["test", "val"] = Query("test"),
     season: Optional[str] = Query(None),
     league: Optional[str] = Query(None),
@@ -430,7 +485,7 @@ def market_value_player_reports(
 
 
 @router.get("/player/{player_id}", response_model=PlayerPredictionResponse, summary="Get a player prediction")
-def market_value_player(
+async def market_value_player(
     player_id: str,
     split: Literal["test", "val"] = Query("test"),
     season: Optional[str] = Query(None),
@@ -448,11 +503,41 @@ def market_value_player(
 
 
 @router.get(
+    "/player/{player_id}/profile",
+    response_model=PlayerProfileResponse,
+    summary="Get unified player profile for UI detail views",
+)
+async def market_value_player_profile(
+    player_id: str,
+    split: Literal["test", "val"] = Query("test"),
+    season: Optional[str] = Query(None),
+    top_metrics: int = Query(6, ge=1, le=10),
+    similar_top_k: int = Query(5, ge=1, le=10),
+) -> PlayerProfileResponse:
+    """Return a unified player profile payload with grouped stats, history, and similar players."""
+    try:
+        profile = get_player_profile(
+            player_id=player_id,
+            split=split,
+            season=season,
+            top_metrics=top_metrics,
+            similar_top_k=similar_top_k,
+        )
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=500, detail=f"Failed to build player profile: {exc}") from exc
+    return PlayerProfileResponse(split=split, profile=profile)
+
+
+@router.get(
     "/player/{player_id}/advanced-profile",
     response_model=PlayerAdvancedProfileResponse,
     summary="Get advanced player profile (type, radar, formation fit)",
 )
-def market_value_player_advanced_profile(
+async def market_value_player_advanced_profile(
     player_id: str,
     split: Literal["test", "val"] = Query("test"),
     season: Optional[str] = Query(None),
@@ -480,7 +565,7 @@ def market_value_player_advanced_profile(
     response_model=PlayerReportResponse,
     summary="Get scouting report for a player (strengths, risks, development levers)",
 )
-def market_value_player_report(
+async def market_value_player_report(
     player_id: str,
     split: Literal["test", "val"] = Query("test"),
     season: Optional[str] = Query(None),
@@ -508,7 +593,7 @@ def market_value_player_report(
     response_model=PlayerHistoryStrengthResponse,
     summary="Get history-strength breakdown for a player",
 )
-def market_value_player_history_strength(
+async def market_value_player_history_strength(
     player_id: str,
     split: Literal["test", "val"] = Query("test"),
     season: Optional[str] = Query(None),

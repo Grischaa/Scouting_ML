@@ -39,18 +39,16 @@ def _player_key(df: pd.DataFrame) -> pd.Series:
     raise ValueError("Dataset needs player_id or name/dob columns to build next-season target.")
 
 
-def build_future_value_targets(
+def build_future_value_targets_frame(
+    frame: pd.DataFrame,
     *,
-    input_path: str,
-    output_path: str,
     min_next_minutes: float = 450.0,
     drop_na_target: bool = False,
-) -> None:
-    df = pd.read_parquet(input_path)
-    if "market_value_eur" not in df.columns:
+) -> pd.DataFrame:
+    if "market_value_eur" not in frame.columns:
         raise ValueError("Input dataset missing 'market_value_eur'.")
 
-    out = df.copy()
+    out = frame.copy()
     out["market_value_eur"] = _to_numeric(out["market_value_eur"])
     out["minutes"] = _to_numeric(out["minutes"]) if "minutes" in out.columns else np.nan
 
@@ -62,10 +60,19 @@ def build_future_value_targets(
         raise ValueError("Input dataset needs season_end_year or season columns.")
 
     out["_player_key"] = _player_key(out)
-    sort_cols = ["_player_key", "season_end_year"]
+    dedupe_cols = ["_player_key", "season"] if "season" in out.columns else ["_player_key", "season_end_year"]
+    sort_cols = [*dedupe_cols]
+    ascending = [True] * len(dedupe_cols)
     if "minutes" in out.columns:
         sort_cols.append("minutes")
-    out = out.sort_values(sort_cols, ascending=[True, True, True], na_position="last").reset_index(drop=True)
+        ascending.append(False)
+    sort_cols.append("market_value_eur")
+    ascending.append(False)
+    out = out.sort_values(sort_cols, ascending=ascending, na_position="last")
+    out = out.drop_duplicates(subset=dedupe_cols, keep="first").copy()
+    out = out.sort_values(["_player_key", "season_end_year"], ascending=[True, True], na_position="last").reset_index(
+        drop=True
+    )
 
     grouped = out.groupby("_player_key", dropna=False)
     out["next_market_value_eur"] = grouped["market_value_eur"].shift(-1)
@@ -95,20 +102,44 @@ def build_future_value_targets(
     out["value_growth_next_season_eur"] = growth_eur.where(valid_mask)
     out["value_growth_next_season_pct"] = growth_pct.where(valid_mask)
     out["value_growth_next_season_log_delta"] = growth_log.where(valid_mask)
-    out["value_growth_positive_flag"] = (out["value_growth_next_season_eur"] > 0).astype(int)
-    out["value_growth_gt25pct_flag"] = (out["value_growth_next_season_pct"] >= 0.25).astype(int)
+    out["value_growth_positive_flag"] = pd.Series(
+        np.where(valid_mask, (growth_eur > 0).astype(float), np.nan),
+        index=out.index,
+        dtype=float,
+    )
+    out["value_growth_gt25pct_flag"] = pd.Series(
+        np.where(valid_mask, (growth_pct >= 0.25).astype(float), np.nan),
+        index=out.index,
+        dtype=float,
+    )
 
     if drop_na_target:
         out = out[out["has_next_season_target"] == 1].copy()
 
     out = out.drop(columns=["_player_key"], errors="ignore")
+    return out
+
+
+def build_future_value_targets(
+    *,
+    input_path: str,
+    output_path: str,
+    min_next_minutes: float = 450.0,
+    drop_na_target: bool = False,
+) -> None:
+    df = pd.read_parquet(input_path)
+    out = build_future_value_targets_frame(
+        df,
+        min_next_minutes=min_next_minutes,
+        drop_na_target=drop_na_target,
+    )
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     out.to_parquet(output, index=False)
 
     total_rows = int(len(df))
-    target_rows = int(valid_mask.sum())
+    target_rows = int((pd.to_numeric(out.get("has_next_season_target"), errors="coerce") == 1).sum())
     coverage = target_rows / max(total_rows, 1)
     print(f"[future-target] wrote {len(out):,} rows -> {output}")
     print(
