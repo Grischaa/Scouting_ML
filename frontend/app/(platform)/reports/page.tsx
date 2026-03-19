@@ -1,37 +1,58 @@
-import { reportBlocks, players } from "@/lib/mock-data";
+import { FileDown, LayoutPanelTop } from "lucide-react";
+import { ConfidenceBadge } from "@/components/recruitment/confidence-badge";
+import { DecisionBadge } from "@/components/recruitment/decision-badge";
+import { StatusTag } from "@/components/recruitment/status-tag";
+import { ValueGapBadge } from "@/components/recruitment/value-gap-badge";
 import { ReportBlockEditor } from "@/components/report-builder/report-block-editor";
-import { SectionHeader } from "@/components/ui/section-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/section-header";
+import { reportFocusPlayer, reportTemplates } from "@/lib/platform-data";
 
 export default function ReportsPage() {
-  const featuredPlayer = players[1];
-
   return (
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Reports"
         title="Report builder"
-        description="Assemble internal reporting packs from reusable modules so club decision-makers receive consistent, high-quality documents."
-        action={<Button variant="secondary">Create report pack</Button>}
+        description="Build one clean decision memo from the same evidence base used across discovery, shortlists, and player dossiers."
+        action={
+          <div className="flex flex-wrap gap-3">
+            <Button variant="outline" className="gap-2">
+              <LayoutPanelTop className="size-4" />
+              Use template
+            </Button>
+            <Button variant="secondary" className="gap-2">
+              <FileDown className="size-4" />
+              Create report pack
+            </Button>
+          </div>
+        }
       />
 
-      <Card>
-        <CardContent className="grid gap-4 p-6 lg:grid-cols-[1.2fr_0.8fr]">
+      <Card className="overflow-hidden">
+        <CardContent className="grid gap-4 p-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div>
-            <p className="text-label">Current focus player</p>
-            <h2 className="mt-3 text-3xl font-semibold text-text">{featuredPlayer.name}</h2>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-muted">This page is designed to feel like internal club software: structured, modular, and editorial rather than like a generic export menu.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <DecisionBadge status={reportFocusPlayer.intel.decisionStatus} size="md" />
+              <ConfidenceBadge level={reportFocusPlayer.intel.confidenceLevel} />
+              <StatusTag label={reportFocusPlayer.intel.priceRealism} />
+              <ValueGapBadge valueGapM={reportFocusPlayer.intel.valueGapM} valueGapPct={reportFocusPlayer.intel.valueGapPct} />
+            </div>
+            <h2 className="mt-4 text-3xl font-semibold text-text">{reportFocusPlayer.player.name}</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
+              The report should explain the call, the conviction behind it, and the exact next step without forcing the reader to reconstruct the model.
+            </p>
           </div>
-          <div className="rounded-[22px] border border-white/8 bg-white/[0.03] p-5">
+          <div className="rounded-[24px] bg-panel-2/65 p-5">
             <p className="text-label">Current report intent</p>
-            <p className="mt-3 text-lg font-semibold text-text">Board review for sporting director meeting</p>
-            <p className="mt-2 text-sm leading-6 text-muted">Includes summary, stats snapshot, scout notes, and final recommendation blocks.</p>
+            <p className="mt-3 text-lg font-semibold text-text">{reportFocusPlayer.intel.nextAction}</p>
+            <p className="mt-2 text-sm leading-6 text-muted">{reportFocusPlayer.intel.decisionReason}</p>
           </div>
         </CardContent>
       </Card>
 
-      <ReportBlockEditor blocks={reportBlocks} player={featuredPlayer} />
+      <ReportBlockEditor blocks={reportTemplates} player={reportFocusPlayer.player} />
     </div>
   );
 }

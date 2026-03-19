@@ -48,7 +48,7 @@ export const players: Player[] = [
       tactical: "Best in a fullback role with freedom to overlap. Reads pressing triggers quickly and supports circulation on the outside lane.",
       physical: "Explosive first five metres and very good repeat sprint capacity. Still has room to add upper-body strength.",
       mental: "Demands the ball, recovers after mistakes quickly, and appears comfortable in high-tempo matches.",
-      recommendation: "Shortlist",
+      recommendation: "Pursue",
     },
     tags: ["U23", "Non-Big5", "High progression"],
     radar: [
@@ -108,7 +108,7 @@ export const players: Player[] = [
       tactical: "Understands rest-defence shapes and screens the back line well. Better as the deeper pivot than as a box-to-box eight.",
       physical: "Good engine and decent contact balance, but not an explosive accelerator over longer distances.",
       mental: "Plays with authority, communicates often, and looks comfortable in structurally demanding phases.",
-      recommendation: "Shortlist",
+      recommendation: "Pursue",
     },
     tags: ["Contract pressure", "Press resistant", "Midfield anchor"],
     radar: [
@@ -168,7 +168,7 @@ export const players: Player[] = [
       tactical: "Best starting wide and attacking the half-space late. Needs a structure that protects him in deeper defending phases.",
       physical: "Sharp accelerator with enough repeat burst to threaten over 90 minutes.",
       mental: "Confident and proactive; does not hide after unsuccessful actions.",
-      recommendation: "Shortlist",
+      recommendation: "Review",
     },
     tags: ["Chance creation", "Wide threat", "Value gap"],
     radar: [
@@ -228,7 +228,7 @@ export const players: Player[] = [
       tactical: "Needs a possession structure and runners ahead of him. Better as a narrow ten or advanced eight than as a winger.",
       physical: "Average frame and not dominant in contact, but agile enough to escape central pressure.",
       mental: "Composed and sees early pictures. Decision-making tends to improve as game state stabilises.",
-      recommendation: "Monitor",
+      recommendation: "Watch",
     },
     tags: ["Creator", "Under market", "Technical upside"],
     radar: [
@@ -288,7 +288,7 @@ export const players: Player[] = [
       tactical: "Reads pressing lanes well and likes to step into midfield duels. Needs cover if used in very aggressive line heights.",
       physical: "Good frame and timing. Top-end pace is adequate rather than elite.",
       mental: "Assertive defender who looks comfortable leading the line despite age.",
-      recommendation: "Shortlist",
+      recommendation: "Review",
     },
     tags: ["Left-sided CB", "Development upside", "Possession fit"],
     radar: [
@@ -348,7 +348,7 @@ export const players: Player[] = [
       tactical: "Covers large spaces well and suits teams that defend front-foot but still face transition moments.",
       physical: "Strong profile with good stride speed over distance.",
       mental: "Competitive and engaged; can get drawn into aggressive duels too early.",
-      recommendation: "Monitor",
+      recommendation: "Price Check",
     },
     tags: ["Aerial profile", "Defensive floor"],
     radar: [
@@ -407,7 +407,7 @@ export const players: Player[] = [
       tactical: "Fits in possession sides using a double pivot or advanced 8. Less valuable in low-possession environments.",
       physical: "Mobile enough but not a pure athlete. Relies on timing more than burst.",
       mental: "Plays with maturity and rarely rushes his next action.",
-      recommendation: "Shortlist",
+      recommendation: "Review",
     },
     tags: ["Left foot", "Possession fit", "Contract watch"],
     radar: [
@@ -466,7 +466,7 @@ export const players: Player[] = [
       tactical: "Best in a team that attacks space. Less convincing when asked to pin and combine for long spells.",
       physical: "Fast and springy, with clear development runway as frame fills out.",
       mental: "Attacks moments aggressively and responds well to repeated high-risk actions.",
-      recommendation: "Shortlist",
+      recommendation: "Watch",
     },
     tags: ["U21", "High upside", "Transition"],
     radar: [
@@ -526,7 +526,7 @@ export const players: Player[] = [
       tactical: "Useful if you want to hold a higher line and start cleanly from the back.",
       physical: "Good size and movement profile, particularly on aggressive claims.",
       mental: "Confident on the ball but can overforce difficult restarts.",
-      recommendation: "Monitor",
+      recommendation: "Pass",
     },
     tags: ["GK market", "Distribution"],
     radar: [
@@ -583,7 +583,7 @@ export const players: Player[] = [
       tactical: "Useful as an aggressive eight. Less convincing as the sole rhythm-setter.",
       physical: "Strong engine and enough athleticism to play at higher intensity.",
       mental: "Competitive and relentless, though occasionally rushes actions in possession.",
-      recommendation: "Monitor",
+      recommendation: "Price Check",
     },
     tags: ["Fair value", "High motor"],
     radar: [
@@ -640,7 +640,7 @@ export const players: Player[] = [
       tactical: "Works best arriving from wide into central lanes rather than being the primary creator.",
       physical: "Very good acceleration and enough flexibility to attack different spaces.",
       mental: "Positive, direct, and still learning game management.",
-      recommendation: "Monitor",
+      recommendation: "Watch",
     },
     tags: ["Development wing", "High variance"],
     radar: [
@@ -697,7 +697,7 @@ export const players: Player[] = [
       tactical: "Useful in teams that value balance from the fullback slot more than pure attacking output.",
       physical: "Solid frame with good durability, though not a true explosive runner.",
       mental: "Stable performer with low-error profile.",
-      recommendation: "Monitor",
+      recommendation: "Price Check",
     },
     tags: ["Defensive fullback", "Reliable floor"],
     radar: [
@@ -796,7 +796,7 @@ export const reportBlocks: ReportBlock[] = [
   { id: "stats", label: "Stats Snapshot", description: "KPI module with percentile bars and trend call-outs." },
   { id: "strengths", label: "Strengths / Weaknesses", description: "Clear recruitment positives and red flags." },
   { id: "notes", label: "Scout Notes", description: "Attach qualitative notes from live reports and video review." },
-  { id: "recommendation", label: "Recommendation", description: "Final call: monitor, shortlist, sign, or pass." },
+  { id: "recommendation", label: "Decision Call", description: "Final call: pursue, review, watch, price check, or pass." },
 ];
 
 export const teamCards: TeamCard[] = [

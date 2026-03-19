@@ -1,50 +1,67 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
+import { Line, LineChart, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
+import { ArrowRightLeft, FileDown } from "lucide-react";
+import { ConfidenceBadge } from "@/components/recruitment/confidence-badge";
+import { DecisionBadge } from "@/components/recruitment/decision-badge";
+import { StatusTag } from "@/components/recruitment/status-tag";
+import { ValueGapBadge } from "@/components/recruitment/value-gap-badge";
+import { PlayerComparisonRow } from "@/components/compare/player-comparison-row";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { SectionHeader } from "@/components/ui/section-header";
-import { PlayerComparisonRow } from "@/components/compare/player-comparison-row";
-import { players } from "@/lib/mock-data";
-import type { Player } from "@/lib/types";
-import { formatCurrencyMillions } from "@/lib/utils";
+import { compareDefaultIds, playerProfiles } from "@/lib/platform-data";
+import type { PlayerProfile } from "@/lib/types";
+import { formatCurrencyMillions, formatDateLabel } from "@/lib/utils";
 
-const defaultIds = ["p1", "p2", "p3"];
 const colors = ["#2EC27E", "#4EA1FF", "#F4B740"];
 
 export default function ComparePage() {
-  const [selectedIds, setSelectedIds] = useState(defaultIds);
+  const [selectedIds, setSelectedIds] = useState(compareDefaultIds);
 
-  const selectedPlayers = useMemo(
-    () => selectedIds.map((id) => players.find((player) => player.id === id)).filter(Boolean) as Player[],
+  const selectedProfiles = useMemo(
+    () =>
+      selectedIds
+        .map((id) => playerProfiles.find((profile) => profile.player.id === id))
+        .filter(Boolean) as PlayerProfile[],
     [selectedIds],
   );
 
   const radarData = useMemo(() => {
-    if (!selectedPlayers.length) return [];
-    const labels = selectedPlayers[0].radar.map((item) => item.subject);
+    if (!selectedProfiles.length) return [];
+    const labels = selectedProfiles[0].player.radar.map((item) => item.subject);
     return labels.map((label) => {
       const row: Record<string, string | number> = { subject: label };
-      selectedPlayers.forEach((player) => {
+      selectedProfiles.forEach(({ player }) => {
         row[player.name] = player.radar.find((item) => item.subject === label)?.value ?? 0;
       });
       return row;
     });
-  }, [selectedPlayers]);
+  }, [selectedProfiles]);
 
   return (
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Compare"
         title="Player comparison room"
-        description="Compare two or three targets side by side to make trade-offs obvious before the final shortlist discussion."
-        action={<Button variant="secondary">Export comparison</Button>}
+        description="Make the decision trade-offs obvious before the final board discussion: conviction, price stance, and the exact next action."
+        action={
+          <Button variant="secondary" className="gap-2">
+            <FileDown className="size-4" />
+            Export comparison
+          </Button>
+        }
       />
 
-      <Card>
+      <Card className="sticky top-[104px] z-20">
         <CardHeader>
-          <SectionHeader title="Selected players" description="Use this sticky comparison header to swap targets without losing the page context." />
+          <SectionHeader
+            eyebrow="Selectors"
+            title="Comparison header"
+            description="Swap targets without losing the decision context beneath."
+            action={<ArrowRightLeft className="size-4 text-blue" />}
+          />
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           {[0, 1, 2].map((index) => (
@@ -52,11 +69,15 @@ export default function ComparePage() {
               <span className="text-label">Player {index + 1}</span>
               <select
                 value={selectedIds[index]}
-                onChange={(event) => setSelectedIds((current) => current.map((item, i) => (i === index ? event.target.value : item)))}
+                onChange={(event) =>
+                  setSelectedIds((current) => current.map((item, i) => (i === index ? event.target.value : item)))
+                }
                 className="h-12 w-full rounded-2xl border border-white/10 bg-panel-2/80 px-4 text-sm text-text outline-none focus:border-blue/60"
               >
-                {players.map((player) => (
-                  <option key={player.id} value={player.id}>{player.name}</option>
+                {playerProfiles.map(({ player }) => (
+                  <option key={player.id} value={player.id}>
+                    {player.name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -64,10 +85,10 @@ export default function ComparePage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <Card>
           <CardHeader>
-            <SectionHeader title="Radar comparison" description="Role-shape differences displayed on one tactical profile chart." />
+            <SectionHeader title="Radar comparison" description="How the players differ in tactical profile and all-phase shape." />
           </CardHeader>
           <CardContent>
             <div className="h-[360px]">
@@ -75,14 +96,14 @@ export default function ComparePage() {
                 <RadarChart data={radarData} outerRadius="70%">
                   <PolarGrid stroke="rgba(255,255,255,0.08)" />
                   <PolarAngleAxis dataKey="subject" tick={{ fill: "#94A3B8", fontSize: 11 }} />
-                  {selectedPlayers.map((player, index) => (
+                  {selectedProfiles.map(({ player }, index) => (
                     <Radar
                       key={player.id}
                       name={player.name}
                       dataKey={player.name}
                       stroke={colors[index]}
                       fill={colors[index]}
-                      fillOpacity={0.16}
+                      fillOpacity={0.12}
                       strokeWidth={2.4}
                     />
                   ))}
@@ -94,27 +115,32 @@ export default function ComparePage() {
 
         <Card>
           <CardHeader>
-            <SectionHeader title="Snapshot" description="Immediate pricing, age, and role context before diving into detailed rows." />
+            <SectionHeader title="Decision snapshot" description="The call, the conviction, and the next action before deeper comparison." />
           </CardHeader>
-          <CardContent className="space-y-3">
-            {selectedPlayers.map((player, index) => (
-              <div key={player.id} className="rounded-[22px] border border-white/8 bg-white/[0.03] p-4">
-                <div className="flex items-center justify-between">
+          <CardContent className="space-y-4">
+            {selectedProfiles.map(({ player, intel }, index) => (
+              <div key={player.id} className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
+                <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-base font-semibold text-text">{player.name}</p>
-                    <p className="mt-1 text-sm text-muted">{player.club} · {player.position}</p>
+                    <p className="mt-1 text-sm text-muted">
+                      {player.club} · {player.position}
+                    </p>
                   </div>
                   <span className="size-3 rounded-full" style={{ backgroundColor: colors[index] }} />
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-label">Score</p>
-                    <p className="mt-2 text-lg font-semibold text-text">{player.scoutingScore}</p>
-                  </div>
-                  <div>
-                    <p className="text-label">Value</p>
-                    <p className="mt-2 text-lg font-semibold text-text">{formatCurrencyMillions(player.marketValueM)}</p>
-                  </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <DecisionBadge status={intel.decisionStatus} />
+                  <ConfidenceBadge level={intel.confidenceLevel} compact />
+                  <StatusTag label={intel.priceRealism} />
+                </div>
+                <p className="mt-3 text-sm font-medium text-slate-100">{intel.nextAction}</p>
+                <div className="mt-4 h-20">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={player.trend}>
+                      <Line type="monotone" dataKey="value" stroke={colors[index]} strokeWidth={2.2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             ))}
@@ -123,29 +149,55 @@ export default function ComparePage() {
       </div>
 
       <div className="space-y-4">
-        <PlayerComparisonRow label="Scouting score" values={selectedPlayers.map((player, index) => ({ name: player.name, value: player.scoutingScore, highlight: index === 0 }))} />
-        <PlayerComparisonRow label="Market value" values={selectedPlayers.map((player) => ({ name: player.name, value: formatCurrencyMillions(player.marketValueM) }))} />
-        <PlayerComparisonRow label="Minutes played" values={selectedPlayers.map((player) => ({ name: player.name, value: player.minutes.toLocaleString("en-GB") }))} />
-        <PlayerComparisonRow label="Preferred foot" values={selectedPlayers.map((player) => ({ name: player.name, value: player.preferredFoot }))} />
+        <PlayerComparisonRow label="Decision" values={selectedProfiles.map(({ player, intel }) => ({ name: player.name, value: intel.decisionStatus }))} />
+        <PlayerComparisonRow label="Next action" values={selectedProfiles.map(({ player, intel }) => ({ name: player.name, value: intel.nextAction }))} />
+        <PlayerComparisonRow label="Confidence" values={selectedProfiles.map(({ player, intel }) => ({ name: player.name, value: intel.confidenceLevel }))} />
+        <PlayerComparisonRow
+          label="Value gap"
+          values={selectedProfiles.map(({ player, intel }) => ({
+            name: player.name,
+            value: `${formatCurrencyMillions(intel.valueGapM)} (${intel.valueGapPct}%)`,
+            highlight: intel.valueGapM === Math.max(...selectedProfiles.map((item) => item.intel.valueGapM)),
+          }))}
+        />
+        <PlayerComparisonRow label="Price stance" values={selectedProfiles.map(({ player, intel }) => ({ name: player.name, value: intel.priceRealism }))} />
+        <PlayerComparisonRow label="Contract expiry" values={selectedProfiles.map(({ player }) => ({ name: player.name, value: formatDateLabel(player.contractExpiry) }))} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
-        {selectedPlayers.map((player) => (
+        {selectedProfiles.map(({ player, intel }) => (
           <Card key={player.id}>
             <CardHeader>
-              <SectionHeader title={player.name} description={`${player.archetype} · ${player.form} form`} />
+              <SectionHeader title={player.name} description={`${intel.roleFitLabel} · ${intel.contractUrgency}`} />
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <DecisionBadge status={intel.decisionStatus} />
+                <StatusTag label={intel.readiness} />
+                <StatusTag label={intel.priceRealism} />
+              </div>
+              <div className="rounded-[22px] border border-white/8 bg-panel-2/70 p-4">
+                <p className="text-label">Decision reason</p>
+                <p className="mt-3 text-sm leading-6 text-slate-300">{intel.decisionReason}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <ValueGapBadge valueGapM={intel.valueGapM} valueGapPct={intel.valueGapPct} compact />
+                  <StatusTag label={intel.priceRealism} />
+                </div>
+              </div>
               <div>
                 <p className="text-label">Strengths</p>
                 <ul className="mt-3 space-y-2 text-sm text-slate-300">
-                  {player.strengths.map((item) => <li key={item}>• {item}</li>)}
+                  {player.strengths.map((item) => (
+                    <li key={item}>• {item}</li>
+                  ))}
                 </ul>
               </div>
               <div>
                 <p className="text-label">Concerns</p>
                 <ul className="mt-3 space-y-2 text-sm text-slate-300">
-                  {player.concerns.map((item) => <li key={item}>• {item}</li>)}
+                  {player.concerns.map((item) => (
+                    <li key={item}>• {item}</li>
+                  ))}
                 </ul>
               </div>
             </CardContent>

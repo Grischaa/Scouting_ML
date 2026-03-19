@@ -93,6 +93,16 @@ const el = {
     funnel: document.getElementById("view-funnel"),
   },
 
+  overviewPosturePill: document.getElementById("overview-posture-pill"),
+  overviewPostureTitle: document.getElementById("overview-posture-title"),
+  overviewPostureCopy: document.getElementById("overview-posture-copy"),
+  overviewPricingStatus: document.getElementById("overview-pricing-status"),
+  overviewPricingCopy: document.getElementById("overview-pricing-copy"),
+  overviewRankingStatus: document.getElementById("overview-ranking-status"),
+  overviewRankingCopy: document.getElementById("overview-ranking-copy"),
+  overviewCoverageStatus: document.getElementById("overview-coverage-status"),
+  overviewCoverageCopy: document.getElementById("overview-coverage-copy"),
+
   trustModelVersion: document.getElementById("trust-model-version"),
   trustUpdated: document.getElementById("trust-updated"),
   trustDataset: document.getElementById("trust-dataset"),
@@ -162,8 +172,17 @@ const el = {
   detailOpenProfile: document.getElementById("detail-open-profile"),
   detailTabButtons: Array.from(document.querySelectorAll("[data-detail-tab]")),
   detailPanels: Array.from(document.querySelectorAll("[data-detail-panel]")),
+  detailDecisionPill: document.getElementById("detail-decision-pill"),
+  detailDecisionNext: document.getElementById("detail-decision-next"),
+  detailDecisionReason: document.getElementById("detail-decision-reason"),
   detailName: document.getElementById("detail-name"),
   detailMeta: document.getElementById("detail-meta"),
+  detailGap: document.getElementById("detail-gap"),
+  detailGapNote: document.getElementById("detail-gap-note"),
+  detailConfidenceScore: document.getElementById("detail-confidence-score"),
+  detailConfidenceNote: document.getElementById("detail-confidence-note"),
+  detailPriceStance: document.getElementById("detail-price-stance"),
+  detailPriceContext: document.getElementById("detail-price-context"),
   detailMarket: document.getElementById("detail-market"),
   detailExpected: document.getElementById("detail-expected"),
   detailLower: document.getElementById("detail-lower"),
@@ -226,6 +245,13 @@ const el = {
   funnelRunBtn: document.getElementById("funnel-run-btn"),
   funnelExportBtn: document.getElementById("funnel-export-btn"),
   funnelMeta: document.getElementById("funnel-meta"),
+  funnelSummaryTitle: document.getElementById("funnel-summary-title"),
+  funnelSummaryLeague: document.getElementById("funnel-summary-league"),
+  funnelSummaryCount: document.getElementById("funnel-summary-count"),
+  funnelSummaryGap: document.getElementById("funnel-summary-gap"),
+  funnelSummaryConfidence: document.getElementById("funnel-summary-confidence"),
+  funnelSummaryStatus: document.getElementById("funnel-summary-status"),
+  funnelSummaryCopy: document.getElementById("funnel-summary-copy"),
   funnelBody: document.getElementById("funnel-body"),
   funnelLeagueBody: document.getElementById("funnel-league-body"),
 
@@ -577,6 +603,127 @@ function rowSignalCoverage(row) {
 
 function buildBadgeChipMarkup(label, tone = "neutral") {
   return `<span class="badge-chip badge-chip--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+}
+
+function buildDecisionPillMarkup(decision) {
+  const tone = safeText(decision?.tone || "neutral").toLowerCase();
+  const label = safeText(decision?.label || "Waiting");
+  return `<span class="decision-pill decision-pill--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+}
+
+function classifyConfidenceSignal(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return { band: "unknown", label: "Unknown", tone: "neutral", note: "Confidence unavailable." };
+  }
+  if (n <= 1.2) {
+    if (n >= 0.72) return { band: "strong", label: "Strong", tone: "pursue", note: "Strong confidence signal." };
+    if (n >= 0.58) return { band: "decent", label: "Decent", tone: "watch", note: "Decent confidence signal." };
+    if (n >= 0.42) return { band: "thin", label: "Thin", tone: "price", note: "Thin confidence signal." };
+    return { band: "weak", label: "Weak", tone: "pass", note: "Weak confidence signal." };
+  }
+  if (n >= 5) return { band: "strong", label: "Strong", tone: "pursue", note: "Strong confidence signal." };
+  if (n >= 3.5) return { band: "decent", label: "Decent", tone: "watch", note: "Decent confidence signal." };
+  if (n >= 2.2) return { band: "thin", label: "Thin", tone: "price", note: "Thin confidence signal." };
+  return { band: "weak", label: "Weak", tone: "pass", note: "Weak confidence signal." };
+}
+
+function summarizeRecruitmentDecision(row, report = null, { source = "workbench" } = {}) {
+  const gaps = deriveGapValues(row, report);
+  const market = firstFiniteNumber(report?.valuation_guardrails?.market_value_eur, row?.market_value_eur);
+  const expected = firstFiniteNumber(report?.valuation_guardrails?.fair_value_eur, row?.expected_value_eur);
+  const confidenceScore = firstFiniteNumber(report?.confidence?.score_0_to_1, row?.undervaluation_confidence);
+  const confidence = classifyConfidenceSignal(confidenceScore);
+  const leagueStatus = summarizeLeagueStatus(row?.league);
+  const minutes = getMinutes(row);
+  const futureProb = firstFiniteNumber(row?.future_growth_probability);
+  const gap = Number(gaps.capped);
+  const gapRatio = Number.isFinite(gap) && Number.isFinite(market) && market > 0 ? gap / market : NaN;
+  let score = 0;
+
+  if (Number.isFinite(gap)) {
+    if (gap >= 2_500_000 || gapRatio >= 1.2) score += 2;
+    else if (gap >= 1_000_000 || gapRatio >= 0.6) score += 1;
+    else if (gap <= 0) score -= 2;
+  }
+
+  if (confidence.band === "strong") score += 2;
+  else if (confidence.band === "decent") score += 1;
+  else if (confidence.band === "weak") score -= 1;
+
+  if (Number.isFinite(minutes) && minutes >= 1800) score += 1;
+  else if (Number.isFinite(minutes) && minutes < 600) score -= 1;
+
+  if (Number.isFinite(futureProb) && futureProb >= 0.55) score += 1;
+
+  if (leagueStatus.tone === "bad") score -= 2;
+  else if (leagueStatus.tone === "warn") score -= 1;
+
+  let label = "Pass";
+  let tone = "pass";
+  let reason = "There is not enough investable upside or confidence to justify attention right now.";
+  let nextAction = "Do not prioritize live scouting.";
+  let priceStance = "Too thin for an active push";
+
+  if (Number.isFinite(gap) && gap > 0) {
+    if (score >= 4) {
+      label = "Pursue";
+      tone = "pursue";
+      reason = "The guardrailed upside is strong enough to justify live follow-up, not just passive monitoring.";
+      nextAction = "Open the memo and assign a live scouting step.";
+      priceStance = "Investable upside";
+    } else if (score >= 2) {
+      label = "Watch";
+      tone = "watch";
+      reason = "There is real upside here, but the case still needs another layer of validation before it becomes a push target.";
+      nextAction = "Keep on shortlist and validate through the memo.";
+      priceStance = "Positive but not fully proven";
+    } else {
+      label = "Price Only";
+      tone = "price";
+      reason = "The valuation delta is useful for pricing discipline, but the recruitment case is too thin for an active chase.";
+      nextAction = "Use as a pricing reference or low-priority comparable.";
+      priceStance = "Pricing reference";
+    }
+  }
+
+  if (source === "predictions" && label === "Pursue") {
+    label = "Price Only";
+    tone = "price";
+    reason = "This view is manually sorted for valuation work. Treat the signal as pricing guidance, not a live pursuit order.";
+    nextAction = "Use for pricing discipline, then switch back to Recruitment Board for live ranking.";
+    priceStance = "Valuation view";
+  }
+
+  const gapNote = Number.isFinite(gap)
+    ? `${formatCurrency(gap)} capped gap${Number.isFinite(gaps.conservative) && gaps.capApplied ? ` from ${formatCurrency(gaps.conservative)} raw` : ""}`
+    : "No guardrailed gap available";
+  const confidenceNote = Number.isFinite(confidenceScore)
+    ? `${confidence.label} confidence | score ${formatNumber(confidenceScore)}`
+    : "Confidence unavailable";
+  const priceContext = [
+    Number.isFinite(market) ? `Market ${formatCurrency(market)}` : null,
+    Number.isFinite(expected) ? `Expected ${formatCurrency(expected)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  return {
+    label,
+    tone,
+    reason,
+    nextAction,
+    priceStance,
+    gap,
+    gapNote,
+    confidenceScore,
+    confidenceLabel: confidence.label,
+    confidenceTone: confidence.tone,
+    confidenceNote,
+    priceContext: priceContext || "Market and expected value unavailable.",
+    leagueTone: leagueStatus.tone,
+    leagueNote: leagueStatus.note,
+  };
 }
 
 function buildProvenanceBadges(row) {
@@ -1427,7 +1574,7 @@ function setLoading(loading) {
   el.prevBtn.disabled = loading;
   el.nextBtn.disabled = loading;
   if (loading) {
-    el.tbody.innerHTML = "<tr><td colspan=\"10\">Loading data...</td></tr>";
+    el.tbody.innerHTML = "<tr><td colspan=\"9\">Loading data...</td></tr>";
   }
 }
 
@@ -1728,6 +1875,120 @@ function renderBenchmarkCards() {
     : "No weak-slice diagnostics loaded";
 }
 
+function renderOverviewReadiness() {
+  if (!el.overviewPosturePill) return;
+
+  if (!state.metrics) {
+    el.overviewPosturePill.className = "decision-pill decision-pill--neutral";
+    el.overviewPosturePill.textContent = "Waiting";
+    el.overviewPostureTitle.textContent = "Connect the API to judge whether the live recruitment workflow is ready.";
+    el.overviewPostureCopy.textContent =
+      "This page should answer, quickly, whether the platform is safe enough to use for live shortlist and pricing work today.";
+    el.overviewPricingStatus.textContent = "-";
+    el.overviewPricingCopy.textContent = "Connect API to load pricing diagnostics.";
+    el.overviewRankingStatus.textContent = "-";
+    el.overviewRankingCopy.textContent = "Connect API to load shortlist-routing posture.";
+    el.overviewCoverageStatus.textContent = "-";
+    el.overviewCoverageCopy.textContent =
+      "Connect API to load where the workflow is investable and where it is still fragile.";
+    return;
+  }
+
+  const overallTestMape = Number(state.metrics?.overall?.test?.mape);
+  const overallTestR2 = Number(state.metrics?.overall?.test?.r2);
+  const segments = state.metrics?.segments?.test || [];
+  const under5 = segments.find((row) => row.segment === "under_5m");
+  const under5Mape = Number(under5?.mape);
+  const champion = activeChampionRoutingSummary();
+  const onboardingCounts = state.benchmark?.onboarding?.status_counts || {};
+  const blocked = Number(onboardingCounts.blocked) || 0;
+  const watch = Number(onboardingCounts.watch) || 0;
+  const ready = Number(onboardingCounts.ready) || 0;
+
+  let pricingTone = "pursue";
+  let pricingStatus = "Aggressive with guardrails";
+  let pricingCopy = "Pricing is disciplined enough to support live shortlist work, provided you stay with conservative gaps.";
+  if ((Number.isFinite(under5Mape) && under5Mape > 0.45) || (Number.isFinite(overallTestMape) && overallTestMape > 0.4)) {
+    pricingTone = "watch";
+    pricingStatus = "Guardrail-heavy";
+    pricingCopy =
+      "Low-value pricing is still noisy. Use the valuation layer for discipline, not for exact price certainty.";
+  }
+  if ((Number.isFinite(under5Mape) && under5Mape > 0.6) || (Number.isFinite(overallTestMape) && overallTestMape > 0.5)) {
+    pricingTone = "price";
+    pricingStatus = "Price with caution";
+    pricingCopy = "Exact valuation is still too fragile in key segments. Treat the price layer as an anchor, not a verdict.";
+  }
+
+  let rankingTone = "pursue";
+  let rankingStatus = "Shortlist-ready";
+  let rankingCopy = `Valuation champion ${champion.valuationLabel} and shortlist champion ${champion.futureShortlistLabel} are live.`;
+  if (!state.modelManifest || champion.futureShortlistLabel === "-") {
+    rankingTone = "watch";
+    rankingStatus = "Routing unclear";
+    rankingCopy = "Shortlist routing is not clearly surfaced. Analysts will need to stay closer to diagnostics.";
+  } else if ((Number.isFinite(overallTestR2) && overallTestR2 < 0.45) || champion.futureShortlistLabel === champion.valuationLabel) {
+    rankingTone = "watch";
+    rankingStatus = "Functional, not decisive";
+    rankingCopy = "Ranking is live, but the workflow still leans heavily on pricing posture and manual judgement.";
+  }
+
+  let coverageTone = "pursue";
+  let coverageStatus = "Deployable across active leagues";
+  let coverageCopy = `${formatInt(ready)} ready | ${formatInt(watch)} watch | ${formatInt(blocked)} blocked in current onboarding diagnostics.`;
+  if (watch > 0 || blocked > 0) {
+    coverageTone = "watch";
+    coverageStatus = "Selective deployment";
+    coverageCopy = `${formatInt(ready)} ready leagues, ${formatInt(watch)} watch leagues, ${formatInt(blocked)} blocked leagues. Stay selective on coverage quality.`;
+  }
+  if (blocked > ready && blocked > 0) {
+    coverageTone = "price";
+    coverageStatus = "Coverage still patchy";
+    coverageCopy = "Too many leagues remain blocked or noisy for broad live deployment. Lean on league guardrails before acting.";
+  }
+
+  const tones = [pricingTone, rankingTone, coverageTone];
+  const overallTone = tones.includes("price")
+    ? "price"
+    : tones.includes("watch")
+    ? "watch"
+    : tones.includes("pass")
+    ? "pass"
+    : "pursue";
+  const overallLabel =
+    overallTone === "pursue"
+      ? "Operational"
+      : overallTone === "watch"
+      ? "Selective"
+      : overallTone === "price"
+      ? "Cautious"
+      : "Blocked";
+  const overallCopy =
+    overallTone === "pursue"
+      ? "The workflow is good enough for live shortlist decisions, with the memo and guardrails acting as the final decision layer."
+      : overallTone === "watch"
+      ? "The workflow can support live work, but you should be selective about leagues and avoid over-trusting exact price points."
+      : overallTone === "price"
+      ? "The platform still behaves more like a pricing and research aid than a fully trusted recruitment operating surface."
+      : "The workflow should not drive live recruitment decisions yet.";
+
+  el.overviewPosturePill.className = `decision-pill decision-pill--${overallTone}`;
+  el.overviewPosturePill.textContent = overallLabel;
+  el.overviewPostureTitle.textContent =
+    overallTone === "pursue"
+      ? "The live recruitment workflow is ready for shortlist work."
+      : overallTone === "watch"
+      ? "The live workflow is usable, but only with visible caution."
+      : "The live workflow is not yet fully trustworthy as a recruitment operating surface.";
+  el.overviewPostureCopy.textContent = overallCopy;
+  el.overviewPricingStatus.textContent = pricingStatus;
+  el.overviewPricingCopy.textContent = pricingCopy;
+  el.overviewRankingStatus.textContent = rankingStatus;
+  el.overviewRankingCopy.textContent = rankingCopy;
+  el.overviewCoverageStatus.textContent = coverageStatus;
+  el.overviewCoverageCopy.textContent = coverageCopy;
+}
+
 function renderWatchlist() {
   if (!el.watchlistBody || !el.watchlistMeta) return;
   const rows = Array.isArray(state.watchlistRows) ? state.watchlistRows : [];
@@ -1869,7 +2130,7 @@ function renderRows() {
       state.mode === "shortlist"
         ? "No recruitment targets matched the current filters. Lower the minutes / age thresholds or switch to Valuation Board to inspect the full artifact."
         : "No valuation rows matched the current filters. Relax the manual sort filters or switch to Recruitment Board for score-driven ranking.";
-    el.tbody.innerHTML = `<tr><td colspan="10">${emptyMessage}</td></tr>`;
+    el.tbody.innerHTML = `<tr><td colspan="9">${emptyMessage}</td></tr>`;
     el.resultCount.textContent = "0 rows";
     el.resultRange.textContent = "offset 0";
     return;
@@ -1879,6 +2140,9 @@ function renderRows() {
     .map((row, idx) => {
       const consGap = conservativeGapForRanking(row);
       const selected = state.selectedRow && rowKey(state.selectedRow) === rowKey(row) ? " selected-row" : "";
+      const decision = summarizeRecruitmentDecision(row, null, {
+        source: state.mode === "predictions" ? "predictions" : "workbench",
+      });
       const scoreContext = resolveRowScoreContext(
         row,
         state.mode === "shortlist" ? state.queryDiagnostics : null,
@@ -1891,7 +2155,7 @@ function renderRows() {
         <tr data-index="${idx}" class="${selected.trim()}">
           <td class="player-cell">
             <strong>${safeText(row.name)}</strong>
-            <span class="player-cell__sub">${safeText(row.season)}</span>
+            <span class="player-cell__sub">${safeText(row.club)} | ${safeText(row.league)} | ${safeText(row.season)}</span>
             <div class="player-cell__badges">${badges}</div>
             <span class="player-cell__note">${escapeHtml(scoreContext.scoreLabel)}${
               Number.isFinite(scoreContext.scoreValue)
@@ -1899,15 +2163,19 @@ function renderRows() {
                 : ""
             }</span>
           </td>
-          <td>${safeText(row.club)}</td>
-          <td>${safeText(row.league)}</td>
+          <td>
+            <div class="table-status">
+              ${buildDecisionPillMarkup(decision)}
+              <span class="table-status__note">${escapeHtml(decision.gapNote)}</span>
+            </div>
+          </td>
           <td>${safeText(getPosition(row))}</td>
           <td class="num">${formatNumber(row.age)}</td>
           <td class="num">${formatCurrency(row.market_value_eur)}</td>
-          <td class="num">${formatCurrency(row.expected_value_eur)}</td>
           <td class="num ${consGap >= 0 ? "positive" : "negative"}">${formatCurrency(consGap)}</td>
           <td class="num">${formatNumber(row.undervaluation_confidence)}</td>
           <td class="num">${formatInt(getMinutes(row))}</td>
+          <td><span class="action-copy">${escapeHtml(decision.nextAction)}</span></td>
         </tr>
       `;
     })
@@ -2549,6 +2817,24 @@ function clearDetail() {
   state.selectedHistory = null;
   el.detailContent.hidden = true;
   el.detailPlaceholder.hidden = false;
+  el.detailDecisionPill.className = "decision-pill decision-pill--neutral";
+  el.detailDecisionPill.textContent = "Waiting";
+  el.detailDecisionNext.textContent = "Select a player to see the recommended next move.";
+  el.detailDecisionReason.textContent = "Select a player to evaluate price upside and actionability.";
+  el.detailGap.textContent = "-";
+  el.detailGapNote.textContent = "Guardrailed upside";
+  el.detailConfidenceScore.textContent = "-";
+  el.detailConfidenceNote.textContent = "Model confidence posture";
+  el.detailPriceStance.textContent = "-";
+  el.detailPriceContext.textContent = "Market vs expected value";
+  el.detailName.textContent = "";
+  el.detailMeta.textContent = "";
+  el.detailMarket.textContent = "-";
+  el.detailExpected.textContent = "-";
+  el.detailLower.textContent = "-";
+  el.barMarket.style.width = "0";
+  el.barExpected.style.width = "0";
+  el.barLower.style.width = "0";
   el.detailSummary.textContent = "Select a player to load scouting summary.";
   el.detailRoleSummary.textContent = "Select a player to inspect the position-specific metric lens.";
   el.detailRoleMetrics.innerHTML =
@@ -2605,6 +2891,9 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
     rankingDiagnostics,
     Number.isFinite(Number(row?._funnelScore)) ? "funnel" : state.mode === "shortlist" ? "shortlist" : "predictions"
   );
+  const decision = summarizeRecruitmentDecision(mergedRow, profile, {
+    source: Number.isFinite(Number(row?._funnelScore)) ? "funnel" : state.mode === "predictions" ? "predictions" : "workbench",
+  });
   const roleLens = buildRoleLens(mergedRow, profile);
   const leagueStatus = summarizeLeagueStatus(mergedRow.league);
   const coverageWarnings = detailCoverageWarnings(mergedRow, profile);
@@ -2631,7 +2920,19 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
   el.detailName.textContent = safeText(mergedRow.name);
   el.detailMeta.textContent = `${safeText(mergedRow.club)} | ${safeText(mergedRow.league)} | ${safeText(
     getPosition(mergedRow)
-  )} | ${safeText(mergedRow.season)}`;
+  )} | age ${formatNumber(mergedRow.age)} | ${formatInt(getMinutes(mergedRow))} minutes`;
+  el.detailDecisionPill.className = `decision-pill decision-pill--${decision.tone}`;
+  el.detailDecisionPill.textContent = decision.label;
+  el.detailDecisionNext.textContent = decision.nextAction;
+  el.detailDecisionReason.textContent = decision.reason;
+  el.detailGap.textContent = Number.isFinite(decision.gap) ? formatCurrency(decision.gap) : "-";
+  el.detailGapNote.textContent = decision.gapNote;
+  el.detailConfidenceScore.textContent = Number.isFinite(decision.confidenceScore)
+    ? `${decision.confidenceLabel} | ${formatNumber(decision.confidenceScore)}`
+    : decision.confidenceLabel;
+  el.detailConfidenceNote.textContent = decision.confidenceNote;
+  el.detailPriceStance.textContent = decision.priceStance;
+  el.detailPriceContext.textContent = decision.priceContext;
   el.detailBadges.innerHTML = provenanceBadges;
   el.detailScoreDriver.textContent = `${scoreContext.scoreLabel}${
     Number.isFinite(scoreContext.scoreValue)
@@ -2660,18 +2961,16 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
 
   const rows = [
     ["League", safeText(mergedRow.league)],
+    ["Price stance", decision.priceStance],
     ["Age", formatNumber(mergedRow.age)],
     ["Minutes", formatInt(getMinutes(mergedRow))],
     ["Role Lens", safeText(roleLens.label)],
-    ["Value Gap (raw)", formatCurrency(gaps.raw)],
-    ["Conservative Gap (raw)", formatCurrency(gaps.conservative)],
-    ["Conservative Gap (capped)", formatCurrency(gaps.capped)],
+    ["Conservative Gap (capped)", formatCurrency(decision.gap)],
     ["Cap Threshold", formatCurrency(gaps.capThreshold)],
-    ["Confidence", formatNumber(mergedRow.undervaluation_confidence)],
+    ["Confidence", Number.isFinite(decision.confidenceScore) ? `${decision.confidenceLabel} | ${formatNumber(decision.confidenceScore)}` : decision.confidenceLabel],
     ["Segment", safeText(mergedRow.value_segment)],
     ["Position Model", safeText(mergedRow.model_position)],
     ["Pred Low", formatCurrency(mergedRow.expected_value_low_eur)],
-    ["Pred High", formatCurrency(mergedRow.expected_value_high_eur)],
   ];
 
   el.detailList.innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
@@ -2833,7 +3132,7 @@ function renderResultsNote() {
   if (!el.resultsNote) return;
   const filterSummary = describeRecruitmentFilters(currentWorkbenchWorkflowSummary());
   if (state.mode === "predictions") {
-    el.resultsNote.textContent = `Valuation board is manually sorted by ${humanizeScoreColumn(state.sortBy)} (${state.sortOrder}). Workflow filters: ${filterSummary}. Use Recruitment Board or Target Funnel when you want model-driven scouting rank for live recruitment work.`;
+    el.resultsNote.textContent = `This is a valuation view, not a live pursuit order. Use it for price discipline under the active brief (${filterSummary}), then switch back to Recruitment Board or Target Funnel when you want decision-ready ranking.`;
     return;
   }
   const diagnostics = state.queryDiagnostics || {};
@@ -2842,8 +3141,10 @@ function renderResultsNote() {
   const precisionRows = diagnostics?.precision_at_k?.rows || [];
   const p25 = precisionRows.find((row) => Number(row.k) === 25);
   const precisionText =
-    p25 && Number.isFinite(Number(p25.precision)) ? ` | precision@25 ${formatPct(Number(p25.precision))}` : "";
-  el.resultsNote.textContent = `Recruitment ranking driver: ${humanizeScoreColumn(scoreColumn)} | ${rankingBasisLabel(rankingBasis)}${precisionText} | filters: ${filterSummary}.`;
+    p25 && Number.isFinite(Number(p25.precision)) ? ` Precision@25 ${formatPct(Number(p25.precision))}.` : "";
+  el.resultsNote.textContent = `Recruitment brief: ${filterSummary}. Scan pursue and watch calls first, then open one memo to decide the next action. Ranking driver: ${humanizeScoreColumn(
+    scoreColumn
+  )} | ${rankingBasisLabel(rankingBasis)}.${precisionText}`;
 }
 
 function updateSelectOptions(select, values, keepValue = "") {
@@ -2869,6 +3170,7 @@ async function refreshCoverageAndOptions() {
   });
   state.coverageRows = rows;
   renderCoverageTable();
+  renderOverviewReadiness();
 
   const seasons = Array.from(new Set(rows.map((r) => String(r.season || "")).filter(Boolean))).sort(
     (a, b) => seasonSortValue(b) - seasonSortValue(a)
@@ -3242,10 +3544,18 @@ function computeFunnelScore(row) {
 function renderFunnelTables() {
   if (!state.funnelTopRows.length) {
     el.funnelBody.innerHTML = "<tr><td colspan=\"8\">No candidates for current funnel filters.</td></tr>";
+    el.funnelSummaryTitle.textContent = "Run the funnel to see where the strongest investable upside is concentrated.";
+    el.funnelSummaryLeague.textContent = "-";
+    el.funnelSummaryCount.textContent = "No league priority yet.";
+    el.funnelSummaryGap.textContent = "-";
+    el.funnelSummaryConfidence.textContent = "Confidence signal unavailable.";
+    el.funnelSummaryStatus.textContent = "-";
+    el.funnelSummaryCopy.textContent = "Run the funnel to decide where scouting time should go next.";
   } else {
     el.funnelBody.innerHTML = state.funnelTopRows
       .map((row, idx) => {
         const score = Number(row._funnelScore);
+        const decision = summarizeRecruitmentDecision(row, null, { source: "funnel" });
         const scoreContext = resolveRowScoreContext(row, state.funnelDiagnostics, "funnel");
         const badges = buildProvenanceBadges(row)
           .map((badge) => buildBadgeChipMarkup(badge.label, badge.tone))
@@ -3254,16 +3564,22 @@ function renderFunnelTables() {
           <tr data-index="${idx}" class="row-clickable">
             <td class="player-cell">
               <strong>${safeText(row.name)}</strong>
+              <span class="player-cell__sub">${safeText(row.league)} | ${safeText(row.club)} | ${safeText(row.season)}</span>
               <div class="player-cell__badges">${badges}</div>
               <span class="player-cell__note">${escapeHtml(scoreContext.scoreLabel)}</span>
             </td>
-            <td>${safeText(row.league)}</td>
+            <td>
+              <div class="table-status">
+                ${buildDecisionPillMarkup(decision)}
+                <span class="table-status__note">${escapeHtml(decision.gapNote)}</span>
+              </div>
+            </td>
             <td class="num">${formatNumber(row.age)}</td>
             <td class="num">${formatCurrency(row.market_value_eur)}</td>
-            <td class="num">${formatCurrency(row.expected_value_eur)}</td>
             <td class="num positive">${formatCurrency(conservativeGapForRanking(row))}</td>
             <td class="num">${formatNumber(row.undervaluation_confidence)}</td>
             <td class="num">${Number.isFinite(score) ? formatNumber(score) : "-"}</td>
+            <td><span class="action-copy">${escapeHtml(decision.nextAction)}</span></td>
           </tr>
         `;
       })
@@ -3271,7 +3587,7 @@ function renderFunnelTables() {
   }
 
   if (!state.funnelRows.length) {
-    el.funnelLeagueBody.innerHTML = "<tr><td colspan=\"5\">No league board yet.</td></tr>";
+    el.funnelLeagueBody.innerHTML = "<tr><td colspan=\"6\">No league board yet.</td></tr>";
     return;
   }
 
@@ -3319,6 +3635,34 @@ function renderFunnelTables() {
       `;
     })
     .join("");
+
+  if (!rows.length) {
+    el.funnelSummaryTitle.textContent = "Run the funnel to see where the strongest investable upside is concentrated.";
+    el.funnelSummaryLeague.textContent = "-";
+    el.funnelSummaryCount.textContent = "No league priority yet.";
+    el.funnelSummaryGap.textContent = "-";
+    el.funnelSummaryConfidence.textContent = "Confidence signal unavailable.";
+    el.funnelSummaryStatus.textContent = "-";
+    el.funnelSummaryCopy.textContent = "Run the funnel to decide where scouting time should go next.";
+    return;
+  }
+
+  const topLeague = rows[0];
+  const topLeagueStatus = summarizeLeagueStatus(topLeague.league);
+  const topGap = topLeague.n > 0 ? topLeague.gapSum / topLeague.n : NaN;
+  const topConf = topLeague.confN > 0 ? topLeague.confSum / topLeague.confN : NaN;
+  el.funnelSummaryTitle.textContent =
+    topLeagueStatus.tone === "bad"
+      ? "The largest concentration of names still sits in a league with fragile coverage."
+      : `The strongest current sourcing pocket is ${safeText(topLeague.league)}.`;
+  el.funnelSummaryLeague.textContent = safeText(topLeague.league);
+  el.funnelSummaryCount.textContent = `${formatInt(topLeague.n)} candidates in the current funnel.`;
+  el.funnelSummaryGap.textContent = Number.isFinite(topGap) ? formatCurrency(topGap) : "-";
+  el.funnelSummaryConfidence.textContent = Number.isFinite(topConf)
+    ? `Avg confidence ${formatNumber(topConf)}`
+    : "Confidence signal unavailable.";
+  el.funnelSummaryStatus.textContent = safeText(topLeagueStatus.label);
+  el.funnelSummaryCopy.textContent = topLeagueStatus.note;
 }
 
 async function runFunnel() {
@@ -3371,16 +3715,16 @@ async function runFunnel() {
     const p50 = precisionRows.find((r) => Number(r.k) === 50);
     const precisionNote =
       p50 && Number.isFinite(Number(p50.precision))
-        ? ` | precision@50=${formatPct(Number(p50.precision))}`
+        ? ` | precision@50 ${formatPct(Number(p50.precision))}`
         : "";
     const scoreColumn =
       payload?.diagnostics?.score_column || payload?.diagnostics?.scoreColumn || "scout_target_score";
     const filterSummary = describeRecruitmentFilters(currentFunnelWorkflowSummary());
     el.funnelMeta.textContent = `${formatInt(state.funnelTopRows.length)} shown / ${formatInt(
       state.funnelRows.length
-    )} total candidates | split=${split}${lowerOnly ? " | outside-big5-only" : ""} | driver=${humanizeScoreColumn(
+    )} total candidates | split ${split}${lowerOnly ? " | outside Big 5" : ""} | driver ${humanizeScoreColumn(
       scoreColumn
-    )}${precisionNote} | filters=${filterSummary} | click a row for full recruitment memo`;
+    )}${precisionNote} | filters ${filterSummary} | start with the league board, then decide which names deserve the memo`;
 
     renderFunnelTables();
   } catch (err) {
@@ -3425,6 +3769,7 @@ async function loadHealthAndMetrics() {
   renderMetrics();
   renderSegmentTable();
   renderBenchmarkCards();
+  renderOverviewReadiness();
 }
 
 function resetWorkbenchControls() {

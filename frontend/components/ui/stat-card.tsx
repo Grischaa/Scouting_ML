@@ -14,11 +14,15 @@ export function StatCard({
   value,
   delta,
   tone = "green",
+  context,
+  icon,
 }: {
   label: string;
   value: string;
   delta: string;
   tone?: keyof typeof toneClasses;
+  context?: string;
+  icon?: React.ReactNode;
 }) {
   return (
     <motion.div whileHover={{ y: -3 }} transition={{ duration: 0.22 }}>
@@ -34,10 +38,11 @@ export function StatCard({
                   <ArrowUpRight className="size-3.5 text-green" />
                   {delta}
                 </div>
+                {context ? <p className="max-w-[18rem] text-sm text-muted">{context}</p> : null}
               </div>
             </div>
             <div className="flex size-11 items-center justify-center rounded-2xl border border-white/10 bg-panel-2/85 text-slate-100">
-              <Sparkles className="size-5" />
+              {icon ?? <Sparkles className="size-5" />}
             </div>
           </div>
         </CardContent>

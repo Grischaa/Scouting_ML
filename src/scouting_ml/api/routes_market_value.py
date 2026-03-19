@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
+from starlette.status import HTTP_503_SERVICE_UNAVAILABLE
 from pydantic import BaseModel
 
 from scouting_ml.services.market_value_service import (
@@ -34,6 +35,8 @@ router = APIRouter(prefix="/market-value", tags=["market_value"])
 class HealthResponse(BaseModel):
     status: str
     artifacts: Dict[str, Any]
+    strict_artifacts: Optional[bool] = None
+    strict_artifacts_error: Optional[str] = None
     test_rows: Optional[int] = None
     val_rows: Optional[int] = None
     metrics_loaded: Optional[bool] = None
@@ -153,9 +156,12 @@ class WatchlistDeleteResponse(BaseModel):
 
 
 @router.get("/health", response_model=HealthResponse, summary="Check market-value artifact health")
-async def market_value_health() -> HealthResponse:
+async def market_value_health(response: Response) -> HealthResponse:
     """Return backend readiness and artifact status for market-value endpoints."""
-    return HealthResponse(**health_payload())
+    payload = health_payload()
+    if payload.get("status") != "ok":
+        response.status_code = HTTP_503_SERVICE_UNAVAILABLE
+    return HealthResponse(**payload)
 
 
 @router.get("/metrics", response_model=MetricsResponse, summary="Get training/evaluation metrics")

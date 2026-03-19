@@ -10,8 +10,8 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="assets/styles.css?v=20260317_recruitment_revamp1" />
-    <script src="assets/app.js?v=20260317_recruitment_revamp1" defer></script>
+    <link rel="stylesheet" href="assets/styles.css?v=20260318_decision_ui" />
+    <script src="assets/app.js?v=20260318_decision_ui" defer></script>
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -19,45 +19,46 @@
     <div class="bg-orb bg-orb--teal" aria-hidden="true"></div>
 
     <header class="app-header">
-      <div class="app-header__left card card--hero">
-        <div class="hero-panel">
-          <div class="hero-panel__copy">
-            <p class="kicker">Scouting ML</p>
-            <h1>Recruitment Intelligence for Smaller Clubs and Consultants</h1>
-            <p class="subtitle">
-              One scouting console for practical recruitment work: price players
-              responsibly, find undervalued non-Big5 targets, and turn shortlist
-              ideas into actionable scouting memos.
-            </p>
-            <div class="goal-pills">
-              <span class="goal-pill">Non-Big5 Opportunity Mapping</span>
-              <span class="goal-pill">Recruitment Board + Watchlist</span>
-              <span class="goal-pill">Consultant-Ready Player Memos</span>
-            </div>
-          </div>
-          <div class="hero-panel__rail">
-            <article class="hero-insight">
-              <span class="hero-insight__eyebrow">Price responsibly</span>
-              <p>Use the valuation champion to stay disciplined on fair value and conservative gap.</p>
-            </article>
-            <article class="hero-insight">
-              <span class="hero-insight__eyebrow">Prioritize upside</span>
-              <p>Use the future shortlist champion to rank outside-Big-5 players worth real follow-up.</p>
-            </article>
-            <article class="hero-insight">
-              <span class="hero-insight__eyebrow">Leave with action</span>
-              <p>Convert a board hit into a memo, watchlist entry, or export pack without switching tools.</p>
-            </article>
+      <div class="app-header__main card card--hero">
+        <div class="app-header__copy">
+          <p class="kicker">ScoutML</p>
+          <h1>Recruitment OS for undervalued football targets</h1>
+          <p class="subtitle">
+            A decision-first operating surface for scouts, analysts, and
+            sporting directors to price players, build conviction, and turn
+            shortlist ideas into recruitment actions.
+          </p>
+          <div class="goal-pills">
+            <span class="goal-pill">Decision-first board</span>
+            <span class="goal-pill">Guardrailed pricing</span>
+            <span class="goal-pill">Scouting memo workflow</span>
           </div>
         </div>
+        <div class="header-signals">
+          <article class="header-signal">
+            <span class="header-signal__label">Board</span>
+            <p>Put pursue, watch, price-only, or pass calls in front of the user before deeper analysis.</p>
+          </article>
+          <article class="header-signal">
+            <span class="header-signal__label">Memo</span>
+            <p>Make the player rail feel like a decision workspace, not a dense diagnostic drawer.</p>
+          </article>
+          <article class="header-signal">
+            <span class="header-signal__label">Funnel</span>
+            <p>Choose where to scout next, then decide which names deserve live follow-up.</p>
+          </article>
+        </div>
       </div>
-      <div class="app-header__right card card--control">
-        <div class="connect-panel">
-          <div class="connect-panel__header">
-            <p class="kicker">Runtime</p>
-            <h2>API Link</h2>
-            <p class="card-intro">Point the app at the live backend and the board, funnel, and memo will populate from the same source.</p>
+      <details class="app-header__utility card">
+        <summary>
+          <div class="app-header__utility-copy">
+            <p class="kicker">Environment</p>
+            <h2>Runtime &amp; API</h2>
+            <p class="card-intro">Keep setup secondary once the live service is connected.</p>
           </div>
+          <span id="api-status" class="status status--neutral">Not connected</span>
+        </summary>
+        <div class="app-header__utility-body">
           <label for="api-base">API base</label>
           <input
             id="api-base"
@@ -68,10 +69,10 @@
           />
           <div class="api-controls">
             <button id="connect-btn" type="button">Connect</button>
-            <span id="api-status" class="status status--neutral">Not connected</span>
+            <p class="utility-note">Use this only to point the frontend at the live backend. Recruitment work should happen below.</p>
           </div>
         </div>
-      </div>
+      </details>
     </header>
 
     <main class="main-wrap">
@@ -83,39 +84,69 @@
 
       <section id="view-overview" class="view view--active">
         <div class="overview-grid">
+          <article class="card overview-readiness">
+            <div class="overview-readiness__copy">
+              <div class="overview-readiness__heading">
+                <p class="results-kicker">Operating posture</p>
+                <span id="overview-posture-pill" class="decision-pill decision-pill--neutral">Waiting</span>
+              </div>
+              <h2 id="overview-posture-title">Connect the API to judge whether the live recruitment workflow is ready.</h2>
+              <p id="overview-posture-copy" class="card-intro">
+                This page should answer, quickly, whether the platform is safe enough to use for live shortlist and pricing work today.
+              </p>
+            </div>
+            <div class="overview-readiness__signals">
+              <article class="readiness-signal">
+                <span class="readiness-signal__label">Pricing discipline</span>
+                <strong id="overview-pricing-status">-</strong>
+                <p id="overview-pricing-copy">Connect API to load pricing diagnostics.</p>
+              </article>
+              <article class="readiness-signal">
+                <span class="readiness-signal__label">Ranking posture</span>
+                <strong id="overview-ranking-status">-</strong>
+                <p id="overview-ranking-copy">Connect API to load shortlist-routing posture.</p>
+              </article>
+              <article class="readiness-signal">
+                <span class="readiness-signal__label">League coverage</span>
+                <strong id="overview-coverage-status">-</strong>
+                <p id="overview-coverage-copy">Connect API to load where the workflow is investable and where it is still fragile.</p>
+              </article>
+            </div>
+          </article>
+
           <article class="card overview-quickstart">
-            <h2>Simple Workflow</h2>
+            <h2>Operating Rhythm</h2>
             <p class="card-intro">
-              Use this page once to check model trust. Day-to-day recruitment work should happen in the board and memo.
+              Use this page to confirm the workflow is live. Daily recruitment work should happen in the board, memo, and funnel.
             </p>
             <div class="workflow-steps">
               <div class="workflow-step">
                 <span class="workflow-step__index">1</span>
                 <div>
-                  <h3>Check Trust</h3>
-                  <p>Use the valuation champion for pricing discipline and the shortlist champion for ranking.</p>
+                  <h3>Validate posture</h3>
+                  <p>Confirm pricing discipline, shortlist routing, and league coverage before trusting live output.</p>
                 </div>
               </div>
               <div class="workflow-step">
                 <span class="workflow-step__index">2</span>
                 <div>
-                  <h3>Set A Brief</h3>
-                  <p>Start with role, age corridor, budget, and contract pressure. Only open advanced filters if needed.</p>
+                  <h3>Shape the brief</h3>
+                  <p>Start with role, age corridor, budget, and contract pressure. Keep the brief tight before opening the memo.</p>
                 </div>
               </div>
               <div class="workflow-step">
                 <span class="workflow-step__index">3</span>
                 <div>
-                  <h3>Open The Memo</h3>
-                  <p>Use player detail for the decision, then export a club CSV or memo pack when the shortlist is ready.</p>
+                  <h3>Make the call</h3>
+                  <p>Use the memo to decide next action, then move the player to watchlist or export a window pack.</p>
                 </div>
               </div>
             </div>
           </article>
 
           <article class="card trust-card">
-            <h2>Active Model Stack</h2>
-            <p class="card-intro">Read this as: which model prices the player, which model ranks the shortlist, and when each one was last refreshed.</p>
+            <h2>Workflow Mechanics</h2>
+            <p class="card-intro">Secondary technical context for analysts auditing the live stack. This should support the decision surface, not compete with it.</p>
             <dl class="trust-list">
               <div><dt>Model Version</dt><dd id="trust-model-version">-</dd></div>
               <div><dt>Last Updated (UTC)</dt><dd id="trust-updated">-</dd></div>
@@ -123,27 +154,32 @@
               <div><dt>Validation/Test</dt><dd id="trust-splits">-</dd></div>
               <div><dt>Rows (Val/Test)</dt><dd id="trust-rows">-</dd></div>
             </dl>
-            <div class="artifact-box">
-              <p class="artifact-box__title">Active Artifacts</p>
-              <ul class="artifact-list">
-                <li><span>Test CSV</span><code id="artifact-test">-</code></li>
-                <li><span>Val CSV</span><code id="artifact-val">-</code></li>
-                <li><span>Metrics JSON</span><code id="artifact-metrics">-</code></li>
-              </ul>
-            </div>
-            <div class="artifact-box">
-              <p class="artifact-box__title">Champion Routing</p>
-              <ul class="artifact-list">
-                <li><span>Valuation</span><code id="champion-valuation">-</code></li>
-                <li><span>Shortlist</span><code id="champion-shortlist">-</code></li>
-                <li><span>Runtime</span><code id="champion-runtime">-</code></li>
-              </ul>
-            </div>
+            <details class="artifact-panel">
+              <summary>Artifacts and routing</summary>
+              <div class="artifact-panel__body">
+                <div class="artifact-box">
+                  <p class="artifact-box__title">Active artifacts</p>
+                  <ul class="artifact-list">
+                    <li><span>Test CSV</span><code id="artifact-test">-</code></li>
+                    <li><span>Val CSV</span><code id="artifact-val">-</code></li>
+                    <li><span>Metrics JSON</span><code id="artifact-metrics">-</code></li>
+                  </ul>
+                </div>
+                <div class="artifact-box">
+                  <p class="artifact-box__title">Champion routing</p>
+                  <ul class="artifact-list">
+                    <li><span>Valuation</span><code id="champion-valuation">-</code></li>
+                    <li><span>Shortlist</span><code id="champion-shortlist">-</code></li>
+                    <li><span>Runtime</span><code id="champion-runtime">-</code></li>
+                  </ul>
+                </div>
+              </div>
+            </details>
             <p class="trust-note" id="trust-note">Connect API to load artifact metadata.</p>
           </article>
 
           <article class="card metrics-card">
-            <h2>Core Metrics (Valuation Champion)</h2>
+            <h2>Pricing Discipline</h2>
             <p class="card-intro">These numbers are about pricing discipline, not future breakout ranking.</p>
             <div class="metrics-grid">
               <article class="metric">
@@ -175,7 +211,7 @@
           </article>
 
           <article class="card segment-card">
-            <h2>Segment Reliability</h2>
+            <h2>High-Risk Price Segments</h2>
             <p class="segment-note">Use test split segment metrics before trusting shortlist calls.</p>
             <div class="table-wrap table-wrap--small">
               <table>
@@ -197,7 +233,7 @@
           </article>
 
           <article class="card coverage-card">
-            <h2>League Coverage (Current Split)</h2>
+            <h2>League Decision Guardrails</h2>
             <p class="segment-note">
               Coverage tells you where the shortlist is grounded in real forward evidence and where you should stay conservative.
             </p>
@@ -221,7 +257,7 @@
           </article>
 
           <article class="card benchmark-card">
-            <h2>League Benchmarks</h2>
+            <h2>League Benchmark Snapshot</h2>
             <p class="card-intro">Use this to decide where shortlist output is credible and where you need more caution.</p>
             <p id="benchmark-meta" class="segment-note">Connect API to load holdout benchmark summary.</p>
             <div class="table-wrap table-wrap--small table-wrap--benchmark">
@@ -243,7 +279,7 @@
           </article>
 
           <article class="card research-card">
-            <h2>Research Snapshot</h2>
+            <h2>Deployment Snapshot</h2>
             <p class="card-intro">This is the current research posture behind the live recruitment workflow.</p>
             <div class="snapshot-grid">
               <article class="snapshot-card">
@@ -272,8 +308,8 @@
           <section class="controls card">
             <div class="panel-header">
               <div>
-                <h2>Set Recruitment Brief</h2>
-                <p class="panel-help">Use the visible fields first. Open advanced filters only when you need a very specific slice.</p>
+                <h2>Recruitment Brief</h2>
+                <p class="panel-help">Build the brief fast, keep the visible filters tight, and only open advanced filters when the shortlist needs a very specific slice.</p>
               </div>
             </div>
 
@@ -433,7 +469,7 @@
 
           <section class="results card">
             <p class="results-kicker">Board</p>
-            <p class="results-guide">Run the board, shortlist the strongest options, then click one player to open the memo.</p>
+            <p class="results-guide">Scan status first. Pursue and watch rows should dominate your attention before you open the memo.</p>
             <div class="results__header">
               <h2 id="results-title">Recruitment Board</h2>
               <div class="results__meta">
@@ -448,20 +484,19 @@
               <table id="results-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Club</th>
-                    <th>League</th>
+                    <th>Target</th>
+                    <th>Status</th>
                     <th>Pos</th>
                     <th class="num">Age</th>
                     <th class="num">Market</th>
-                    <th class="num">Expected</th>
                     <th class="num">Cons. gap (capped)</th>
                     <th class="num">Confidence</th>
                     <th class="num">Minutes</th>
+                    <th>Next move</th>
                   </tr>
                 </thead>
                 <tbody id="results-body">
-                  <tr><td colspan="10">Connect API and run query.</td></tr>
+                  <tr><td colspan="9">Connect API and run query.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -472,20 +507,49 @@
           </section>
 
           <aside class="details card" id="detail-panel">
-            <p class="results-kicker">Memo</p>
+            <p class="results-kicker">Decision rail</p>
             <div class="detail-header">
               <div>
                 <h2>Recruitment Memo</h2>
-                <p class="detail-header__note">Start with overview. Only open fit or due diligence if the player survives the first pass.</p>
+                <p class="detail-header__note">Start with the call. Only go deeper into fit or due diligence if the player still deserves live follow-up.</p>
               </div>
               <button id="detail-open-profile" type="button" class="btn-ghost">Open Profile</button>
             </div>
             <p class="details-placeholder" id="detail-placeholder">
-              Select a player from the board to open a clean recruitment memo.
+              Select a player to see recruitment status, price upside, confidence, and the recommended next move.
             </p>
             <div id="detail-content" hidden>
-              <h3 id="detail-name"></h3>
-              <p id="detail-meta"></p>
+              <div class="decision-summary">
+                <div class="decision-summary__lead">
+                  <div class="decision-summary__status-row">
+                    <span id="detail-decision-pill" class="decision-pill decision-pill--neutral">No player selected</span>
+                    <span id="detail-decision-next" class="decision-summary__next">Select a player to see the recommended next move.</span>
+                  </div>
+                  <h3 id="detail-name"></h3>
+                  <p id="detail-meta"></p>
+                  <p id="detail-decision-reason" class="decision-summary__reason">Select a player to evaluate price upside and actionability.</p>
+                  <div id="detail-badges" class="badge-row">
+                    <span class="badge-chip badge-chip--neutral">No player selected</span>
+                  </div>
+                </div>
+                <div class="decision-summary__metrics">
+                  <article class="decision-metric">
+                    <span>Conservative gap</span>
+                    <strong id="detail-gap">-</strong>
+                    <small id="detail-gap-note">Guardrailed upside</small>
+                  </article>
+                  <article class="decision-metric">
+                    <span>Confidence</span>
+                    <strong id="detail-confidence-score">-</strong>
+                    <small id="detail-confidence-note">Model confidence posture</small>
+                  </article>
+                  <article class="decision-metric">
+                    <span>Price stance</span>
+                    <strong id="detail-price-stance">-</strong>
+                    <small id="detail-price-context">Market vs expected value</small>
+                  </article>
+                </div>
+              </div>
               <div class="detail-tabbar" id="detail-tabbar">
                 <button class="detail-tab is-active" type="button" data-detail-tab="overview">Overview</button>
                 <button class="detail-tab" type="button" data-detail-tab="stats">Stats</button>
@@ -527,9 +591,6 @@
                     </div>
                     <div class="detail-section">
                       <h4>Why It Ranks</h4>
-                      <div id="detail-badges" class="badge-row">
-                        <span class="badge-chip badge-chip--neutral">No player selected</span>
-                      </div>
                       <p id="detail-score-driver" class="detail-summary">Select a player to inspect ranking context.</p>
                       <ul id="detail-why-ranked" class="risk-list">
                         <li class="risk-item risk-item--none">Select a player to see why the current ranking placed him here.</li>
@@ -727,7 +788,7 @@
             <div class="panel-header">
               <div>
                 <h2>Build Target Funnel</h2>
-                <p class="panel-help">Use the same recruitment brief, then let the funnel rank the strongest outside-Big-5 leads.</p>
+                <p class="panel-help">Use the same recruitment brief, then let the funnel tell you where to scout and which names deserve live attention.</p>
               </div>
             </div>
             <div class="funnel-form">
@@ -813,32 +874,32 @@
             <p id="funnel-meta" class="metrics-meta">No funnel run yet.</p>
           </article>
 
-          <article class="card funnel-results">
-            <p class="results-kicker">Funnel</p>
-            <p class="results-guide">Set the same brief, run the funnel, then use the league board below to decide where to scout deeper.</p>
-            <h2>Top Talent Candidates</h2>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>League</th>
-                    <th class="num">Age</th>
-                    <th class="num">Market</th>
-                    <th class="num">Expected</th>
-                    <th class="num">Cons. gap (capped)</th>
-                    <th class="num">Confidence</th>
-                    <th class="num">Score</th>
-                  </tr>
-                </thead>
-                <tbody id="funnel-body">
-                  <tr><td colspan="8">Build funnel to view candidates.</td></tr>
-                </tbody>
-              </table>
+          <article class="card funnel-summary">
+            <p class="results-kicker">Scout next</p>
+            <h2>League Priority</h2>
+            <p id="funnel-summary-title" class="card-intro">Run the funnel to see where the strongest investable upside is concentrated.</p>
+            <div class="funnel-summary__metrics">
+              <article class="decision-metric">
+                <span>Top league</span>
+                <strong id="funnel-summary-league">-</strong>
+                <small id="funnel-summary-count">No league priority yet.</small>
+              </article>
+              <article class="decision-metric">
+                <span>Avg gap</span>
+                <strong id="funnel-summary-gap">-</strong>
+                <small id="funnel-summary-confidence">Confidence signal unavailable.</small>
+              </article>
+              <article class="decision-metric">
+                <span>Posture</span>
+                <strong id="funnel-summary-status">-</strong>
+                <small id="funnel-summary-copy">Run the funnel to decide where scouting time should go next.</small>
+              </article>
             </div>
           </article>
 
           <article class="card funnel-leagues">
+            <p class="results-kicker">League board</p>
+            <p class="results-guide">Start here. Use the league call to decide where deeper scouting is worth the next block of time.</p>
             <h2>League Opportunity Board</h2>
             <div class="table-wrap table-wrap--small">
               <table>
@@ -854,6 +915,31 @@
                 </thead>
                 <tbody id="funnel-league-body">
                   <tr><td colspan="6">No league board yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card funnel-results">
+            <p class="results-kicker">Candidates</p>
+            <p class="results-guide">Once the league call is clear, use this board to decide which individual names deserve live follow-up.</p>
+            <h2>Highest-Priority Names</h2>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Target</th>
+                    <th>Status</th>
+                    <th class="num">Age</th>
+                    <th class="num">Market</th>
+                    <th class="num">Cons. gap (capped)</th>
+                    <th class="num">Confidence</th>
+                    <th class="num">Score</th>
+                    <th>Next move</th>
+                  </tr>
+                </thead>
+                <tbody id="funnel-body">
+                  <tr><td colspan="8">Build funnel to view candidates.</td></tr>
                 </tbody>
               </table>
             </div>

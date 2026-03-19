@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.status import HTTP_503_SERVICE_UNAVAILABLE
 
 from scouting_ml.api.routes_market_value import router as market_value_router
 from scouting_ml.api.routes_players_nlp import router as players_nlp_router
@@ -23,10 +24,16 @@ logger = logging.getLogger(__name__)
 API_CONFIG = load_api_runtime_config()
 _STARTUP_LOCK = Lock()
 _STARTUP_CHECKS_DONE = False
+_STARTUP_CHECKS_ERROR: Exception | None = None
+_STARTUP_CHECK_EXEMPT_PATHS = {"/health", "/market-value/health"}
+
+
+def _strict_artifacts_enabled() -> bool:
+    return load_api_runtime_config().strict_artifacts
 
 
 def _startup_checks() -> None:
-    if API_CONFIG.strict_artifacts:
+    if _strict_artifacts_enabled():
         validate_strict_artifact_env()
     paths = get_resolved_artifact_paths()
     logger.info(
@@ -37,15 +44,27 @@ def _startup_checks() -> None:
     )
 
 
-def _ensure_startup_checks() -> None:
-    global _STARTUP_CHECKS_DONE
+def _ensure_startup_checks(*, raise_on_failure: bool = True) -> None:
+    global _STARTUP_CHECKS_DONE, _STARTUP_CHECKS_ERROR
     if _STARTUP_CHECKS_DONE:
+        if _STARTUP_CHECKS_ERROR is not None and raise_on_failure:
+            raise _STARTUP_CHECKS_ERROR
         return
     with _STARTUP_LOCK:
         if _STARTUP_CHECKS_DONE:
+            if _STARTUP_CHECKS_ERROR is not None and raise_on_failure:
+                raise _STARTUP_CHECKS_ERROR
             return
-        _startup_checks()
-        _STARTUP_CHECKS_DONE = True
+        try:
+            _startup_checks()
+        except Exception as exc:
+            logger.exception("Startup checks failed")
+            _STARTUP_CHECKS_ERROR = exc
+        finally:
+            _STARTUP_CHECKS_DONE = True
+
+        if _STARTUP_CHECKS_ERROR is not None and raise_on_failure:
+            raise _STARTUP_CHECKS_ERROR
 
 
 app = FastAPI(title="Scouting ML API")
@@ -61,7 +80,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def startup_checks_middleware(request: Request, call_next) -> Response:
-    _ensure_startup_checks()
+    _ensure_startup_checks(raise_on_failure=request.url.path not in _STARTUP_CHECK_EXEMPT_PATHS)
     return await call_next(request)
 
 # Register routers
@@ -82,9 +101,12 @@ async def root() -> dict:
 
 
 @app.get("/health", summary="Global API health")
-async def health() -> dict:
+async def health(response: Response) -> dict:
     """Return global API health plus market-value artifact readiness."""
-    return health_payload()
+    payload = health_payload()
+    if payload.get("status") != "ok":
+        response.status_code = HTTP_503_SERVICE_UNAVAILABLE
+    return payload
 
 
 __all__ = ["app"]

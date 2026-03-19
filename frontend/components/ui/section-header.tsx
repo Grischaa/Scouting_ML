@@ -14,15 +14,15 @@ export function SectionHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", className)}>
-      <div className="space-y-2">
-        {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-blue">{eyebrow}</p> : null}
+    <div className={cn("flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between", className)}>
+      <div className="space-y-1.5">
+        {eyebrow ? <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-blue">{eyebrow}</p> : null}
         <div className="space-y-1">
-          <h2 className="text-xl font-semibold tracking-tight text-text">{title}</h2>
+          <h2 className="text-[1.3rem] font-semibold tracking-tight text-text sm:text-[1.45rem]">{title}</h2>
           {description ? <p className="max-w-2xl text-sm leading-6 text-muted">{description}</p> : null}
         </div>
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="shrink-0 pt-1">{action}</div> : null}
     </div>
   );
 }

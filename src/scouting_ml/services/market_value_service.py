@@ -3757,6 +3757,8 @@ def health_payload() -> dict[str, Any]:
     out: dict[str, Any] = {
         "status": "ok",
         "artifacts": {},
+        "strict_artifacts": _env_flag("SCOUTING_STRICT_ARTIFACTS", default=False),
+        "strict_artifacts_error": None,
     }
     test_path = _resolve_path(*SPLIT_TO_PATH["test"])
     val_path = _resolve_path(*SPLIT_TO_PATH["val"])
@@ -3778,6 +3780,11 @@ def health_payload() -> dict[str, Any]:
         "val_predictions_mtime_utc": val_meta["mtime_utc"],
         "metrics_mtime_utc": metrics_meta["mtime_utc"],
     }
+    if out["strict_artifacts"]:
+        try:
+            validate_strict_artifact_env()
+        except Exception as exc:
+            out["strict_artifacts_error"] = str(exc)
     try:
         out["test_rows"] = int(len(get_predictions("test")))
     except Exception as exc:
@@ -3797,6 +3804,16 @@ def health_payload() -> dict[str, Any]:
     except Exception as exc:
         out["metrics_loaded"] = False
         out["metrics_error"] = str(exc)
+    if (
+        out["strict_artifacts_error"]
+        or not test_meta["exists"]
+        or not val_meta["exists"]
+        or not metrics_meta["exists"]
+        or out.get("test_error")
+        or out.get("val_error")
+        or out.get("metrics_error")
+    ):
+        out["status"] = "error"
     return out
 
 

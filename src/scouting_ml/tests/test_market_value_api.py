@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from scouting_ml.api import main as api_main
 from scouting_ml.api.main import app
 from scouting_ml.scripts.lock_market_value_artifacts import build_lock_bundle
 from scouting_ml.services import market_value_service as mvs
@@ -354,6 +355,8 @@ def _reset_service_caches() -> None:
     mvs._PRED_CACHE.clear()  # type: ignore[attr-defined]
     mvs._METRICS_CACHE = {}  # type: ignore[attr-defined]
     mvs._RESIDUAL_CALIBRATION_CACHE = None  # type: ignore[attr-defined]
+    api_main._STARTUP_CHECKS_DONE = False  # type: ignore[attr-defined]
+    api_main._STARTUP_CHECKS_ERROR = None  # type: ignore[attr-defined]
 
 
 def _write_dual_role_artifacts(tmp_path: Path) -> dict[str, Path]:
@@ -705,6 +708,32 @@ def test_validate_strict_artifact_env_requires_env_vars(monkeypatch) -> None:
     monkeypatch.delenv("SCOUTING_METRICS_PATH", raising=False)
     with pytest.raises(RuntimeError, match="required env vars are missing"):
         mvs.validate_strict_artifact_env()
+
+
+def test_market_value_health_returns_503_payload_when_strict_artifacts_missing(tmp_path: Path, monkeypatch) -> None:
+    missing_test = tmp_path / "missing_test.csv"
+    missing_val = tmp_path / "missing_val.csv"
+    missing_metrics = tmp_path / "missing_metrics.json"
+
+    monkeypatch.setenv("SCOUTING_STRICT_ARTIFACTS", "1")
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(missing_test))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(missing_val))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(missing_metrics))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    health_resp = client.get("/market-value/health")
+    assert health_resp.status_code == 503
+    payload = health_resp.json()
+    assert payload["status"] == "error"
+    assert payload["strict_artifacts"] is True
+    assert "artifact files do not exist" in payload["strict_artifacts_error"]
+    assert payload["artifacts"]["test_predictions_exists"] is False
+    assert payload["artifacts"]["val_predictions_exists"] is False
+    assert payload["artifacts"]["metrics_exists"] is False
+
+    with pytest.raises(RuntimeError, match="Strict artifacts mode is enabled"):
+        client.get("/market-value/metrics")
 
 
 def test_player_report_endpoint_returns_profile(tmp_path: Path, monkeypatch) -> None:

@@ -1,16 +1,16 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-type ButtonVariant = "default" | "secondary" | "ghost" | "outline" | "danger";
+type ButtonVariant = "default" | "secondary" | "ghost" | "outline" | "panel" | "danger";
 type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 const variantClasses: Record<ButtonVariant, string> = {
   default:
-    "bg-green text-slate-950 hover:bg-green/90 shadow-[0_10px_24px_rgba(46,194,126,0.24)]",
-  secondary:
-    "bg-blue text-white hover:bg-blue/90 shadow-[0_10px_24px_rgba(78,161,255,0.18)]",
-  ghost: "bg-transparent text-slate-200 hover:bg-white/5",
-  outline: "border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10",
+    "bg-green text-slate-950 hover:bg-green/90 shadow-[0_16px_30px_rgba(46,194,126,0.24)]",
+  secondary: "bg-blue text-white hover:bg-blue/90 shadow-[0_16px_30px_rgba(78,161,255,0.2)]",
+  ghost: "bg-transparent text-slate-200 hover:bg-white/[0.06]",
+  outline: "border border-white/10 bg-white/[0.04] text-slate-100 hover:border-white/16 hover:bg-white/[0.08]",
+  panel: "border border-white/8 bg-panel-2/80 text-slate-100 hover:border-white/14 hover:bg-panel-3/80",
   danger: "bg-red text-white hover:bg-red/90",
 };
 

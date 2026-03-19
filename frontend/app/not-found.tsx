@@ -23,11 +23,11 @@ export default function NotFound() {
             Back to dashboard
           </Link>
           <Link
-            href="/players"
+            href="/discovery"
             className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 text-sm font-medium text-slate-100 transition-all duration-200 hover:bg-white/10"
           >
             <ArrowLeft className="size-4" />
-            Browse players
+            Open discovery
           </Link>
         </div>
       </div>

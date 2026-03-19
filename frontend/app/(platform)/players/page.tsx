@@ -1,136 +1,122 @@
-"use client";
-
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { BookmarkPlus, LayoutGrid, List, SlidersHorizontal } from "lucide-react";
-import { motion } from "framer-motion";
-import { DataTable, type TableColumn } from "@/components/ui/data-table";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { SectionHeader } from "@/components/ui/section-header";
-import { FilterPanel, type PlayerFilters } from "@/components/players/filter-panel";
+import { ArrowRight, FileDown, NotebookPen, Radar } from "lucide-react";
+import { ConfidenceBadge } from "@/components/recruitment/confidence-badge";
+import { DecisionBadge } from "@/components/recruitment/decision-badge";
+import { StatusTag } from "@/components/recruitment/status-tag";
+import { ValueGapBadge } from "@/components/recruitment/value-gap-badge";
 import { PlayerCard } from "@/components/players/player-card";
-import { players } from "@/lib/mock-data";
-import type { Player } from "@/lib/types";
-import { formatCurrencyMillions } from "@/lib/utils";
-
-const initialFilters: PlayerFilters = {
-  age: "",
-  nationality: "",
-  position: "",
-  league: "",
-  club: "",
-  minutes: "",
-  marketValue: "",
-  contract: "",
-  foot: "",
-  height: "",
-  score: "",
-};
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/section-header";
+import { trackedProfiles } from "@/lib/platform-data";
 
 export default function PlayersPage() {
-  const [filters, setFilters] = useState<PlayerFilters>(initialFilters);
-  const [view, setView] = useState<"table" | "grid">("table");
-
-  const setFilter = (key: keyof PlayerFilters, value: string) => setFilters((current) => ({ ...current, [key]: value }));
-
-  const filteredPlayers = useMemo(() => {
-    return players.filter((player) => {
-      const checks = [
-        !filters.age || String(player.age).includes(filters.age),
-        !filters.nationality || player.nationality.toLowerCase().includes(filters.nationality.toLowerCase()),
-        !filters.position || player.position.toLowerCase().includes(filters.position.toLowerCase()),
-        !filters.league || player.league.toLowerCase().includes(filters.league.toLowerCase()),
-        !filters.club || player.club.toLowerCase().includes(filters.club.toLowerCase()),
-        !filters.minutes || player.minutes >= Number(filters.minutes),
-        !filters.marketValue || player.marketValueM <= Number(filters.marketValue),
-        !filters.contract || player.contractExpiry.includes(filters.contract),
-        !filters.foot || player.preferredFoot.toLowerCase().includes(filters.foot.toLowerCase()),
-        !filters.height || player.heightCm >= Number(filters.height),
-        !filters.score || player.scoutingScore >= Number(filters.score),
-      ];
-      return checks.every(Boolean);
-    });
-  }, [filters]);
-
-  const columns: TableColumn<Player>[] = [
+  const featured = trackedProfiles[0];
+  const groups = [
     {
-      key: "name",
-      header: "Player",
-      render: (player) => (
-        <Link href={`/players/${player.slug}`} className="block min-w-[220px]">
-          <div className="font-medium text-text">{player.name}</div>
-          <div className="mt-1 text-xs text-muted">{player.nationality} · {player.secondaryPositions.join(" / ")}</div>
-        </Link>
-      ),
+      label: "Pursue now",
+      description: "The strongest dossiers with clear next steps attached.",
+      profiles: trackedProfiles.filter((profile) => profile.intel.decisionStatus === "Pursue").slice(0, 3),
     },
-    { key: "age", header: "Age", align: "right", render: (player) => player.age },
-    { key: "club", header: "Club", render: (player) => player.club },
-    { key: "league", header: "League", render: (player) => player.league },
-    { key: "position", header: "Pos", render: (player) => player.position },
-    { key: "minutes", header: "Minutes", align: "right", render: (player) => player.minutes.toLocaleString("en-GB") },
-    { key: "value", header: "Market value", align: "right", render: (player) => formatCurrencyMillions(player.marketValueM) },
-    { key: "score", header: "Scouting score", align: "right", render: (player) => <span className="font-semibold text-text">{player.scoutingScore}</span> },
     {
-      key: "form",
-      header: "Form",
-      render: (player) => <Badge tone={player.form === "Rising" ? "green" : player.form === "Stable" ? "blue" : "amber"}>{player.form}</Badge>,
+      label: "Review this week",
+      description: "Serious cases that merit board discussion or a final validation step.",
+      profiles: trackedProfiles.filter((profile) => profile.intel.decisionStatus === "Review").slice(0, 3),
+    },
+    {
+      label: "Watch and price check",
+      description: "Hold these names for timing, leverage, or benchmark discipline.",
+      profiles: trackedProfiles.filter((profile) => ["Watch", "Price Check"].includes(profile.intel.decisionStatus)).slice(0, 6),
     },
   ];
 
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow="Discovery"
-        title="Player search and discovery"
-        description="Search like a serious scouting database: role, value, contract leverage, physical profile, and performance floor in one premium view."
+        eyebrow="Players"
+        title="Tracked player dossiers"
+        description="A live library of active recruitment cases, organised by what the club should do next rather than by database storage."
         action={
-          <div className="flex gap-3">
-            <Button variant="outline" className="gap-2"><SlidersHorizontal className="size-4" />Saved filters</Button>
-            <Button className="gap-2"><BookmarkPlus className="size-4" />Create shortlist</Button>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/discovery">
+              <Button variant="outline" className="gap-2">
+                <Radar className="size-4" />
+                Open discovery
+              </Button>
+            </Link>
+            <Button className="gap-2">
+              <FileDown className="size-4" />
+              Export dossier pack
+            </Button>
           </div>
         }
       />
 
-      <FilterPanel filters={filters} setFilter={setFilter} />
-
-      <Card>
-        <CardContent className="space-y-5 p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-label">Results</p>
-              <h3 className="mt-2 text-xl font-semibold text-text">{filteredPlayers.length} matching profiles</h3>
-              <p className="mt-2 text-sm leading-6 text-muted">Toggle between analytical table view and card-first scouting view without losing the current lens.</p>
+      <Card className="overflow-hidden bg-hero">
+        <CardContent className="grid gap-6 p-6 xl:grid-cols-[1.2fr_0.8fr] xl:p-8">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <DecisionBadge status={featured.intel.decisionStatus} size="md" />
+              <ConfidenceBadge level={featured.intel.confidenceLevel} />
+              <ValueGapBadge valueGapM={featured.intel.valueGapM} valueGapPct={featured.intel.valueGapPct} />
+              <StatusTag label={featured.intel.priceRealism} />
             </div>
-            <div className="flex items-center gap-3">
-              <div className="inline-flex rounded-2xl border border-white/8 bg-white/[0.03] p-1">
-                <button onClick={() => setView("table")} className={`rounded-xl px-3 py-2 text-sm ${view === "table" ? "bg-white/10 text-text" : "text-muted"}`}>
-                  <span className="inline-flex items-center gap-2"><List className="size-4" />Table</span>
-                </button>
-                <button onClick={() => setView("grid")} className={`rounded-xl px-3 py-2 text-sm ${view === "grid" ? "bg-white/10 text-text" : "text-muted"}`}>
-                  <span className="inline-flex items-center gap-2"><LayoutGrid className="size-4" />Grid</span>
-                </button>
-              </div>
+            <h1 className="mt-4 text-4xl font-semibold text-text">{featured.player.name}</h1>
+            <p className="mt-2 text-base text-slate-300">
+              {featured.player.club} · {featured.player.league} · {featured.intel.roleFitLabel}
+            </p>
+            <div className="mt-5 rounded-[24px] bg-white/[0.03] p-5">
+              <p className="text-label">Next action</p>
+              <p className="mt-2 text-2xl font-semibold text-text">{featured.intel.nextAction}</p>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">{featured.intel.decisionReason}</p>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link href={`/players/${featured.player.slug}`}>
+                <Button className="gap-2">
+                  Open dossier
+                  <ArrowRight className="size-4" />
+                </Button>
+              </Link>
+              <Button variant="panel" className="gap-2">
+                <NotebookPen className="size-4" />
+                Add board note
+              </Button>
             </div>
           </div>
 
-          {filteredPlayers.length === 0 ? (
-            <EmptyState title="No players match this lens" description="Relax the contract, value, or score filters to widen the scouting surface." />
-          ) : view === "table" ? (
-            <DataTable columns={columns} data={filteredPlayers} rowKey={(player) => player.id} />
-          ) : (
-            <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
-              {filteredPlayers.map((player, index) => (
-                <motion.div key={player.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.03 }}>
-                  <PlayerCard player={player} />
-                </motion.div>
+          <div className="space-y-4">
+            <div className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+              <p className="text-label">Why this case is live</p>
+              <p className="mt-3 text-sm leading-7 text-slate-300">{featured.intel.reliabilityNote}</p>
+            </div>
+            <div className="rounded-[24px] border border-white/10 bg-panel-2/70 p-5">
+              <p className="text-label">Commercial posture</p>
+              <p className="mt-3 text-sm leading-7 text-slate-300">{featured.intel.contractUrgency}</p>
+              <p className="mt-3 text-sm leading-7 text-muted">{featured.intel.availability}</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {featured.intel.modelFlags.map((flag) => (
+                <div key={flag} className="rounded-[20px] border border-white/8 bg-panel-2/70 p-4 text-sm text-slate-200">
+                  {flag}
+                </div>
               ))}
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
+
+      <div className="space-y-6">
+        {groups.map((group) => (
+          <section key={group.label} className="space-y-4">
+            <SectionHeader title={group.label} description={group.description} />
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {group.profiles.map(({ player }) => (
+                <PlayerCard key={player.id} player={player} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
