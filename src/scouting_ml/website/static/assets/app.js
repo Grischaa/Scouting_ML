@@ -2017,7 +2017,13 @@ function renderWatchlist() {
 }
 
 async function refreshWatchlist() {
-  if (!state.connected) return;
+  if (!backendReady()) {
+    state.watchlistRows = [];
+    state.watchlistTotal = 0;
+    renderWatchlist();
+    el.watchlistMeta.textContent = "Watchlist unavailable until backend artifacts are ready.";
+    return;
+  }
   try {
     const payload = await requestJson("/market-value/watchlist", {
       method: "GET",
@@ -3162,7 +3168,17 @@ function updateSelectOptions(select, values, keepValue = "") {
   }
 }
 
+function backendReady() {
+  return Boolean(state.connected && state.health?.status === "ok");
+}
+
 async function refreshCoverageAndOptions() {
+  if (!backendReady()) {
+    state.coverageRows = [];
+    renderCoverageTable();
+    renderOverviewReadiness();
+    return;
+  }
   const rows = await fetchAllPredictions({
     split: state.split,
     columns:
@@ -3276,6 +3292,18 @@ async function runQuery() {
   readWorkbenchControlsToState();
   localStorage.setItem("scoutml_api_base", state.apiBase);
   renderModeAffordances();
+  if (!backendReady()) {
+    state.rows = [];
+    state.total = 0;
+    state.count = 0;
+    state.queryDiagnostics = null;
+    el.tbody.innerHTML =
+      '<tr><td colspan="10">Backend artifacts are not ready. Review Overview for readiness details.</td></tr>';
+    renderResultsNote();
+    renderPager();
+    clearDetail();
+    return;
+  }
   setLoading(true);
   try {
     if (state.mode === "shortlist") {
@@ -3666,6 +3694,14 @@ function renderFunnelTables() {
 }
 
 async function runFunnel() {
+  if (!backendReady()) {
+    state.funnelRows = [];
+    state.funnelTopRows = [];
+    state.funnelDiagnostics = null;
+    renderFunnelTables();
+    el.funnelMeta.textContent = "Target funnel unavailable until backend artifacts are ready.";
+    return;
+  }
   const split = el.funnelSplit.value;
   const minAge = parseNumberOr(el.funnelMinAge.value, -1);
   const maxAge = parseNumberOr(el.funnelMaxAge.value, 23);
@@ -3743,6 +3779,20 @@ async function loadHealthAndMetrics() {
   state.selectedReport = null;
   state.selectedHistory = null;
   state.health = await getJson("/market-value/health");
+  state.connected = true;
+  if (state.health?.status !== "ok") {
+    state.metrics = null;
+    state.modelManifest = null;
+    state.benchmark = null;
+    state.activeArtifacts = null;
+    setStatus("error", "Artifacts missing");
+    renderTrustCard();
+    renderMetrics();
+    renderSegmentTable();
+    renderBenchmarkCards();
+    renderOverviewReadiness();
+    return false;
+  }
   state.metrics = (await getJson("/market-value/metrics")).payload || null;
   try {
     state.modelManifest = (await getJson("/market-value/model-manifest")).payload || null;
@@ -3763,13 +3813,13 @@ async function loadHealthAndMetrics() {
   const artifacts = state.health?.artifacts || {};
   const ok = Boolean(artifacts.test_predictions_exists && artifacts.metrics_exists);
   setStatus(ok ? "ok" : "error", ok ? "Artifacts ready" : "Artifacts missing");
-  state.connected = true;
 
   renderTrustCard();
   renderMetrics();
   renderSegmentTable();
   renderBenchmarkCards();
   renderOverviewReadiness();
+  return true;
 }
 
 function resetWorkbenchControls() {
@@ -3812,7 +3862,8 @@ function bindEvents() {
     readWorkbenchControlsToState();
     localStorage.setItem("scoutml_api_base", state.apiBase);
     try {
-      await loadHealthAndMetrics();
+      const ready = await loadHealthAndMetrics();
+      if (!ready) return;
       await refreshCoverageAndOptions();
       await runQuery();
       await refreshWatchlist();
@@ -4063,7 +4114,8 @@ async function boot() {
   bindEvents();
 
   try {
-    await loadHealthAndMetrics();
+    const ready = await loadHealthAndMetrics();
+    if (!ready) return;
     await refreshCoverageAndOptions();
     await runQuery();
     await refreshWatchlist();

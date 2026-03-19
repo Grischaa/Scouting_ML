@@ -1,42 +1,53 @@
 # Scouting ML Frontend
 
-This folder contains the static frontend for the recruitment-intelligence backend API aimed at smaller clubs and consultants hunting undervalued non-Big5 players:
+`src/scouting_ml/website/static/` is the canonical backend-connected frontend for ScoutML.
 
-- `static/index.html` - multi-view scouting application shell
-- `static/assets/app.js` - API client + state + valuation/funnel logic
-- `static/assets/styles.css` - responsive dashboard styling
+Current frontend paths:
+
+- `static/index.html` - canonical recruitment UI backed by the FastAPI market-value API
+- `static/assets/app.js` - API client, state management, watchlist actions, exports, and detail workflows
+- `static/assets/styles.css` - canonical dashboard styling
+- `frontend/` - separate Next.js mock-data demo kept for portfolio purposes, not the canonical backend UI
+- `legacy/` - archived generated frontend and build scripts kept only as reference
 
 ## Main views
 
-- `Overview` - model trust card, valuation-vs-shortlist champion routing, val/test KPIs, value-segment reliability, league coverage
-- `Recruitment Board` - move between valuation and shortlist modes, then filter by age corridor, role need, budget band, contract years left, and outside-Big-5 focus
-- `Target Funnel` - build non-Big5 scouting shortlists with the same smaller-club filters used on the board
-
-## Recruitment exports
-
-- `Export Club CSV` - compact shortlist export for club discussion or analyst review
-- `Export Window Pack JSON` - consultant-style pack with active filters, champion routing, and current board rows
-- `Export Memo JSON/CSV` - player-level memo export from the detail panel
-- `Export Memo Pack JSON` - watchlist-oriented bulk pack for consultant delivery
+- `Overview` - readiness, artifact routing, metrics, and benchmark context
+- `Recruitment Board` - valuation and shortlist workflows with age, role, budget, contract, and non-Big5 filters
+- `Target Funnel` - candidate funnel for non-Big5 scouting prioritization
 
 ## Run locally
 
-### 1) Start backend API
+### 1) Start the backend API
 
 PowerShell:
 
 ```powershell
 $env:PYTHONPATH = "src"
-$env:SCOUTING_API_CORS_ORIGINS = "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500"
+$env:SCOUTING_API_CORS_ORIGINS = "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500,http://127.0.0.1:5500"
 uvicorn scouting_ml.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Bash:
+
+```bash
+export PYTHONPATH=src
+export SCOUTING_API_CORS_ORIGINS="http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500,http://127.0.0.1:5500"
+python3 -m uvicorn scouting_ml.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 2) Start a static server
 
-From repository root:
+From the repository root:
 
 ```bash
 python3 -m http.server 8080
+```
+
+Or:
+
+```bash
+make static-ui
 ```
 
 Open:
@@ -47,27 +58,31 @@ In the UI, set API base to:
 
 - `http://localhost:8000`
 
-Recommended first workflow:
+## Degraded mode
 
-1. connect the API
-2. review `Overview`
-3. use `Recruitment Board` in shortlist mode and tighten the age / budget / contract / role filters
-4. move strongest targets into the watchlist
-5. export a `Window Pack JSON` or `Memo Pack JSON` for club / consultant delivery
-6. use `Target Funnel` for outside-Big-5 sourcing
+The UI treats `/market-value/health` as a readiness gate.
 
-## Required artifacts
+- If artifacts are ready, the board, funnel, and watchlist load normally.
+- If artifacts are missing or strict startup validation fails, the UI stops after health and shows the degraded status instead of cascading into failing market-value requests.
 
-The frontend uses backend endpoints that read these files by default:
+## Artifact expectations
+
+The canonical frontend expects the backend to resolve these artifact paths by default:
 
 - `data/model/big5_predictions_full_v2.csv`
 - `data/model/big5_predictions_full_v2_val.csv`
 - `data/model/big5_predictions_full_v2.metrics.json`
 
-If you store artifacts elsewhere, set:
+If artifacts live elsewhere, set the usual env vars before starting `uvicorn`:
 
 - `SCOUTING_TEST_PREDICTIONS_PATH`
 - `SCOUTING_VAL_PREDICTIONS_PATH`
 - `SCOUTING_METRICS_PATH`
+- `SCOUTING_MODEL_MANIFEST_PATH`
+- `SCOUTING_BENCHMARK_REPORT_PATH`
 
-before starting `uvicorn`.
+## Frontend status
+
+- Canonical backend-connected frontend: `src/scouting_ml/website/static/`
+- Optional mock-data demo: `frontend/`
+- Legacy generated frontend archive: `src/scouting_ml/website/legacy/`; kept only as reference, not the active product path

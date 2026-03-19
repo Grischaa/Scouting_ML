@@ -1,35 +1,42 @@
 ## NLP in Scout_Pred
-- **Purpose:** Condense large performance datasets into human-friendly insights, classify player roles without hard labels, and power semantic search to surface similar profiles quickly for analysts and scouts.
-- **Value:** Saves time on first-pass evaluations, standardizes language across reports, and provides repeatable, auditable outputs that pair with quantitative models.
 
-## Module Overview
-- **scouting_ml/nlp/config.py** — Environment-driven configuration (devices, model ids, thresholds) for all NLP components.
-- **scouting_ml/nlp/prompts.py** — Pure prompt builders for scouting reports, embedding text, and role-classification context; no model logic.
-- **scouting_ml/nlp/summarizer.py** — Lazy-loaded HF summarization pipeline that turns structured player data into concise scouting reports with token safeguards.
-- **scouting_ml/nlp/role_classifier.py** — Zero-shot role classification with fixed candidate roles and confidence thresholding.
-- **scouting_ml/services/scouting_report_service.py** — Stateless service wrapper adding validation and in-memory caching around report generation.
-- **scouting_ml/services/player_similarity_service.py** — FAISS-based nearest-neighbour retrieval with deterministic justifications (non-LLM).
+The NLP layer is currently experimental. The public `/players/*` routes remain available, but they are disabled by default and must be explicitly enabled with:
 
-## Model Choices & Trade-offs
-- **Summarization:** `facebook/bart-large-cnn` — strong general summarizer; heavier latency but better fidelity than smaller models.
-- **Embeddings:** `sentence-transformers/all-MiniLM-L6-v2` — lightweight, fast inference; lower dimensionality may miss rare nuances.
-- **Zero-shot roles:** `facebook/bart-large-mnli` — robust NLI backbone; performance can vary for domain-specific football terminology.
-- **Device selection:** Configurable (`HF_DEVICE`) to support CPU by default; GPU recommended for batch workloads.
+- `SCOUTING_ENABLE_EXPERIMENTAL_NLP_ROUTES=1`
 
-## Limitations & Biases
-- Summaries reflect input data quality; missing stats produce sparser narratives.
-- Zero-shot labels rely on English prompts and may misinterpret unconventional roles or hybrid systems.
-- Embedding-based similarity inherits dataset bias (league coverage, age distribution, positional balance) and FAISS index choices.
-- Confidence thresholds reduce noise but may suppress edge-case players.
+## What is currently real
 
-## Ethical Considerations
-- Avoid over-reliance on automated outputs for final decisions; models should augment, not replace, human scouting.
-- Be transparent about data sources and model limitations when sharing insights with players, agents, or clubs.
-- Guard against reinforcing demographic or league-based biases in recommendations.
-- Ensure compliance with data protection and privacy standards for any personally identifiable information.
+- `scouting_ml/services/player_similarity_service.py` provides FAISS-backed similar-player retrieval when `PLAYER_FAISS_INDEX_PATH`, `PLAYER_EMBEDDINGS_PATH`, and `PLAYER_METADATA_PATH` are configured.
+- `scouting_ml/services/scouting_report_service.py` is a thin wrapper around the summarization layer with validation and in-memory caching.
+- `scouting_ml/nlp/config.py` centralizes optional Hugging Face model configuration.
 
-## Website Integration
-- Summaries and role labels feed the web UI player pages; caching keeps response times low.
-- Similarity search drives “Players like this” widgets using FAISS-backed retrieval.
-- All NLP endpoints consume environment-configured models, enabling deployment-specific tuning without code changes.
-- Services are stateless and API-agnostic, making them easy to wrap in FastAPI or other frameworks without modification.
+## What is intentionally de-scoped
+
+- The canonical static frontend under `src/scouting_ml/website/static/` does not currently depend on `/players/*`.
+- Summary and role routes are treated as experimental because they rely on optional Hugging Face dependencies and only receive thin player context today.
+- `transformers` is intentionally not part of the base `requirements.txt`; enabling these routes in a deployment means installing and provisioning the NLP stack explicitly.
+
+## Route behavior
+
+When `SCOUTING_ENABLE_EXPERIMENTAL_NLP_ROUTES=0` or unset:
+
+- `/players/{player_id}/scouting-report` returns `503`
+- `/players/{player_id}/similar` returns `503`
+- `/players/{player_id}/role` returns `503`
+
+When the flag is enabled:
+
+- `/players/{player_id}/similar` uses the configured FAISS resources
+- `/players/{player_id}/scouting-report` and `/players/{player_id}/role` return `503` if optional NLP dependencies are unavailable
+
+## Optional NLP configuration
+
+- `HF_DEVICE`
+- `SUMMARIZATION_MODEL`
+- `EMBEDDING_MODEL`
+- `ZERO_SHOT_MODEL`
+- `MAX_SUMMARY_TOKENS`
+- `ROLE_CONFIDENCE_THRESHOLD`
+- `ENABLE_ROLE_CLASSIFICATION`
+
+Use `.env.example` for the canonical list of runtime variables.

@@ -20,5 +20,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install -e .
+      - name: Ruff
+        run: |
+          ruff check src/scouting_ml/api src/scouting_ml/core src/scouting_ml/services src/scouting_ml/tests
+      - name: API smoke check
+        run: |
+          PYTHONPATH=src python -c "from scouting_ml.api.main import app; paths = {route.path for route in app.routes}; required = {'/', '/health', '/market-value/health'}; missing = sorted(required - paths); assert not missing, missing; print('API smoke ok')"
       - name: Run tests
         run: pytest -q

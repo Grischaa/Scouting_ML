@@ -41,15 +41,28 @@ def read_csv_env(name: str, default: str) -> tuple[str, ...]:
 class ApiRuntimeConfig:
     """Environment-backed API settings used across app initialization."""
 
-    cors_origins: tuple[str, ...] = ("*",)
+    cors_origins: tuple[str, ...] = (
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+    )
     strict_artifacts: bool = False
+    experimental_nlp_routes: bool = False
 
 
 def load_api_runtime_config() -> ApiRuntimeConfig:
     """Resolve API runtime settings from environment variables."""
     return ApiRuntimeConfig(
-        cors_origins=read_csv_env("SCOUTING_API_CORS_ORIGINS", "*"),
+        cors_origins=read_csv_env(
+            "SCOUTING_API_CORS_ORIGINS",
+            "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500,http://127.0.0.1:5500",
+        ),
         strict_artifacts=read_bool_env("SCOUTING_STRICT_ARTIFACTS", default=False),
+        experimental_nlp_routes=read_bool_env(
+            "SCOUTING_ENABLE_EXPERIMENTAL_NLP_ROUTES",
+            default=False,
+        ),
     )
 
 

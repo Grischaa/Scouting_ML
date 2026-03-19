@@ -7,7 +7,7 @@ from threading import Lock
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_503_SERVICE_UNAVAILABLE
 
 from scouting_ml.api.routes_market_value import router as market_value_router
@@ -26,6 +26,7 @@ _STARTUP_LOCK = Lock()
 _STARTUP_CHECKS_DONE = False
 _STARTUP_CHECKS_ERROR: Exception | None = None
 _STARTUP_CHECK_EXEMPT_PATHS = {"/health", "/market-value/health"}
+_STARTUP_CHECK_PROTECTED_PREFIXES = ("/market-value",)
 
 
 def _strict_artifacts_enabled() -> bool:
@@ -80,7 +81,18 @@ app.add_middleware(
 
 @app.middleware("http")
 async def startup_checks_middleware(request: Request, call_next) -> Response:
-    _ensure_startup_checks(raise_on_failure=request.url.path not in _STARTUP_CHECK_EXEMPT_PATHS)
+    path = request.url.path
+    _ensure_startup_checks(raise_on_failure=False)
+    if (
+        _STARTUP_CHECKS_ERROR is not None
+        and path not in _STARTUP_CHECK_EXEMPT_PATHS
+        and path.startswith(_STARTUP_CHECK_PROTECTED_PREFIXES)
+    ):
+        payload = health_payload()
+        payload["detail"] = (
+            "Market-value artifacts are not ready. Check /market-value/health for readiness details."
+        )
+        return JSONResponse(status_code=HTTP_503_SERVICE_UNAVAILABLE, content=payload)
     return await call_next(request)
 
 # Register routers

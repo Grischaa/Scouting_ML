@@ -347,8 +347,16 @@ async def market_value_scout_targets(
     """Return production-ready scouting targets ranked by confidence-weighted undervaluation."""
     try:
         pos_list = [p.strip().upper() for p in positions.split(",") if p.strip()] if positions else None
-        include_list = [l.strip() for l in include_leagues.split(",") if l.strip()] if include_leagues else None
-        exclude_list = [l.strip() for l in exclude_leagues.split(",") if l.strip()] if exclude_leagues else None
+        include_list = (
+            [league_name.strip() for league_name in include_leagues.split(",") if league_name.strip()]
+            if include_leagues
+            else None
+        )
+        exclude_list = (
+            [league_name.strip() for league_name in exclude_leagues.split(",") if league_name.strip()]
+            if exclude_leagues
+            else None
+        )
         payload = query_scout_targets(
             split=split,
             top_n=top_n,

@@ -1,22 +1,22 @@
-# ScoutML: Recruitment Intelligence for Smaller Clubs and Consultants
+# ScoutML: Artifact-Driven Recruitment Intelligence
 
-End-to-end football recruitment platform for:
+ScoutML is a football scouting and market-value ML platform built around an artifact-driven valuation pipeline, a FastAPI serving layer, and a backend-connected static recruitment UI.
 
-- market-value prediction (player-level, split by position),
-- confidence-aware undervaluation ranking, especially outside the Big 5,
-- tactical player breakdowns (archetype, formation fit, radar),
-- recruitment workflows (watchlist, weekly KPIs, onboarding checks),
-- production-grade pipeline orchestration.
+What is materially implemented today:
 
-Primary product direction: help smaller clubs and external consultants identify undervalued non-Big5 players, build shortlists, and turn them into concrete recruitment actions.
+- position-aware player valuation artifacts and confidence-aware undervaluation ranking
+- shortlist and scout-target workflows oriented toward non-Big-5 opportunity discovery
+- detail-view payloads for scouting memos, archetype fit, formation fit, radar context, and history strength
+- explicit degraded-mode/readiness behavior when required artifacts are missing
+- file-backed watchlist and export flows intended for internal or single-operator use
 
-This repository supports Big5 and non-Big5 league workflows if your processed data is organized correctly.
+This repo is best understood as a robust internal-quality ML/API project with a polished demo surface, not as a multi-tenant production SaaS backend.
 
 ---
 
 ## 1) What This Project Does
 
-ScoutML builds and serves player valuation predictions from season-level data and external enrichment, then turns them into recruitment workflows for affordable non-Big5 opportunity mapping.
+ScoutML builds and serves player valuation predictions from season-level data and external enrichment, then turns them into concrete recruitment workflows for affordable non-Big-5 opportunity mapping.
 
 Core capabilities:
 
@@ -32,7 +32,7 @@ Core capabilities:
   - recruitment board with budget / contract / age / role filters
   - target funnel + watchlist management
   - consultant-ready exports (club CSV, window pack JSON, player memo exports)
-- One-command production pipeline + one-command weekly scout ops
+- One-command artifact pipeline + one-command weekly scout ops
 
 ---
 
@@ -42,12 +42,19 @@ Key folders:
 
 - `src/scouting_ml/models` -> dataset build, cleaning, model training
 - `src/scouting_ml/scripts` -> orchestration and utility scripts
-- `src/scouting_ml/services` -> business logic (valuation, reports, watchlist)
+- `src/scouting_ml/services` -> business logic (valuation, artifacts, reports, watchlist)
 - `src/scouting_ml/api` -> FastAPI routes
-- `src/scouting_ml/website/static` -> frontend (HTML/CSS/JS)
+- `src/scouting_ml/website/static` -> canonical backend-connected frontend (HTML/CSS/JS)
+- `frontend` -> optional Next.js mock-data demo, kept for portfolio use and not the canonical backend UI
+- `src/scouting_ml/website` -> canonical static frontend sources plus archived legacy generated frontend reference
 - `data/model` -> model artifacts, backtests, reports
 - `data/processed` -> source player-season CSV organization
 - `data/external` -> enrichment tables (injury, contract, transfer, national, context)
+
+Operational notes:
+
+- startup readiness is artifact-driven, and market-value routes degrade explicitly when artifacts are unavailable
+- the watchlist is intentionally file-backed and acceptable for local/internal workflows, not shared multi-user state
 
 ---
 
@@ -62,15 +69,41 @@ python -m venv .venv
 . .\.venv\Scripts\Activate.ps1
 ```
 
+Bash:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+```
+
 ### 3.2 Install dependencies
+
+PowerShell:
 
 ```powershell
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+python -m pip install -e .
+```
+
+Bash:
+
+```bash
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+python3 -m pip install -e .
 ```
 
 If dependency resolution fails, confirm you are in `.venv` and retry.
 Current `requirements.txt` expects `pyyaml==6.0.2` (needed with `scraperfc==4.1.0`).
+
+### 3.3 Runtime configuration
+
+- Review `.env.example` for the canonical API, artifact, watchlist, provider, similarity, and experimental NLP environment variables.
+- Minimum backend env for local work is usually just:
+  - `PYTHONPATH=src`
+  - `SCOUTING_API_CORS_ORIGINS=...`
+- Artifact path overrides remain backwards-compatible with `data/model/model_artifacts.env`.
 
 ---
 
@@ -557,10 +590,26 @@ Transfermarkt context additions now included in dataset build:
 
 ## 8) Run Backend API
 
+PowerShell:
+
 ```powershell
 $env:PYTHONPATH = "src"
-$env:SCOUTING_API_CORS_ORIGINS = "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500"
+$env:SCOUTING_API_CORS_ORIGINS = "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500,http://127.0.0.1:5500"
 uvicorn scouting_ml.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Bash:
+
+```bash
+export PYTHONPATH=src
+export SCOUTING_API_CORS_ORIGINS="http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500,http://127.0.0.1:5500"
+python3 -m uvicorn scouting_ml.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Or:
+
+```bash
+make api
 ```
 
 Health / docs:
@@ -570,15 +619,38 @@ Health / docs:
 - `http://127.0.0.1:8000/market-value/health`
 - `http://127.0.0.1:8000/market-value/benchmarks`
 
+Startup behavior:
+
+- `/health` and `/market-value/health` always report readiness
+- market-value routes return structured `503` JSON when strict startup validation fails or required artifacts are not ready
+
 ---
 
 ## 9) Run Frontend
 
+Canonical backend-connected UI:
+
+- `src/scouting_ml/website/static/index.html`
+
 Terminal 1: run API (section above).
 Terminal 2 (repo root):
 
+PowerShell:
+
 ```powershell
 python -m http.server 8080
+```
+
+Bash:
+
+```bash
+python3 -m http.server 8080
+```
+
+Or:
+
+```bash
+make static-ui
 ```
 
 Open:
@@ -594,6 +666,11 @@ Views:
 - `Overview`
 - `Recruitment Board`
 - `Target Funnel`
+
+Other frontend paths:
+
+- `frontend/` is a separate mock-data Next.js demo, not the canonical backend UI
+- `src/scouting_ml/website/legacy/` contains the archived generated frontend reference and is not an active product path
 
 ---
 
@@ -615,6 +692,14 @@ Views:
 - `GET /market-value/watchlist`
 - `POST /market-value/watchlist/items`
 - `DELETE /market-value/watchlist/items/{watch_id}`
+
+Experimental NLP routes:
+
+- `/players/{player_id}/scouting-report`
+- `/players/{player_id}/similar`
+- `/players/{player_id}/role`
+
+These are disabled by default. Set `SCOUTING_ENABLE_EXPERIMENTAL_NLP_ROUTES=1` to enable them.
 
 ---
 
@@ -655,6 +740,7 @@ python -c "import sklearn,optuna,lightgbm,xgboost,catboost,shap; print('ok')"
 - API not running on expected host/port.
 - Wrong API base in UI (use `http://127.0.0.1:8000`).
 - CORS env missing (`SCOUTING_API_CORS_ORIGINS`).
+- Backend readiness is degraded; check `/market-value/health`.
 
 ### PowerShell parser error on multiline command
 

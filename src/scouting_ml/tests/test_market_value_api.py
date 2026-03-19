@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
+import types
 from pathlib import Path
 
 import httpx
@@ -616,6 +618,128 @@ def test_watchlist_add_list_delete(tmp_path: Path, monkeypatch) -> None:
     assert list_after.json()["count"] == 0
 
 
+def test_watchlist_empty_list_and_missing_delete_are_safe(tmp_path: Path, monkeypatch) -> None:
+    watchlist_path = tmp_path / "watchlist.jsonl"
+    monkeypatch.setenv("SCOUTING_WATCHLIST_PATH", str(watchlist_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    list_resp = client.get("/market-value/watchlist")
+    assert list_resp.status_code == 200
+    payload = list_resp.json()
+    assert payload["path"] == str(watchlist_path)
+    assert payload["total"] == 0
+    assert payload["count"] == 0
+    assert payload["items"] == []
+
+    del_resp = client.delete("/market-value/watchlist/items/missing-watch-id")
+    assert del_resp.status_code == 200
+    assert del_resp.json()["deleted"] is False
+
+
+def test_watchlist_duplicate_add_updates_existing_entry(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_test_artifacts(tmp_path)
+    watchlist_path = tmp_path / "watchlist.jsonl"
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_WATCHLIST_PATH", str(watchlist_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    first_resp = client.post(
+        "/market-value/watchlist/items",
+        json={
+            "player_id": "ered_fw_1",
+            "split": "test",
+            "tag": "u23",
+            "notes": "first pass",
+            "source": "manual",
+        },
+    )
+    assert first_resp.status_code == 200
+    first_item = first_resp.json()["item"]
+
+    second_resp = client.post(
+        "/market-value/watchlist/items",
+        json={
+            "player_id": "ered_fw_1",
+            "split": "test",
+            "tag": "u23",
+            "notes": "updated notes",
+            "source": "frontend_workbench",
+        },
+    )
+    assert second_resp.status_code == 200
+    second_item = second_resp.json()["item"]
+
+    assert second_item["watch_id"] == first_item["watch_id"]
+    assert second_item["notes"] == "updated notes"
+    assert second_item["source"] == "frontend_workbench"
+
+    list_resp = client.get("/market-value/watchlist", params={"tag": "u23"})
+    assert list_resp.status_code == 200
+    payload = list_resp.json()
+    assert payload["count"] == 1
+    assert payload["items"][0]["watch_id"] == first_item["watch_id"]
+    assert payload["items"][0]["notes"] == "updated notes"
+
+    lines = [line for line in watchlist_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) == 1
+
+
+def test_watchlist_recovers_from_corrupt_file_and_backs_up_before_rewrite(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_test_artifacts(tmp_path)
+    watchlist_path = tmp_path / "watchlist.jsonl"
+    watchlist_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "watch_id": "existing-watch",
+                        "created_at_utc": "2026-01-01T00:00:00+00:00",
+                        "player_id": "ered_fw_1",
+                        "split": "test",
+                        "season": "2024/25",
+                        "tag": "u23",
+                        "notes": "existing",
+                    }
+                ),
+                "{bad json",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_WATCHLIST_PATH", str(watchlist_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    list_resp = client.get("/market-value/watchlist")
+    assert list_resp.status_code == 200
+    assert list_resp.json()["count"] == 1
+    assert list_resp.json()["items"][0]["watch_id"] == "existing-watch"
+
+    add_resp = client.post(
+        "/market-value/watchlist/items",
+        json={
+            "player_id": "liga_mf_1",
+            "split": "test",
+            "tag": "u23",
+            "notes": "new item",
+        },
+    )
+    assert add_resp.status_code == 200
+
+    lines = [line for line in watchlist_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(lines) == 2
+    backups = list(tmp_path.glob("watchlist.jsonl.bak.*"))
+    assert backups
+
+
 def test_predictions_default_sort_uses_capped_gap(tmp_path: Path, monkeypatch) -> None:
     test_path, val_path, metrics_path = _write_test_artifacts(tmp_path)
     monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
@@ -630,6 +754,61 @@ def test_predictions_default_sort_uses_capped_gap(tmp_path: Path, monkeypatch) -
     assert payload["sort_by"] == "value_gap_capped_eur"
     assert payload["count"] == 2
     assert "value_gap_capped_eur" in payload["items"][0]
+
+
+def test_predictions_endpoint_exposes_board_row_fields(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_recruitment_filter_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get("/market-value/predictions", params={"split": "test", "limit": 1})
+    assert resp.status_code == 200
+    item = resp.json()["items"][0]
+    assert {
+        "player_id",
+        "name",
+        "club",
+        "league",
+        "season",
+        "model_position",
+        "market_value_eur",
+        "value_gap_conservative_eur",
+        "value_gap_capped_eur",
+        "undervaluation_confidence",
+    } <= set(item)
+
+
+def test_predictions_endpoint_supports_limited_columns_for_coverage_fetch(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_test_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get(
+        "/market-value/predictions",
+        params={
+            "split": "test",
+            "limit": 5,
+            "columns": "season,league,undervalued_flag,undervaluation_confidence,value_gap_conservative_eur",
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["count"] >= 1
+    for item in payload["items"]:
+        assert set(item) <= {
+            "season",
+            "league",
+            "undervalued_flag",
+            "undervaluation_confidence",
+            "value_gap_conservative_eur",
+        }
+        assert {"season", "league", "undervaluation_confidence", "value_gap_conservative_eur"} <= set(item)
 
 
 def test_predictions_endpoint_supports_recruitment_filters(tmp_path: Path, monkeypatch) -> None:
@@ -702,6 +881,56 @@ def test_shortlist_and_scout_targets_support_role_budget_and_contract_filters(tm
     assert [item["player_id"] for item in scout_payload["items"]] == ["wing_target"]
 
 
+def test_shortlist_endpoint_exposes_diagnostics_and_active_score_field(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_recruitment_filter_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get(
+        "/market-value/shortlist",
+        params={"split": "test", "top_n": 5, "min_minutes": 900, "max_age": 23},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    diagnostics = payload["diagnostics"]
+    assert {"score_column", "ranking_basis", "precision_at_k"} <= set(diagnostics)
+    assert isinstance(diagnostics["precision_at_k"].get("rows"), list)
+    assert payload["count"] >= 1
+    active_score = diagnostics["score_column"]
+    assert active_score
+    assert active_score in payload["items"][0]
+
+
+def test_scout_targets_empty_state_retains_diagnostics_shape(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_recruitment_filter_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get(
+        "/market-value/scout-targets",
+        params={
+            "split": "test",
+            "top_n": 10,
+            "min_minutes": 900,
+            "min_confidence": 0.5,
+            "min_value_gap_eur": 25_000_000,
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["count"] == 0
+    assert payload["items"] == []
+    diagnostics = payload["diagnostics"]
+    assert {"score_column", "ranking_basis", "precision_at_k"} <= set(diagnostics)
+    assert isinstance(diagnostics["precision_at_k"].get("rows"), list)
+
+
 def test_validate_strict_artifact_env_requires_env_vars(monkeypatch) -> None:
     monkeypatch.delenv("SCOUTING_TEST_PREDICTIONS_PATH", raising=False)
     monkeypatch.delenv("SCOUTING_VAL_PREDICTIONS_PATH", raising=False)
@@ -732,8 +961,55 @@ def test_market_value_health_returns_503_payload_when_strict_artifacts_missing(t
     assert payload["artifacts"]["val_predictions_exists"] is False
     assert payload["artifacts"]["metrics_exists"] is False
 
-    with pytest.raises(RuntimeError, match="Strict artifacts mode is enabled"):
-        client.get("/market-value/metrics")
+    metrics_resp = client.get("/market-value/metrics")
+    assert metrics_resp.status_code == 503
+    metrics_payload = metrics_resp.json()
+    assert metrics_payload["status"] == "error"
+    assert "Market-value artifacts are not ready" in metrics_payload["detail"]
+
+
+def test_frontend_bootstrap_endpoints_expose_expected_payload_keys(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_test_artifacts(tmp_path)
+    benchmark_path = tmp_path / "benchmark.json"
+    benchmark_path.write_text(
+        json.dumps({"summary": {"label": "tmp benchmark"}, "segments": []}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_BENCHMARK_REPORT_PATH", str(benchmark_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+
+    health_resp = client.get("/market-value/health")
+    assert health_resp.status_code == 200
+    health_payload = health_resp.json()
+    assert health_payload["status"] == "ok"
+    assert {"artifacts", "metrics_loaded", "test_rows", "val_rows"} <= set(health_payload)
+
+    metrics_resp = client.get("/market-value/metrics")
+    assert metrics_resp.status_code == 200
+    metrics_payload = metrics_resp.json()["payload"]
+    assert {"dataset", "test_season", "val_season"} <= set(metrics_payload)
+
+    manifest_resp = client.get("/market-value/model-manifest")
+    assert manifest_resp.status_code == 200
+    manifest_payload = manifest_resp.json()["payload"]
+    assert manifest_payload["artifacts"]["test_predictions"]["path"] == str(test_path)
+    assert manifest_payload["artifacts"]["metrics"]["path"] == str(metrics_path)
+
+    active_resp = client.get("/market-value/active-artifacts")
+    assert active_resp.status_code == 200
+    active_payload = active_resp.json()["payload"]
+    assert active_payload["test_predictions_path"] == str(test_path)
+    assert "valuation" in active_payload
+    assert "future_shortlist" in active_payload
+
+    benchmark_resp = client.get("/market-value/benchmarks")
+    assert benchmark_resp.status_code == 200
+    assert benchmark_resp.json()["payload"]["summary"]["label"] == "tmp benchmark"
 
 
 def test_player_report_endpoint_returns_profile(tmp_path: Path, monkeypatch) -> None:
@@ -766,13 +1042,24 @@ def test_player_report_endpoint_returns_profile(tmp_path: Path, monkeypatch) -> 
     assert "valuation_guardrails" in report
     assert report["valuation_guardrails"]["cap_applied"] is True
     assert report["valuation_guardrails"]["value_gap_capped_eur"] is not None
+    assert report["valuation_guardrails"]["market_value_eur"] is not None
+    assert report["valuation_guardrails"]["fair_value_eur"] is not None
     assert "player_type" in report
     assert "formation_fit" in report
     assert "radar_profile" in report
+    assert isinstance(report["strengths"][0].get("label"), str)
+    assert report["strengths"][0]["label"]
+    assert isinstance(report["weaknesses"][0].get("label"), str)
+    assert isinstance(report["development_levers"][0].get("label"), str)
+    assert isinstance(report["risk_flags"], list)
+    assert report["risk_flags"]
+    assert {"severity", "code", "message"} <= set(report["risk_flags"][0])
     assert isinstance(report["player_type"].get("archetype"), str)
     assert report["player_type"].get("archetype")
     assert report["player_type"].get("position_key") == "W"
+    assert isinstance(report["player_type"].get("summary_text"), str)
     assert report["formation_fit"].get("position_key") == "W"
+    assert isinstance(report["formation_fit"].get("summary_text"), str)
     assert report["radar_profile"].get("position_key") == "W"
 
     recommended = report["formation_fit"].get("recommended")
@@ -865,7 +1152,10 @@ def test_player_profile_endpoint_returns_grouped_stats_and_similar_players(tmp_p
     first_group = profile["stat_groups"][0]
     assert "group" in first_group
     assert isinstance(first_group.get("items"), list)
+    assert first_group["group"]
+    assert "label" in first_group["items"][0]
     assert "display_value" in first_group["items"][0]
+    assert "kind" in first_group["items"][0]
 
     similar = profile.get("similar_players", {})
     assert similar["available"] is True
@@ -873,13 +1163,45 @@ def test_player_profile_endpoint_returns_grouped_stats_and_similar_players(tmp_p
     assert similar["items"][0]["player_id"] == "profile_fw_2"
     assert similar["items"][0]["name"] == "Profile FW 2"
     assert profile["external_tactical_context"]["available"] is True
+    assert isinstance(profile["external_tactical_context"]["summary_text"], str)
+    assert isinstance(profile["external_tactical_context"]["signals"], list)
     assert profile["external_tactical_context"]["preferred_formations"][0]["formation"] == "433"
     assert profile["availability_context"]["available"] is True
+    assert isinstance(profile["availability_context"]["summary_text"], str)
+    assert isinstance(profile["availability_context"]["signals"], list)
     assert profile["market_context"]["available"] is True
+    assert isinstance(profile["market_context"]["summary_text"], str)
+    assert isinstance(profile["market_context"]["signals"], list)
     assert profile["provider_coverage"]["statsbomb"] is True
+    assert profile["provider_coverage"]["availability_provider"] is True
+    assert profile["provider_coverage"]["market_provider"] is True
     codes = {flag["code"] for flag in profile.get("risk_flags", [])}
     assert "provider_injury_load" in codes
     assert "provider_schedule_congestion" in codes
+
+
+def test_player_profile_endpoint_handles_missing_similarity_resources(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+
+    def _raise_similarity(*args, **kwargs):
+        raise RuntimeError("faiss unavailable")
+
+    monkeypatch.setattr(mvs, "_load_similar_player_matches", _raise_similarity)
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get(
+        "/market-value/player/profile_fw_target/profile",
+        params={"split": "test", "top_metrics": 6, "similar_top_k": 3},
+    )
+    assert resp.status_code == 200
+    similar = resp.json()["profile"]["similar_players"]
+    assert similar["available"] is False
+    assert similar["items"] == []
+    assert "faiss unavailable" in similar["reason"]
 
 
 def test_player_reports_endpoint_returns_bulk_profiles(tmp_path: Path, monkeypatch) -> None:
@@ -976,3 +1298,63 @@ def test_player_history_strength_endpoint_returns_breakdown(tmp_path: Path, monk
     assert "history_injury_component" in keys
     assert isinstance(history["summary_text"], str)
     assert history["summary_text"]
+
+
+def test_player_history_strength_endpoint_handles_sparse_context(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_test_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get("/market-value/player/ered_fw_1/history-strength", params={"split": "test"})
+    assert resp.status_code == 200
+    history = resp.json()["breakdown"]["history_strength"]
+    assert isinstance(history["summary_text"], str)
+    assert 0.0 <= float(history["coverage_0_to_1"]) <= 1.0
+    assert history["tier"] in {"uncertain", "developing", "strong", "elite"}
+    assert isinstance(history["components"], list)
+
+
+def test_players_routes_return_503_when_experimental_nlp_is_disabled(monkeypatch) -> None:
+    monkeypatch.delenv("SCOUTING_ENABLE_EXPERIMENTAL_NLP_ROUTES", raising=False)
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    report_resp = client.get("/players/example-player/scouting-report")
+    assert report_resp.status_code == 503
+    assert "Experimental NLP routes are disabled" in report_resp.json()["detail"]
+
+    similar_resp = client.get("/players/example-player/similar")
+    assert similar_resp.status_code == 503
+    assert "Experimental NLP routes are disabled" in similar_resp.json()["detail"]
+
+
+def test_players_report_and_role_routes_map_missing_optional_deps_to_503(monkeypatch) -> None:
+    monkeypatch.setenv("SCOUTING_ENABLE_EXPERIMENTAL_NLP_ROUTES", "1")
+    _reset_service_caches()
+
+    import scouting_ml.services.scouting_report_service as report_service
+
+    monkeypatch.setattr(
+        report_service,
+        "get_scouting_report",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ModuleNotFoundError("transformers missing")),
+    )
+    fake_role_module = types.ModuleType("scouting_ml.nlp.role_classifier")
+
+    def _raise_role(*_args, **_kwargs):
+        raise ModuleNotFoundError("transformers missing")
+
+    fake_role_module.classify_player_role = _raise_role
+    monkeypatch.setitem(sys.modules, "scouting_ml.nlp.role_classifier", fake_role_module)
+
+    client = _ASGITestClient(app)
+    report_resp = client.get("/players/example-player/scouting-report")
+    assert report_resp.status_code == 503
+    assert "Experimental NLP dependencies are unavailable" in report_resp.json()["detail"]
+
+    role_resp = client.get("/players/example-player/role")
+    assert role_resp.status_code == 503
+    assert "Experimental NLP dependencies are unavailable" in role_resp.json()["detail"]

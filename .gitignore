@@ -18,6 +18,7 @@ data/*
 .ruff_cache/
 .coverage
 htmlcov/
+tmp/
 
 # local dbs
 *.duckdb

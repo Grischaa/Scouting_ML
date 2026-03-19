@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import hashlib
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -14,59 +13,60 @@ from typing import Any, Dict, Literal, Sequence
 import numpy as np
 import pandas as pd
 
-from scouting_ml.features.history_strength import (
-    HISTORY_COMPONENT_COLUMNS,
-    HISTORY_COMPONENT_LABELS,
-    HISTORY_COMPONENT_WEIGHTS,
-    add_history_strength_features,
-)
+from scouting_ml.features.history_strength import add_history_strength_features
 from scouting_ml.reporting.market_value_benchmarks import build_market_value_benchmark_payload
+from scouting_ml.services.market_value_artifacts import (
+    BENCHMARK_REPORT_ENV,
+    CALIBRATION_MIN_SAMPLES_ENV,
+    ChampionRole,
+    DEFAULT_BENCHMARK_REPORT,
+    DEFAULT_METRICS,
+    ENABLE_RESIDUAL_CALIBRATION_ENV,
+    METRICS_ENV,
+    MODEL_MANIFEST_ENV,
+    ROLE_TO_MANIFEST_KEY,
+    SPLIT_TO_PATH,
+    Split,
+    env_flag as _env_flag,
+    file_meta as _file_meta,
+    get_active_artifacts,
+    get_resolved_artifact_paths,
+    manifest_path as _manifest_path,
+    manifest_role_section as _manifest_role_section,
+    manifest_targets_active_artifacts as _manifest_targets_active_artifacts,
+    normalized_path_str as _normalized_path_str,
+    resolve_path as _resolve_path,
+    resolve_role_artifact_paths as _resolve_role_artifact_paths,
+    sha256_file as _sha256_file,
+    validate_strict_artifact_env,
+    watchlist_path as _watchlist_path,
+)
+from scouting_ml.services.watchlist_store import (
+    delete_watchlist_record,
+    read_watchlist_records,
+    upsert_watchlist_record,
+)
+from scouting_ml.services.market_value_profile_context import (
+    build_availability_context,
+    build_external_tactical_context,
+    build_history_strength_payload,
+    build_market_context_payload,
+    build_profile_stat_groups,
+    build_provider_coverage,
+    build_provider_risk_flags,
+    format_eur,
+)
+from scouting_ml.services.market_value_profile_taxonomy import (
+    ADVANCED_METRIC_DIRECTION,
+    ADVANCED_METRIC_LABEL,
+    ADVANCED_METRIC_SPECS,
+    ARCHETYPE_TEMPLATES,
+    FORMATION_FIT_TEMPLATES,
+    PROFILE_METRIC_SPECS,
+    RADAR_AXES_BY_POSITION,
+    ROLE_KEY_LABELS,
+)
 
-Split = Literal["test", "val"]
-ChampionRole = Literal["valuation", "future_shortlist"]
-
-TEST_PRED_ENV = "SCOUTING_TEST_PREDICTIONS_PATH"
-VAL_PRED_ENV = "SCOUTING_VAL_PREDICTIONS_PATH"
-METRICS_ENV = "SCOUTING_METRICS_PATH"
-MODEL_MANIFEST_ENV = "SCOUTING_MODEL_MANIFEST_PATH"
-BENCHMARK_REPORT_ENV = "SCOUTING_BENCHMARK_REPORT_PATH"
-ENABLE_RESIDUAL_CALIBRATION_ENV = "SCOUTING_ENABLE_RESIDUAL_CALIBRATION"
-CALIBRATION_MIN_SAMPLES_ENV = "SCOUTING_CALIBRATION_MIN_SAMPLES"
-WATCHLIST_PATH_ENV = "SCOUTING_WATCHLIST_PATH"
-VALUATION_TEST_PRED_ENV = "SCOUTING_VALUATION_TEST_PREDICTIONS_PATH"
-VALUATION_VAL_PRED_ENV = "SCOUTING_VALUATION_VAL_PREDICTIONS_PATH"
-VALUATION_METRICS_ENV = "SCOUTING_VALUATION_METRICS_PATH"
-FUTURE_TEST_PRED_ENV = "SCOUTING_FUTURE_SHORTLIST_TEST_PREDICTIONS_PATH"
-FUTURE_VAL_PRED_ENV = "SCOUTING_FUTURE_SHORTLIST_VAL_PREDICTIONS_PATH"
-FUTURE_METRICS_ENV = "SCOUTING_FUTURE_SHORTLIST_METRICS_PATH"
-
-DEFAULT_TEST_PRED = Path("data/model/big5_predictions_full_v2.csv")
-DEFAULT_VAL_PRED = Path("data/model/big5_predictions_full_v2_val.csv")
-DEFAULT_METRICS = Path("data/model/big5_predictions_full_v2.metrics.json")
-DEFAULT_MODEL_MANIFEST = Path("data/model/model_manifest.json")
-DEFAULT_BENCHMARK_REPORT = Path("data/model/reports/market_value_benchmark_report.json")
-DEFAULT_WATCHLIST_PATH = Path("data/model/scout_watchlist.jsonl")
-
-SPLIT_TO_PATH = {
-    "test": (TEST_PRED_ENV, DEFAULT_TEST_PRED),
-    "val": (VAL_PRED_ENV, DEFAULT_VAL_PRED),
-}
-ROLE_TO_MANIFEST_KEY: dict[ChampionRole, str] = {
-    "valuation": "valuation_champion",
-    "future_shortlist": "future_shortlist_champion",
-}
-ROLE_ENV_NAMES: dict[ChampionRole, dict[str, str]] = {
-    "valuation": {
-        "test": VALUATION_TEST_PRED_ENV,
-        "val": VALUATION_VAL_PRED_ENV,
-        "metrics": VALUATION_METRICS_ENV,
-    },
-    "future_shortlist": {
-        "test": FUTURE_TEST_PRED_ENV,
-        "val": FUTURE_VAL_PRED_ENV,
-        "metrics": FUTURE_METRICS_ENV,
-    },
-}
 FUTURE_OVERLAY_COLUMNS: tuple[str, ...] = (
     "_player_key",
     "_season_key",
@@ -98,771 +98,6 @@ BIG5_LEAGUES = {
     "ligue 1",
 }
 
-PROFILE_METRIC_SPECS: tuple[tuple[str, str, int], ...] = (
-    ("sofa_goals_per90", "Goals/90", 1),
-    ("sofa_assists_per90", "Assists/90", 1),
-    ("sofa_expectedGoals_per90", "xG/90", 1),
-    ("sofa_totalShots_per90", "Shots/90", 1),
-    ("sofa_keyPasses_per90", "Key passes/90", 1),
-    ("sofa_successfulDribbles_per90", "Successful dribbles/90", 1),
-    ("sofa_accuratePassesPercentage", "Pass accuracy %", 1),
-    ("sofa_totalDuelsWonPercentage", "Duels won %", 1),
-    ("sofa_tackles_per90", "Tackles/90", 1),
-    ("sofa_interceptions_per90", "Interceptions/90", 1),
-    ("sofa_clearances_per90", "Clearances/90", 1),
-    ("injury_days_per_1000_min", "Injury days/1000 min", -1),
-    ("history_strength_score", "History strength", 1),
-)
-
-ADVANCED_METRIC_SPECS: tuple[tuple[str, str, int], ...] = (
-    ("sofa_goals_per90", "Goals/90", 1),
-    ("sofa_assists_per90", "Assists/90", 1),
-    ("sofa_expectedGoals_per90", "xG/90", 1),
-    ("sofa_totalShots_per90", "Shots/90", 1),
-    ("sofa_shotsOnTarget_per90", "Shots on target/90", 1),
-    ("sofa_goalConversionPercentage", "Goal conversion %", 1),
-    ("sofa_keyPasses_per90", "Key passes/90", 1),
-    ("sofa_successfulDribbles_per90", "Dribbles/90", 1),
-    ("sofa_accurateFinalThirdPasses_per90", "Final-third passes/90", 1),
-    ("sofa_accurateCrossesPercentage", "Cross accuracy %", 1),
-    ("sofa_accuratePassesPercentage", "Pass accuracy %", 1),
-    ("sofa_totalDuelsWonPercentage", "Duels won %", 1),
-    ("sofa_aerialDuelsWon_per90", "Aerial duels won/90", 1),
-    ("sofa_aerialDuelsWonPercentage", "Aerial duels won %", 1),
-    ("sofa_tackles_per90", "Tackles/90", 1),
-    ("sofa_interceptions_per90", "Interceptions/90", 1),
-    ("sofa_clearances_per90", "Clearances/90", 1),
-    ("sofa_saves", "Saves", 1),
-    ("sofa_highClaims", "High claims", 1),
-    ("sofa_successfulRunsOut", "Successful runs out", 1),
-    ("sofa_accurateLongBallsPercentage", "Long-ball accuracy %", 1),
-    ("sb_progressive_passes_per90", "Progressive passes/90", 1),
-    ("sb_progressive_carries_per90", "Progressive carries/90", 1),
-    ("sb_passes_into_box_per90", "Passes into box/90", 1),
-    ("sb_shot_assists_per90", "Shot assists/90", 1),
-    ("sb_duel_win_rate", "Duel win rate", 1),
-    ("sb_aerial_win_rate", "Aerial win rate", 1),
-    ("injury_days_per_1000_min", "Injury days/1000 min", -1),
-    ("history_strength_score", "History strength", 1),
-)
-
-ADVANCED_METRIC_DIRECTION: dict[str, int] = {key: direction for key, _, direction in ADVANCED_METRIC_SPECS}
-ADVANCED_METRIC_LABEL: dict[str, str] = {key: label for key, label, _ in ADVANCED_METRIC_SPECS}
-PROFILE_CONTEXT_FIELDS: tuple[str, ...] = (
-    "player_id",
-    "name",
-    "club",
-    "league",
-    "season",
-    "country",
-    "nationality",
-    "position_main",
-    "position_group",
-    "model_position",
-    "age",
-    "height",
-    "foot",
-    "contract_years_left",
-)
-PROFILE_STAT_GROUP_ORDER: tuple[str, ...] = (
-    "Profile & Context",
-    "Value & Model",
-    "Attacking",
-    "Passing & Progression",
-    "Defending & Duels",
-    "Goalkeeping",
-    "External Tactical",
-    "Availability & Physical",
-    "History & Context",
-    "Schedule & Market",
-    "Other Metrics",
-)
-PROFILE_STAT_SKIP_FIELDS: tuple[str, ...] = (
-    "split",
-    "source",
-    "source_file",
-    "league_norm",
-    "position_norm",
-    "value_segment",
-    "expected_value_raw_eur",
-    "expected_value_low_raw_eur",
-    "expected_value_high_raw_eur",
-)
-ROLE_KEY_LABELS: dict[str, str] = {
-    "GK": "Goalkeeper",
-    "CB": "Centre-back",
-    "FB": "Fullback / Wing-back",
-    "DF": "Defender",
-    "DM": "Defensive midfielder",
-    "CM": "Central midfielder",
-    "AM": "Attacking midfielder",
-    "MF": "Midfielder",
-    "W": "Winger",
-    "SS": "Support forward",
-    "ST": "Striker",
-    "FW": "Forward",
-    "UNK": "Unknown role",
-}
-
-RADAR_AXES_BY_POSITION: dict[str, tuple[str, ...]] = {
-    "GK": (
-        "sofa_saves",
-        "sofa_highClaims",
-        "sofa_successfulRunsOut",
-        "sofa_accuratePassesPercentage",
-        "sofa_accurateLongBallsPercentage",
-        "injury_days_per_1000_min",
-    ),
-    "CB": (
-        "sb_aerial_win_rate",
-        "sb_duel_win_rate",
-        "sofa_interceptions_per90",
-        "sofa_clearances_per90",
-        "sb_progressive_passes_per90",
-        "sofa_accuratePassesPercentage",
-    ),
-    "FB": (
-        "sofa_tackles_per90",
-        "sofa_interceptions_per90",
-        "sb_progressive_carries_per90",
-        "sb_progressive_passes_per90",
-        "sofa_accurateCrossesPercentage",
-        "sofa_keyPasses_per90",
-    ),
-    "DM": (
-        "sofa_tackles_per90",
-        "sofa_interceptions_per90",
-        "sb_duel_win_rate",
-        "sb_progressive_passes_per90",
-        "sofa_accuratePassesPercentage",
-        "history_strength_score",
-    ),
-    "CM": (
-        "sb_progressive_passes_per90",
-        "sofa_accurateFinalThirdPasses_per90",
-        "sofa_keyPasses_per90",
-        "sofa_accuratePassesPercentage",
-        "sb_progressive_carries_per90",
-        "sofa_tackles_per90",
-    ),
-    "AM": (
-        "sofa_keyPasses_per90",
-        "sb_shot_assists_per90",
-        "sb_passes_into_box_per90",
-        "sofa_successfulDribbles_per90",
-        "sofa_expectedGoals_per90",
-        "sofa_assists_per90",
-    ),
-    "W": (
-        "sofa_successfulDribbles_per90",
-        "sb_progressive_carries_per90",
-        "sb_shot_assists_per90",
-        "sb_passes_into_box_per90",
-        "sofa_expectedGoals_per90",
-        "sofa_goalConversionPercentage",
-    ),
-    "SS": (
-        "sofa_keyPasses_per90",
-        "sb_shot_assists_per90",
-        "sofa_successfulDribbles_per90",
-        "sofa_expectedGoals_per90",
-        "sofa_shotsOnTarget_per90",
-        "sb_passes_into_box_per90",
-    ),
-    "ST": (
-        "sofa_expectedGoals_per90",
-        "sofa_totalShots_per90",
-        "sofa_shotsOnTarget_per90",
-        "sofa_goalConversionPercentage",
-        "sb_aerial_win_rate",
-        "sofa_goals_per90",
-    ),
-    "DF": (
-        "sofa_accuratePassesPercentage",
-        "sofa_clearances_per90",
-        "sofa_interceptions_per90",
-        "sofa_tackles_per90",
-        "sofa_aerialDuelsWon_per90",
-        "sofa_totalDuelsWonPercentage",
-    ),
-    "MF": (
-        "sofa_keyPasses_per90",
-        "sofa_assists_per90",
-        "sofa_accuratePassesPercentage",
-        "sofa_tackles_per90",
-        "sofa_interceptions_per90",
-        "sofa_successfulDribbles_per90",
-    ),
-    "FW": (
-        "sofa_goals_per90",
-        "sofa_expectedGoals_per90",
-        "sofa_shotsOnTarget_per90",
-        "sofa_keyPasses_per90",
-        "sofa_successfulDribbles_per90",
-        "sofa_totalDuelsWonPercentage",
-    ),
-}
-
-ARCHETYPE_TEMPLATES: dict[str, tuple[dict[str, Any], ...]] = {
-    "GK": (
-        {
-            "name": "Shot-Stopper",
-            "description": "Goalkeeper profile centered on save volume and box command.",
-            "targets": {
-                "sofa_saves": 0.86,
-                "sofa_highClaims": 0.70,
-                "sofa_accuratePassesPercentage": 0.44,
-                "sofa_successfulRunsOut": 0.42,
-                "injury_days_per_1000_min": 0.70,
-            },
-        },
-        {
-            "name": "Sweeper Keeper",
-            "description": "Proactive keeper for high-line structures and circulation.",
-            "targets": {
-                "sofa_successfulRunsOut": 0.86,
-                "sofa_accuratePassesPercentage": 0.80,
-                "sofa_accurateLongBallsPercentage": 0.74,
-                "sofa_highClaims": 0.60,
-                "sofa_saves": 0.52,
-            },
-        },
-    ),
-    "CB": (
-        {
-            "name": "Ball-Playing Centre-Back",
-            "description": "Centre-back who defends the box and progresses play cleanly.",
-            "targets": {
-                "sb_progressive_passes_per90": 0.82,
-                "sofa_accuratePassesPercentage": 0.86,
-                "sofa_interceptions_per90": 0.66,
-                "sb_aerial_win_rate": 0.70,
-                "sofa_clearances_per90": 0.50,
-            },
-        },
-        {
-            "name": "Stopper Centre-Back",
-            "description": "Duel-heavy centre-back with aerial and box-defending volume.",
-            "targets": {
-                "sofa_clearances_per90": 0.90,
-                "sofa_interceptions_per90": 0.74,
-                "sb_duel_win_rate": 0.76,
-                "sb_aerial_win_rate": 0.80,
-                "sofa_accuratePassesPercentage": 0.50,
-            },
-        },
-    ),
-    "FB": (
-        {
-            "name": "Overlapping Fullback",
-            "description": "Wide defender with crossing, carrying, and repeat transition volume.",
-            "targets": {
-                "sb_progressive_carries_per90": 0.80,
-                "sofa_accurateCrossesPercentage": 0.72,
-                "sofa_keyPasses_per90": 0.66,
-                "sofa_tackles_per90": 0.62,
-                "sofa_interceptions_per90": 0.58,
-            },
-        },
-        {
-            "name": "Inverted Fullback",
-            "description": "Fullback who supports buildup and protects central zones.",
-            "targets": {
-                "sb_progressive_passes_per90": 0.78,
-                "sofa_accuratePassesPercentage": 0.82,
-                "sofa_interceptions_per90": 0.64,
-                "sofa_tackles_per90": 0.62,
-                "sb_duel_win_rate": 0.60,
-            },
-        },
-    ),
-    "DM": (
-        {
-            "name": "Anchor 6",
-            "description": "Defensive midfielder focused on regains, duels, and screening.",
-            "targets": {
-                "sofa_tackles_per90": 0.86,
-                "sofa_interceptions_per90": 0.88,
-                "sb_duel_win_rate": 0.74,
-                "sofa_accuratePassesPercentage": 0.62,
-                "sb_progressive_passes_per90": 0.52,
-            },
-        },
-        {
-            "name": "Regista 6",
-            "description": "Deep midfielder who progresses play without sacrificing control.",
-            "targets": {
-                "sb_progressive_passes_per90": 0.86,
-                "sofa_accuratePassesPercentage": 0.88,
-                "sofa_accurateFinalThirdPasses_per90": 0.64,
-                "sofa_interceptions_per90": 0.62,
-                "sofa_tackles_per90": 0.56,
-            },
-        },
-    ),
-    "CM": (
-        {
-            "name": "Deep Playmaker",
-            "description": "Tempo-setter with progression and final-third delivery.",
-            "targets": {
-                "sb_progressive_passes_per90": 0.86,
-                "sofa_accuratePassesPercentage": 0.88,
-                "sofa_accurateFinalThirdPasses_per90": 0.72,
-                "sofa_keyPasses_per90": 0.64,
-                "sofa_tackles_per90": 0.46,
-            },
-        },
-        {
-            "name": "Box-to-Box Midfielder",
-            "description": "Balanced midfielder with carrying, pressing, and end-product support.",
-            "targets": {
-                "sb_progressive_carries_per90": 0.70,
-                "sofa_keyPasses_per90": 0.60,
-                "sofa_tackles_per90": 0.68,
-                "sofa_interceptions_per90": 0.60,
-                "sofa_expectedGoals_per90": 0.46,
-            },
-        },
-    ),
-    "AM": (
-        {
-            "name": "Chance Creator 10",
-            "description": "Final-third specialist driven by chance creation and box access.",
-            "targets": {
-                "sofa_keyPasses_per90": 0.90,
-                "sb_shot_assists_per90": 0.86,
-                "sb_passes_into_box_per90": 0.80,
-                "sofa_successfulDribbles_per90": 0.68,
-                "sofa_assists_per90": 0.70,
-            },
-        },
-        {
-            "name": "Goal Threat 10",
-            "description": "Attacking midfielder who adds real shot and scoring value.",
-            "targets": {
-                "sofa_expectedGoals_per90": 0.76,
-                "sofa_shotsOnTarget_per90": 0.72,
-                "sofa_keyPasses_per90": 0.72,
-                "sofa_successfulDribbles_per90": 0.62,
-                "sb_passes_into_box_per90": 0.68,
-            },
-        },
-    ),
-    "W": (
-        {
-            "name": "Direct Winger",
-            "description": "Wide attacker who wins ground with carrying and dribbling.",
-            "targets": {
-                "sofa_successfulDribbles_per90": 0.90,
-                "sb_progressive_carries_per90": 0.86,
-                "sofa_expectedGoals_per90": 0.62,
-                "sb_passes_into_box_per90": 0.64,
-                "sofa_goalConversionPercentage": 0.56,
-            },
-        },
-        {
-            "name": "Creator Winger",
-            "description": "Wide creator focused on shot assists, final ball, and box service.",
-            "targets": {
-                "sb_shot_assists_per90": 0.90,
-                "sofa_keyPasses_per90": 0.88,
-                "sb_passes_into_box_per90": 0.82,
-                "sofa_accurateCrossesPercentage": 0.70,
-                "sofa_successfulDribbles_per90": 0.62,
-            },
-        },
-    ),
-    "SS": (
-        {
-            "name": "Link Forward",
-            "description": "Support striker who creates and combines around the box.",
-            "targets": {
-                "sofa_keyPasses_per90": 0.82,
-                "sb_shot_assists_per90": 0.76,
-                "sofa_successfulDribbles_per90": 0.70,
-                "sofa_expectedGoals_per90": 0.62,
-                "sb_passes_into_box_per90": 0.66,
-            },
-        },
-        {
-            "name": "Shadow Striker",
-            "description": "Second forward who attacks space and still contributes creation.",
-            "targets": {
-                "sofa_expectedGoals_per90": 0.80,
-                "sofa_shotsOnTarget_per90": 0.76,
-                "sofa_keyPasses_per90": 0.64,
-                "sb_passes_into_box_per90": 0.64,
-                "sofa_successfulDribbles_per90": 0.56,
-            },
-        },
-    ),
-    "ST": (
-        {
-            "name": "Poacher",
-            "description": "Final-third finisher with high shot and xG output.",
-            "targets": {
-                "sofa_goals_per90": 0.92,
-                "sofa_expectedGoals_per90": 0.90,
-                "sofa_totalShots_per90": 0.86,
-                "sofa_shotsOnTarget_per90": 0.82,
-                "sofa_goalConversionPercentage": 0.68,
-            },
-        },
-        {
-            "name": "Mobile 9",
-            "description": "Striker who stretches the line and adds carrying or combination work.",
-            "targets": {
-                "sofa_expectedGoals_per90": 0.80,
-                "sofa_successfulDribbles_per90": 0.70,
-                "sofa_keyPasses_per90": 0.58,
-                "sb_passes_into_box_per90": 0.54,
-                "sofa_shotsOnTarget_per90": 0.72,
-            },
-        },
-        {
-            "name": "Target Forward",
-            "description": "Central reference point with aerial value and efficient finishing.",
-            "targets": {
-                "sb_aerial_win_rate": 0.84,
-                "sofa_aerialDuelsWonPercentage": 0.82,
-                "sofa_shotsOnTarget_per90": 0.70,
-                "sofa_goalConversionPercentage": 0.64,
-                "sofa_goals_per90": 0.72,
-            },
-        },
-    ),
-    "DF": (
-        {
-            "name": "Ball-Playing Defender",
-            "description": "Build-up defender with passing control and progression.",
-            "targets": {
-                "sofa_accuratePassesPercentage": 0.90,
-                "sb_progressive_passes_per90": 0.72,
-                "sofa_interceptions_per90": 0.64,
-                "sofa_clearances_per90": 0.44,
-                "sofa_totalDuelsWonPercentage": 0.64,
-            },
-        },
-        {
-            "name": "Stopper",
-            "description": "Duel-oriented defender with heavy defensive volume.",
-            "targets": {
-                "sofa_clearances_per90": 0.90,
-                "sofa_interceptions_per90": 0.72,
-                "sofa_tackles_per90": 0.72,
-                "sofa_totalDuelsWonPercentage": 0.74,
-                "sofa_accuratePassesPercentage": 0.44,
-            },
-        },
-    ),
-    "MF": (
-        {
-            "name": "Deep Playmaker",
-            "description": "Tempo-setter with high passing quality and buildup contribution.",
-            "targets": {
-                "sofa_accuratePassesPercentage": 0.90,
-                "sofa_keyPasses_per90": 0.72,
-                "sofa_assists_per90": 0.62,
-                "sofa_tackles_per90": 0.45,
-                "sofa_interceptions_per90": 0.55,
-            },
-        },
-        {
-            "name": "Ball-Winning Midfielder",
-            "description": "Midfielder focused on regains and duel control.",
-            "targets": {
-                "sofa_tackles_per90": 0.88,
-                "sofa_interceptions_per90": 0.88,
-                "sofa_totalDuelsWonPercentage": 0.76,
-                "sofa_accuratePassesPercentage": 0.60,
-                "sofa_keyPasses_per90": 0.40,
-            },
-        },
-    ),
-    "FW": (
-        {
-            "name": "Creator Forward",
-            "description": "Chance-creating attacker with link-play and dribble volume.",
-            "targets": {
-                "sofa_assists_per90": 0.80,
-                "sofa_keyPasses_per90": 0.90,
-                "sofa_successfulDribbles_per90": 0.82,
-                "sofa_accuratePassesPercentage": 0.62,
-                "sofa_goals_per90": 0.58,
-            },
-        },
-        {
-            "name": "Pressing Forward",
-            "description": "Work-rate forward that contributes in duels and defensive actions.",
-            "targets": {
-                "sofa_tackles_per90": 0.80,
-                "sofa_totalDuelsWonPercentage": 0.72,
-                "sofa_keyPasses_per90": 0.62,
-                "sofa_goals_per90": 0.55,
-                "sofa_successfulDribbles_per90": 0.55,
-            },
-        },
-    ),
-}
-
-FORMATION_FIT_TEMPLATES: dict[str, tuple[dict[str, Any], ...]] = {
-    "GK": (
-        {
-            "formation": "4-3-3",
-            "role": "High-line Keeper",
-            "targets": {
-                "sofa_successfulRunsOut": 0.80,
-                "sofa_accuratePassesPercentage": 0.72,
-                "sofa_accurateLongBallsPercentage": 0.68,
-                "sofa_highClaims": 0.62,
-            },
-        },
-        {
-            "formation": "5-3-2",
-            "role": "Box Keeper",
-            "targets": {
-                "sofa_saves": 0.82,
-                "sofa_highClaims": 0.72,
-                "sofa_successfulRunsOut": 0.42,
-                "sofa_accuratePassesPercentage": 0.50,
-            },
-        },
-    ),
-    "CB": (
-        {
-            "formation": "4-3-3",
-            "role": "Centre-Back",
-            "targets": {
-                "sofa_clearances_per90": 0.72,
-                "sofa_interceptions_per90": 0.66,
-                "sb_aerial_win_rate": 0.72,
-                "sofa_accuratePassesPercentage": 0.64,
-            },
-        },
-        {
-            "formation": "3-4-3",
-            "role": "Wide Centre-Back",
-            "targets": {
-                "sb_progressive_passes_per90": 0.74,
-                "sofa_accuratePassesPercentage": 0.76,
-                "sofa_interceptions_per90": 0.60,
-                "sofa_tackles_per90": 0.56,
-            },
-        },
-    ),
-    "FB": (
-        {
-            "formation": "4-3-3",
-            "role": "Overlapping Fullback",
-            "targets": {
-                "sb_progressive_carries_per90": 0.78,
-                "sofa_accurateCrossesPercentage": 0.68,
-                "sofa_keyPasses_per90": 0.62,
-                "sofa_tackles_per90": 0.60,
-            },
-        },
-        {
-            "formation": "3-4-3",
-            "role": "Wing-Back",
-            "targets": {
-                "sb_progressive_carries_per90": 0.82,
-                "sb_passes_into_box_per90": 0.66,
-                "sofa_accurateCrossesPercentage": 0.62,
-                "sofa_interceptions_per90": 0.54,
-            },
-        },
-        {
-            "formation": "4-2-3-1",
-            "role": "Inverted Fullback",
-            "targets": {
-                "sb_progressive_passes_per90": 0.78,
-                "sofa_accuratePassesPercentage": 0.82,
-                "sofa_interceptions_per90": 0.60,
-                "sofa_tackles_per90": 0.58,
-            },
-        },
-    ),
-    "DM": (
-        {
-            "formation": "4-3-3",
-            "role": "No. 6",
-            "targets": {
-                "sofa_interceptions_per90": 0.80,
-                "sofa_tackles_per90": 0.80,
-                "sofa_accuratePassesPercentage": 0.78,
-                "sb_duel_win_rate": 0.66,
-            },
-        },
-        {
-            "formation": "4-2-3-1",
-            "role": "Double Pivot Controller",
-            "targets": {
-                "sb_progressive_passes_per90": 0.80,
-                "sofa_accuratePassesPercentage": 0.84,
-                "sofa_interceptions_per90": 0.62,
-                "sofa_tackles_per90": 0.58,
-            },
-        },
-    ),
-    "CM": (
-        {
-            "formation": "4-3-3",
-            "role": "No. 8",
-            "targets": {
-                "sb_progressive_passes_per90": 0.74,
-                "sofa_accurateFinalThirdPasses_per90": 0.64,
-                "sofa_keyPasses_per90": 0.60,
-                "sofa_tackles_per90": 0.58,
-            },
-        },
-        {
-            "formation": "4-2-3-1",
-            "role": "Circulating 8",
-            "targets": {
-                "sofa_accuratePassesPercentage": 0.84,
-                "sb_progressive_passes_per90": 0.72,
-                "sb_progressive_carries_per90": 0.58,
-                "sofa_interceptions_per90": 0.52,
-            },
-        },
-    ),
-    "AM": (
-        {
-            "formation": "4-2-3-1",
-            "role": "No. 10",
-            "targets": {
-                "sofa_keyPasses_per90": 0.84,
-                "sb_shot_assists_per90": 0.82,
-                "sb_passes_into_box_per90": 0.74,
-                "sofa_successfulDribbles_per90": 0.66,
-            },
-        },
-        {
-            "formation": "4-3-3",
-            "role": "Advanced 8",
-            "targets": {
-                "sofa_keyPasses_per90": 0.72,
-                "sofa_expectedGoals_per90": 0.60,
-                "sofa_accurateFinalThirdPasses_per90": 0.66,
-                "sb_progressive_carries_per90": 0.58,
-            },
-        },
-    ),
-    "W": (
-        {
-            "formation": "4-3-3",
-            "role": "Touchline Winger",
-            "targets": {
-                "sofa_successfulDribbles_per90": 0.84,
-                "sb_progressive_carries_per90": 0.82,
-                "sofa_accurateCrossesPercentage": 0.66,
-                "sb_shot_assists_per90": 0.68,
-            },
-        },
-        {
-            "formation": "4-2-3-1",
-            "role": "Inverted Winger",
-            "targets": {
-                "sofa_expectedGoals_per90": 0.72,
-                "sb_passes_into_box_per90": 0.68,
-                "sofa_successfulDribbles_per90": 0.74,
-                "sofa_goalConversionPercentage": 0.58,
-            },
-        },
-    ),
-    "SS": (
-        {
-            "formation": "3-5-2",
-            "role": "Second Striker",
-            "targets": {
-                "sofa_keyPasses_per90": 0.72,
-                "sb_shot_assists_per90": 0.68,
-                "sofa_expectedGoals_per90": 0.66,
-                "sofa_successfulDribbles_per90": 0.62,
-            },
-        },
-        {
-            "formation": "4-4-2",
-            "role": "Support Forward",
-            "targets": {
-                "sofa_keyPasses_per90": 0.70,
-                "sb_passes_into_box_per90": 0.62,
-                "sofa_shotsOnTarget_per90": 0.66,
-                "sofa_successfulDribbles_per90": 0.58,
-            },
-        },
-    ),
-    "ST": (
-        {
-            "formation": "4-3-3",
-            "role": "Lone 9",
-            "targets": {
-                "sofa_goals_per90": 0.82,
-                "sofa_expectedGoals_per90": 0.84,
-                "sofa_totalShots_per90": 0.78,
-                "sofa_shotsOnTarget_per90": 0.76,
-            },
-        },
-        {
-            "formation": "4-2-3-1",
-            "role": "Linking 9",
-            "targets": {
-                "sofa_keyPasses_per90": 0.64,
-                "sb_passes_into_box_per90": 0.58,
-                "sofa_expectedGoals_per90": 0.72,
-                "sofa_goalConversionPercentage": 0.56,
-            },
-        },
-        {
-            "formation": "3-5-2",
-            "role": "Target 9",
-            "targets": {
-                "sb_aerial_win_rate": 0.82,
-                "sofa_aerialDuelsWonPercentage": 0.80,
-                "sofa_shotsOnTarget_per90": 0.70,
-                "sofa_goals_per90": 0.72,
-            },
-        },
-    ),
-    "DF": (
-        {
-            "formation": "4-3-3",
-            "role": "Defender",
-            "targets": {
-                "sofa_clearances_per90": 0.68,
-                "sofa_interceptions_per90": 0.62,
-                "sofa_totalDuelsWonPercentage": 0.68,
-                "sofa_accuratePassesPercentage": 0.60,
-            },
-        },
-    ),
-    "MF": (
-        {
-            "formation": "4-3-3",
-            "role": "Midfielder",
-            "targets": {
-                "sofa_keyPasses_per90": 0.66,
-                "sofa_accuratePassesPercentage": 0.76,
-                "sofa_tackles_per90": 0.60,
-                "sofa_interceptions_per90": 0.56,
-            },
-        },
-    ),
-    "FW": (
-        {
-            "formation": "4-3-3",
-            "role": "Forward",
-            "targets": {
-                "sofa_goals_per90": 0.76,
-                "sofa_expectedGoals_per90": 0.74,
-                "sofa_keyPasses_per90": 0.56,
-                "sofa_successfulDribbles_per90": 0.58,
-            },
-        },
-    ),
-}
-
-
 class ArtifactNotFoundError(FileNotFoundError):
     """Raised when required model artifacts are missing."""
 
@@ -885,107 +120,6 @@ class _ResidualCalibrationCache:
 _PRED_CACHE: Dict[str, _FrameCache] = {}
 _METRICS_CACHE: Dict[str, tuple[Path, int, dict[str, Any]]] = {}
 _RESIDUAL_CALIBRATION_CACHE: _ResidualCalibrationCache | None = None
-_REQUIRED_ARTIFACT_ENVS = (TEST_PRED_ENV, VAL_PRED_ENV, METRICS_ENV)
-
-
-def _resolve_path(env_var: str, default_path: Path) -> Path:
-    value = os.getenv(env_var, "").strip()
-    return Path(value) if value else default_path
-
-
-def _manifest_path() -> Path:
-    manifest_env_raw = os.getenv(MODEL_MANIFEST_ENV, "").strip()
-    return Path(manifest_env_raw) if manifest_env_raw else DEFAULT_MODEL_MANIFEST
-
-
-def _load_manifest_payload() -> dict[str, Any] | None:
-    manifest_path = _manifest_path()
-    if not manifest_path.exists():
-        return None
-    try:
-        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-    return payload if isinstance(payload, dict) else None
-
-
-def _manifest_role_section(payload: dict[str, Any] | None, role: ChampionRole) -> dict[str, Any] | None:
-    if not isinstance(payload, dict):
-        return None
-    key = ROLE_TO_MANIFEST_KEY[role]
-    section = payload.get(key)
-    return section if isinstance(section, dict) else None
-
-
-def _legacy_default_role(payload: dict[str, Any] | None) -> ChampionRole:
-    if isinstance(payload, dict) and str(payload.get("legacy_default_role") or "").strip() == "future_shortlist":
-        return "future_shortlist"
-    return "valuation"
-
-
-def _resolve_role_artifact_paths(role: ChampionRole) -> dict[str, Path]:
-    manifest_payload = _load_manifest_payload()
-    manifest_env_raw = os.getenv(MODEL_MANIFEST_ENV, "").strip()
-    role_envs = ROLE_ENV_NAMES[role]
-    test_env = os.getenv(role_envs["test"], "").strip()
-    val_env = os.getenv(role_envs["val"], "").strip()
-    metrics_env = os.getenv(role_envs["metrics"], "").strip()
-    legacy_paths = {
-        "test_predictions": _resolve_path(*SPLIT_TO_PATH["test"]),
-        "val_predictions": _resolve_path(*SPLIT_TO_PATH["val"]),
-        "metrics": _resolve_path(METRICS_ENV, DEFAULT_METRICS),
-    }
-    if test_env or val_env or metrics_env:
-        return {
-            "test_predictions": Path(test_env) if test_env else legacy_paths["test_predictions"],
-            "val_predictions": Path(val_env) if val_env else legacy_paths["val_predictions"],
-            "metrics": Path(metrics_env) if metrics_env else legacy_paths["metrics"],
-        }
-
-    legacy_env_explicit = any(
-        os.getenv(env_name, "").strip() for env_name in (TEST_PRED_ENV, VAL_PRED_ENV, METRICS_ENV)
-    )
-    manifest_matches_legacy = bool(
-        manifest_payload
-        and _manifest_targets_active_artifacts(
-            manifest_payload,
-            test_path=legacy_paths["test_predictions"],
-            val_path=legacy_paths["val_predictions"],
-            metrics_path=legacy_paths["metrics"],
-        )
-    )
-    can_use_manifest = bool(manifest_payload) and (
-        bool(manifest_env_raw) or not legacy_env_explicit or manifest_matches_legacy
-    )
-    if can_use_manifest:
-        section = _manifest_role_section(manifest_payload, role)
-        if isinstance(section, dict):
-            artifacts = section.get("artifacts")
-            if isinstance(artifacts, dict):
-                test_meta = artifacts.get("test_predictions")
-                val_meta = artifacts.get("val_predictions")
-                metrics_meta = artifacts.get("metrics")
-                if all(isinstance(meta, dict) and meta.get("path") for meta in (test_meta, val_meta, metrics_meta)):
-                    return {
-                        "test_predictions": Path(str(test_meta["path"])),
-                        "val_predictions": Path(str(val_meta["path"])),
-                        "metrics": Path(str(metrics_meta["path"])),
-                    }
-
-        if manifest_payload is not None and _legacy_default_role(manifest_payload) == role:
-            artifacts = manifest_payload.get("artifacts")
-            if isinstance(artifacts, dict):
-                test_meta = artifacts.get("test_predictions")
-                val_meta = artifacts.get("val_predictions")
-                metrics_meta = artifacts.get("metrics")
-                if all(isinstance(meta, dict) and meta.get("path") for meta in (test_meta, val_meta, metrics_meta)):
-                    return {
-                        "test_predictions": Path(str(test_meta["path"])),
-                        "val_predictions": Path(str(val_meta["path"])),
-                        "metrics": Path(str(metrics_meta["path"])),
-                    }
-
-    return legacy_paths
 
 
 def _prediction_cache_version(*paths: Path) -> tuple[tuple[str, int], ...]:
@@ -995,51 +129,9 @@ def _prediction_cache_version(*paths: Path) -> tuple[tuple[str, int], ...]:
     )
 
 
-def _env_flag(name: str, default: bool = False) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _watchlist_path() -> Path:
-    return _resolve_path(WATCHLIST_PATH_ENV, DEFAULT_WATCHLIST_PATH)
-
-
-def _file_meta(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {
-            "exists": False,
-            "size_bytes": None,
-            "mtime_utc": None,
-            "mtime_epoch": None,
-        }
-    stat = path.stat()
-    dt = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
-    return {
-        "exists": True,
-        "size_bytes": int(stat.st_size),
-        "mtime_utc": dt,
-        "mtime_epoch": float(stat.st_mtime),
-    }
-
-
 def _safe_numeric(frame: pd.DataFrame, col: str) -> None:
     if col in frame.columns:
         frame[col] = pd.to_numeric(frame[col], errors="coerce")
-
-
-def _sha256_file(path: Path, chunk_size: int = 1 << 20) -> str | None:
-    if not path.exists():
-        return None
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        while True:
-            chunk = handle.read(chunk_size)
-            if not chunk:
-                break
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _replace_inf_with_nan(frame: pd.DataFrame) -> pd.DataFrame:
@@ -1050,73 +142,6 @@ def _replace_inf_with_nan(frame: pd.DataFrame) -> pd.DataFrame:
     numeric = out.loc[:, numeric_cols]
     out.loc[:, numeric_cols] = numeric.where(np.isfinite(numeric), np.nan)
     return out
-
-
-def get_resolved_artifact_paths() -> dict[str, str]:
-    test_path = _resolve_path(*SPLIT_TO_PATH["test"])
-    val_path = _resolve_path(*SPLIT_TO_PATH["val"])
-    metrics_path = _resolve_path(METRICS_ENV, DEFAULT_METRICS)
-    return {
-        "test_predictions_path": str(test_path),
-        "val_predictions_path": str(val_path),
-        "metrics_path": str(metrics_path),
-    }
-
-
-def get_active_artifacts() -> dict[str, Any]:
-    paths = get_resolved_artifact_paths()
-    test_path = Path(paths["test_predictions_path"])
-    val_path = Path(paths["val_predictions_path"])
-    metrics_path = Path(paths["metrics_path"])
-    valuation_paths = _resolve_role_artifact_paths("valuation")
-    future_paths = _resolve_role_artifact_paths("future_shortlist")
-    return {
-        "test_predictions_path": str(test_path),
-        "val_predictions_path": str(val_path),
-        "metrics_path": str(metrics_path),
-        "test_predictions_sha256": _sha256_file(test_path),
-        "val_predictions_sha256": _sha256_file(val_path),
-        "metrics_sha256": _sha256_file(metrics_path),
-        "prediction_service_base_role": "valuation",
-        "shortlist_overlay_role": "future_shortlist",
-        "valuation": {
-            "test_predictions_path": str(valuation_paths["test_predictions"]),
-            "val_predictions_path": str(valuation_paths["val_predictions"]),
-            "metrics_path": str(valuation_paths["metrics"]),
-            "test_predictions_sha256": _sha256_file(valuation_paths["test_predictions"]),
-            "val_predictions_sha256": _sha256_file(valuation_paths["val_predictions"]),
-            "metrics_sha256": _sha256_file(valuation_paths["metrics"]),
-        },
-        "future_shortlist": {
-            "test_predictions_path": str(future_paths["test_predictions"]),
-            "val_predictions_path": str(future_paths["val_predictions"]),
-            "metrics_path": str(future_paths["metrics"]),
-            "test_predictions_sha256": _sha256_file(future_paths["test_predictions"]),
-            "val_predictions_sha256": _sha256_file(future_paths["val_predictions"]),
-            "metrics_sha256": _sha256_file(future_paths["metrics"]),
-        },
-    }
-
-
-def validate_strict_artifact_env() -> None:
-    missing_env = [env_name for env_name in _REQUIRED_ARTIFACT_ENVS if not os.getenv(env_name, "").strip()]
-    if missing_env:
-        raise RuntimeError(
-            "Strict artifacts mode is enabled, but required env vars are missing: "
-            + ", ".join(missing_env)
-        )
-
-    missing_files: list[str] = []
-    for env_name in _REQUIRED_ARTIFACT_ENVS:
-        raw = os.getenv(env_name, "").strip()
-        path = Path(raw)
-        if not path.exists():
-            missing_files.append(f"{env_name}={path}")
-    if missing_files:
-        raise RuntimeError(
-            "Strict artifacts mode is enabled, but artifact files do not exist: "
-            + ", ".join(missing_files)
-        )
 
 
 def _clean_prediction_frame(frame: pd.DataFrame) -> pd.DataFrame:
@@ -1354,38 +379,6 @@ def _build_capped_gap_columns(frame: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _normalized_path_str(path: Path | str) -> str:
-    return os.path.normcase(str(Path(path)))
-
-
-def _manifest_targets_active_artifacts(
-    payload: dict[str, Any],
-    *,
-    test_path: Path,
-    val_path: Path,
-    metrics_path: Path,
-) -> bool:
-    artifacts = payload.get("artifacts")
-    if not isinstance(artifacts, dict):
-        return False
-
-    expectations = {
-        "test_predictions": test_path,
-        "val_predictions": val_path,
-        "metrics": metrics_path,
-    }
-    for key, expected in expectations.items():
-        section = artifacts.get(key)
-        if not isinstance(section, dict):
-            return False
-        raw_path = section.get("path")
-        if not raw_path:
-            return False
-        if _normalized_path_str(raw_path) != _normalized_path_str(expected):
-            return False
-    return True
-
-
 def _fit_residual_calibrator(val_frame: pd.DataFrame, min_samples: int) -> dict[str, Any]:
     if val_frame.empty:
         return {"min_samples": int(min_samples), "global_adjustment_eur": 0.0}
@@ -1616,19 +609,25 @@ def _precision_at_k(
     score_col: str,
     k_values: Sequence[int] = (10, 25, 50, 100),
 ) -> dict[str, Any]:
+    empty_payload = {
+        "available": False,
+        "label_column": None,
+        "n_labeled_rows": 0,
+        "rows": [],
+    }
     if score_col not in frame.columns:
-        return {"available": False, "reason": f"missing_score_col:{score_col}"}
+        return {**empty_payload, "reason": f"missing_score_col:{score_col}"}
 
     labels, label_col = _infer_future_outcome_label(frame)
     if labels is None or label_col is None:
-        return {"available": False, "reason": "missing_future_outcome_label"}
+        return {**empty_payload, "reason": "missing_future_outcome_label"}
 
     work = frame.copy()
     work["_score"] = pd.to_numeric(work[score_col], errors="coerce")
     work["_label"] = pd.to_numeric(labels, errors="coerce")
     work = work[np.isfinite(work["_score"]) & np.isfinite(work["_label"])].copy()
     if work.empty:
-        return {"available": False, "reason": "no_rows_with_labels"}
+        return {**empty_payload, "reason": "no_rows_with_labels", "label_column": label_col}
 
     work = work.sort_values("_score", ascending=False).reset_index(drop=True)
     out_rows: list[dict[str, Any]] = []
@@ -2672,20 +1671,6 @@ def _build_valuation_guardrails(row: pd.Series) -> dict[str, Any]:
     }
 
 
-def _fmt_eur(value: float | None) -> str:
-    if value is None:
-        return "n/a"
-    sign = "-" if value < 0 else ""
-    v = abs(float(value))
-    if v >= 1_000_000_000:
-        return f"{sign}EUR {v / 1_000_000_000:.2f}bn"
-    if v >= 1_000_000:
-        return f"{sign}EUR {v / 1_000_000:.1f}m"
-    if v >= 1_000:
-        return f"{sign}EUR {v / 1_000:.0f}k"
-    return f"{sign}EUR {v:.0f}"
-
-
 def _build_summary_text(
     row: pd.Series,
     strengths: list[dict[str, Any]],
@@ -2696,10 +1681,10 @@ def _build_summary_text(
 ) -> str:
     name = str(row.get("name") or row.get("player_id") or "Player")
     conf_label = str(confidence.get("label", "medium"))
-    market = _fmt_eur(valuation_guardrails.get("market_value_eur"))
-    fair = _fmt_eur(valuation_guardrails.get("fair_value_eur"))
-    gap = _fmt_eur(valuation_guardrails.get("value_gap_conservative_eur"))
-    capped = _fmt_eur(valuation_guardrails.get("value_gap_capped_eur"))
+    market = format_eur(valuation_guardrails.get("market_value_eur"))
+    fair = format_eur(valuation_guardrails.get("fair_value_eur"))
+    gap = format_eur(valuation_guardrails.get("value_gap_conservative_eur"))
+    capped = format_eur(valuation_guardrails.get("value_gap_capped_eur"))
 
     top_strengths = ", ".join(m["label"] for m in strengths[:2]) if strengths else "no standout metric edge"
     top_levers = ", ".join(m["label"] for m in development_levers[:2]) if development_levers else "no clear lever"
@@ -2988,7 +1973,7 @@ def query_player_reports(
             "report": report,
         }
         if include_history:
-            item["history_strength"] = _build_history_strength_payload(row=row)
+            item["history_strength"] = build_history_strength_payload(row=row)
         items.append(item)
 
     return {
@@ -3029,186 +2014,6 @@ def get_player_advanced_profile(
         "valuation_guardrails": report.get("valuation_guardrails", {}),
         "summary_text": report.get("summary_text"),
     }
-
-
-def _build_history_strength_payload(row: pd.Series) -> dict[str, Any]:
-    score = _safe_float(row.get("history_strength_score"))
-    coverage = _safe_float(row.get("history_strength_coverage"))
-    tier = row.get("history_strength_tier")
-    tier_text = str(tier).strip() if tier is not None and not pd.isna(tier) else "uncertain"
-
-    components: list[dict[str, Any]] = []
-    for key in HISTORY_COMPONENT_COLUMNS:
-        value = _safe_float(row.get(key))
-        weight = float(HISTORY_COMPONENT_WEIGHTS.get(key, 0.0))
-        label = HISTORY_COMPONENT_LABELS.get(key, key)
-        weighted_points = None if value is None else float(value * weight * 100.0)
-        components.append(
-            {
-                "key": key,
-                "label": label,
-                "value_0_to_1": value,
-                "value_0_to_100": None if value is None else float(value * 100.0),
-                "weight": weight,
-                "weighted_points_0_to_100": weighted_points,
-                "missing": value is None,
-            }
-        )
-
-    components_sorted = sorted(
-        components,
-        key=lambda x: x["weighted_points_0_to_100"] if isinstance(x["weighted_points_0_to_100"], (float, int)) else -1.0,
-        reverse=True,
-    )
-    strongest = [c for c in components_sorted if not c["missing"]][:3]
-
-    weakest = sorted(
-        [c for c in components if not c["missing"]],
-        key=lambda x: x["value_0_to_1"] if isinstance(x["value_0_to_1"], (float, int)) else 1.0,
-    )[:3]
-
-    if score is None:
-        narrative = "History strength score is unavailable because required history components are missing."
-    else:
-        narrative = f"History strength is {score:.1f}/100 ({tier_text})."
-        if strongest:
-            narrative += " Strongest components: " + ", ".join(c["label"] for c in strongest[:2]) + "."
-        if weakest:
-            narrative += " Development focus: " + ", ".join(c["label"] for c in weakest[:2]) + "."
-
-    return {
-        "score_0_to_100": score,
-        "coverage_0_to_1": coverage,
-        "tier": tier_text,
-        "components": components,
-        "strongest_components": strongest,
-        "improvement_components": weakest,
-        "summary_text": narrative,
-    }
-
-
-def _humanize_profile_field(key: str) -> str:
-    raw = (
-        str(key)
-        .replace("sofa_", "")
-        .replace("clubctx_", "club ")
-        .replace("history_", "history ")
-        .replace("prior_", "prior ")
-        .replace("_", " ")
-        .strip()
-    )
-    raw = " ".join(raw.split())
-    if not raw:
-        return str(key)
-    words = raw.split(" ")
-    return " ".join(word.upper() if word.lower() in {"eur", "xg", "xa"} else word.capitalize() for word in words)
-
-
-def _is_profile_stat_value(key: str, value: Any) -> bool:
-    key_str = str(key)
-    if key_str in PROFILE_STAT_SKIP_FIELDS or key_str.startswith("_"):
-        return False
-    if isinstance(value, bool):
-        return True
-    if isinstance(value, str):
-        return key_str in PROFILE_CONTEXT_FIELDS and bool(value.strip())
-    return _safe_float(value) is not None
-
-
-def _profile_stat_kind(key: str, value: Any) -> str:
-    if isinstance(value, bool):
-        return "bool"
-    if isinstance(value, str):
-        return "text"
-    key_str = str(key).lower()
-    if key_str.endswith("_eur"):
-        return "currency"
-    if key_str.endswith("_0_to_1") or "percentile" in key_str:
-        return "fraction"
-    if "percentage" in key_str:
-        return "percentage"
-    if "minutes" in key_str or key_str.endswith("_n") or "count" in key_str or "caps" in key_str:
-        return "integer"
-    return "number"
-
-
-def _format_profile_stat_value(key: str, value: Any) -> str:
-    if isinstance(value, bool):
-        return "Yes" if value else "No"
-    if isinstance(value, str):
-        return value
-    num = _safe_float(value)
-    if num is None:
-        return "n/a"
-    kind = _profile_stat_kind(key, value)
-    if kind == "currency":
-        return _fmt_eur(num)
-    if kind == "fraction":
-        return f"{num * 100.0:.1f}%"
-    if kind == "percentage":
-        return f"{num:.1f}%"
-    if kind == "integer":
-        return f"{int(round(num)):,}"
-    return f"{num:.2f}" if abs(num) < 1000 else f"{num:,.0f}"
-
-
-def _classify_profile_stat_group(key: str) -> str:
-    key_str = str(key)
-    key_lower = key_str.lower()
-    if key_str in PROFILE_CONTEXT_FIELDS:
-        return "Profile & Context"
-    if key_lower.startswith("sb_"):
-        return "External Tactical"
-    if key_lower.startswith("fixture_") or key_lower.startswith("odds_"):
-        return "Schedule & Market"
-    if key_lower.startswith("avail_"):
-        return "Availability & Physical"
-    if any(tok in key_lower for tok in ("market_value", "expected_value", "fair_value", "gap", "confidence", "interval", "calibration", "prior_")):
-        return "Value & Model"
-    if any(tok in key_lower for tok in ("goal", "assist", "shot", "xg", "xa", "dribble", "bigchance", "penalty")):
-        return "Attacking"
-    if any(tok in key_lower for tok in ("pass", "cross", "throughball", "longball", "keypass", "progressive", "chancecreated")):
-        return "Passing & Progression"
-    if any(tok in key_lower for tok in ("tackle", "interception", "clearance", "blocked", "duel", "aerial", "recovery", "possessionwon")):
-        return "Defending & Duels"
-    if any(tok in key_lower for tok in ("save", "highclaim", "runout", "goalsprevented", "cleansheet")):
-        return "Goalkeeping"
-    if any(tok in key_lower for tok in ("age", "minutes", "injury", "height", "weight", "contract", "foot")):
-        return "Availability & Physical"
-    if key_lower.startswith("clubctx_") or key_lower.startswith("history_") or "coeff" in key_lower:
-        return "History & Context"
-    return "Other Metrics"
-
-
-def _build_profile_stat_groups(row_payload: dict[str, Any]) -> list[dict[str, Any]]:
-    grouped: dict[str, list[dict[str, Any]]] = {name: [] for name in PROFILE_STAT_GROUP_ORDER}
-    for key, value in row_payload.items():
-        if not _is_profile_stat_value(key, value):
-            continue
-        group_name = _classify_profile_stat_group(key)
-        grouped[group_name].append(
-            {
-                "key": str(key),
-                "label": _humanize_profile_field(str(key)),
-                "value": value,
-                "display_value": _format_profile_stat_value(str(key), value),
-                "kind": _profile_stat_kind(str(key), value),
-            }
-        )
-
-    out: list[dict[str, Any]] = []
-    for group_name in PROFILE_STAT_GROUP_ORDER:
-        items = sorted(grouped[group_name], key=lambda item: str(item["label"]))
-        if not items:
-            continue
-        out.append(
-            {
-                "group": group_name,
-                "count": int(len(items)),
-                "items": items,
-            }
-        )
-    return out
 
 
 def _load_similar_player_matches(player_id: str, top_k: int) -> list[dict[str, Any]]:
@@ -3263,180 +2068,6 @@ def _build_similar_players_payload(
     return {"available": True, "reason": None, "items": enriched}
 
 
-def _build_external_tactical_context(row: pd.Series) -> dict[str, Any]:
-    formations: list[dict[str, Any]] = []
-    for key in row.index:
-        key_str = str(key)
-        if not key_str.startswith("sb_minutes_in_"):
-            continue
-        minutes = _safe_float(row.get(key_str))
-        if minutes is None or minutes <= 0:
-            continue
-        formations.append(
-            {
-                "formation": key_str.replace("sb_minutes_in_", ""),
-                "minutes": minutes,
-            }
-        )
-    formations.sort(key=lambda item: float(item["minutes"]), reverse=True)
-
-    metrics = [
-        ("Progressive passes/90", _safe_float(row.get("sb_progressive_passes_per90"))),
-        ("Progressive carries/90", _safe_float(row.get("sb_progressive_carries_per90"))),
-        ("Passes into box/90", _safe_float(row.get("sb_passes_into_box_per90"))),
-        ("Shot assists/90", _safe_float(row.get("sb_shot_assists_per90"))),
-        ("Pressures/90", _safe_float(row.get("sb_pressures_per90"))),
-        ("Counterpressures/90", _safe_float(row.get("sb_counterpressures_per90"))),
-        ("High regains/90", _safe_float(row.get("sb_high_regains_per90"))),
-        ("Duel win rate", _safe_float(row.get("sb_duel_win_rate"))),
-        ("Aerial win rate", _safe_float(row.get("sb_aerial_win_rate"))),
-    ]
-    signals = [
-        {"label": label, "value": value, "display_value": f"{value * 100.0:.1f}%" if "rate" in label.lower() else f"{value:.2f}"}
-        for label, value in metrics
-        if value is not None
-    ]
-    if not formations and not signals:
-        return {"available": False, "summary_text": "No external tactical provider signals available.", "preferred_formations": [], "signals": []}
-
-    if formations:
-        top = formations[0]
-        summary = f"StatsBomb profile leans toward {top['formation']} ({top['minutes']:.0f} tracked minutes)."
-    else:
-        summary = "StatsBomb tactical metrics available without formation exposure."
-    return {
-        "available": True,
-        "summary_text": summary,
-        "preferred_formations": formations[:4],
-        "signals": signals[:6],
-    }
-
-
-def _build_availability_context(row: pd.Series) -> dict[str, Any]:
-    reports = _safe_float(row.get("avail_reports"))
-    start_share = _safe_float(row.get("avail_start_share"))
-    bench_share = _safe_float(row.get("avail_bench_share"))
-    injury_count = _safe_float(row.get("avail_injury_count"))
-    suspension_count = _safe_float(row.get("avail_suspension_count"))
-    expected_start_rate = _safe_float(row.get("avail_expected_start_rate"))
-
-    signals = []
-    for label, value, fmt in [
-        ("Availability reports", reports, "count"),
-        ("Start share", start_share, "pct"),
-        ("Bench share", bench_share, "pct"),
-        ("Injury reports", injury_count, "count"),
-        ("Suspension reports", suspension_count, "count"),
-        ("Expected start rate", expected_start_rate, "pct"),
-    ]:
-        if value is None:
-            continue
-        display = f"{value * 100.0:.1f}%" if fmt == "pct" else f"{value:.0f}"
-        signals.append({"label": label, "value": value, "display_value": display})
-
-    if not signals:
-        return {"available": False, "summary_text": "No provider availability signals available.", "signals": []}
-
-    summary_parts: list[str] = []
-    if start_share is not None:
-        summary_parts.append(f"start share {start_share * 100.0:.0f}%")
-    if injury_count is not None:
-        summary_parts.append(f"{injury_count:.0f} injury reports")
-    if expected_start_rate is not None:
-        summary_parts.append(f"expected-start rate {expected_start_rate * 100.0:.0f}%")
-    summary = "Availability context: " + ", ".join(summary_parts) + "." if summary_parts else "Availability provider signals available."
-    return {
-        "available": True,
-        "summary_text": summary,
-        "signals": signals,
-    }
-
-
-def _build_market_context_payload(row: pd.Series) -> dict[str, Any]:
-    signals = []
-    for label, key, fmt in [
-        ("Fixture matches", "fixture_matches", "count"),
-        ("Mean rest days", "fixture_mean_rest_days", "num"),
-        ("Congestion share", "fixture_congestion_share", "pct"),
-        ("Opponent strength", "fixture_opponent_strength", "num"),
-        ("Team market strength", "odds_implied_team_strength", "pct"),
-        ("Opponent market strength", "odds_implied_opponent_strength", "pct"),
-        ("Upset probability", "odds_upset_probability", "pct"),
-        ("Expected total goals", "odds_expected_total_goals", "num"),
-    ]:
-        value = _safe_float(row.get(key))
-        if value is None:
-            continue
-        if fmt == "pct":
-            display = f"{value * 100.0:.1f}%"
-        elif fmt == "count":
-            display = f"{value:.0f}"
-        else:
-            display = f"{value:.2f}"
-        signals.append({"label": label, "value": value, "display_value": display})
-
-    if not signals:
-        return {"available": False, "summary_text": "No fixture or market-context signals available.", "signals": []}
-
-    congestion = _safe_float(row.get("fixture_congestion_share"))
-    team_strength = _safe_float(row.get("odds_implied_team_strength"))
-    summary_bits: list[str] = []
-    if congestion is not None:
-        summary_bits.append(f"schedule congestion {congestion * 100.0:.0f}%")
-    if team_strength is not None:
-        summary_bits.append(f"market win strength {team_strength * 100.0:.0f}%")
-    summary = "Schedule + market context: " + ", ".join(summary_bits) + "." if summary_bits else "Fixture and market signals available."
-    return {
-        "available": True,
-        "summary_text": summary,
-        "signals": signals,
-    }
-
-
-def _build_provider_coverage(row: pd.Series) -> dict[str, Any]:
-    tactical = _build_external_tactical_context(row)
-    availability = _build_availability_context(row)
-    market = _build_market_context_payload(row)
-    return {
-        "statsbomb": bool(tactical.get("available")),
-        "availability_provider": bool(availability.get("available")),
-        "market_provider": bool(market.get("available")),
-    }
-
-
-def _build_provider_risk_flags(row: pd.Series) -> list[dict[str, Any]]:
-    flags: list[dict[str, Any]] = []
-    injury_count = _safe_float(row.get("avail_injury_count"))
-    if injury_count is not None and injury_count >= 3:
-        flags.append(
-            {
-                "severity": "medium",
-                "code": "provider_injury_load",
-                "message": f"External availability feed shows {injury_count:.0f} injury reports this season.",
-            }
-        )
-    start_share = _safe_float(row.get("avail_start_share"))
-    reports = _safe_float(row.get("avail_reports"))
-    if reports is not None and reports >= 3 and start_share is not None and start_share < 0.5:
-        flags.append(
-            {
-                "severity": "medium",
-                "code": "provider_rotation_risk",
-                "message": f"External lineup feed shows only {start_share * 100.0:.0f}% starts across tracked reports.",
-            }
-        )
-    congestion = _safe_float(row.get("fixture_congestion_share"))
-    if congestion is not None and congestion >= 0.4:
-        flags.append(
-            {
-                "severity": "low",
-                "code": "provider_schedule_congestion",
-                "message": f"Fixture context indicates high congestion ({congestion * 100.0:.0f}% of matches on short rest).",
-            }
-        )
-    return flags
-
-
 def get_player_history_strength(
     player_id: str,
     split: Split = "test",
@@ -3447,7 +2078,7 @@ def get_player_history_strength(
     row_dict = _to_records(row.to_frame().T)[0]
     return {
         "player": row_dict,
-        "history_strength": _build_history_strength_payload(row=row),
+        "history_strength": build_history_strength_payload(row=row),
     }
 
 
@@ -3461,12 +2092,12 @@ def get_player_profile(
     frame = _prepare_predictions_frame(get_predictions(split=split))
     row = _select_player_row(frame=frame, player_id=player_id, season=season)
     report = _build_player_report_from_row(frame=frame, row=row, top_metrics=top_metrics)
-    history_strength = _build_history_strength_payload(row=row)
+    history_strength = build_history_strength_payload(row=row)
     player_payload = dict(report.get("player", {}))
-    tactical_context = _build_external_tactical_context(row)
-    availability_context = _build_availability_context(row)
-    market_context = _build_market_context_payload(row)
-    combined_risk_flags = list(report.get("risk_flags", [])) + _build_provider_risk_flags(row)
+    tactical_context = build_external_tactical_context(row)
+    availability_context = build_availability_context(row)
+    market_context = build_market_context_payload(row)
+    combined_risk_flags = list(report.get("risk_flags", [])) + build_provider_risk_flags(row)
     return {
         "player": player_payload,
         "cohort": report.get("cohort", {}),
@@ -3484,8 +2115,8 @@ def get_player_profile(
         "external_tactical_context": tactical_context,
         "availability_context": availability_context,
         "market_context": market_context,
-        "provider_coverage": _build_provider_coverage(row),
-        "stat_groups": _build_profile_stat_groups(player_payload),
+        "provider_coverage": build_provider_coverage(row),
+        "stat_groups": build_profile_stat_groups(player_payload),
         "similar_players": _build_similar_players_payload(
             frame=frame,
             row=row,
@@ -3498,31 +2129,6 @@ def _now_utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _read_watchlist_records(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    records: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for raw in handle:
-            line = raw.strip()
-            if not line:
-                continue
-            try:
-                payload = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(payload, dict):
-                records.append(payload)
-    return records
-
-
-def _write_watchlist_records(path: Path, records: Sequence[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for record in records:
-            handle.write(json.dumps(record, ensure_ascii=True) + "\n")
-
-
 def list_watchlist(
     *,
     split: Split | None = None,
@@ -3532,7 +2138,7 @@ def list_watchlist(
     offset: int = 0,
 ) -> dict[str, Any]:
     path = _watchlist_path()
-    records = _read_watchlist_records(path)
+    records = read_watchlist_records(path).records
 
     out: list[dict[str, Any]] = []
     for item in records:
@@ -3599,19 +2205,12 @@ def add_watchlist_item(
     }
 
     path = _watchlist_path()
-    records = _read_watchlist_records(path)
-    records.append(record)
-    _write_watchlist_records(path, records)
-    return record
+    return upsert_watchlist_record(path, record)
 
 
 def delete_watchlist_item(watch_id: str) -> dict[str, Any]:
     path = _watchlist_path()
-    records = _read_watchlist_records(path)
-    keep = [row for row in records if str(row.get("watch_id")) != str(watch_id)]
-    deleted = len(keep) != len(records)
-    if deleted:
-        _write_watchlist_records(path, keep)
+    deleted = delete_watchlist_record(path, watch_id)
     return {
         "path": str(path),
         "watch_id": str(watch_id),

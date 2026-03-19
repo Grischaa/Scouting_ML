@@ -1,5 +1,7 @@
 # ScoutML Frontend
 
+This is an optional mock-data portfolio demo. The canonical backend-connected UI for the FastAPI API lives under `src/scouting_ml/website/static/`.
+
 Premium football scouting and player analytics frontend built with:
 
 - Next.js
