@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import ast
 import argparse
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
+
+from scouting_ml.reporting.operator_health import (
+    build_valuation_promotion_gate,
+    regenerate_ingestion_health_report,
+)
 
 def _parse_csv_tokens(raw: str | None) -> list[str]:
     if raw is None:
@@ -119,6 +126,98 @@ def _require_artifact(path: str | Path, label: str) -> dict[str, object]:
     return meta
 
 
+def _parse_missing_holdout_error(message: str) -> tuple[str, str] | None:
+    match = re.search(
+        r"League holdout (?P<token>'.+?'|\".+?\") resolved to (?P<league>'.+?'|\".+?\"), "
+        r"but that league is not present in the dataset\.",
+        message,
+    )
+    if not match:
+        return None
+    try:
+        token = str(ast.literal_eval(match.group("token")))
+        league = str(ast.literal_eval(match.group("league")))
+    except Exception:
+        return None
+    return token, league
+
+
+def _augment_missing_holdout_error(
+    exc: ValueError,
+    *,
+    dataset_output: str,
+    clean_output: str,
+    test_season: str,
+) -> ValueError:
+    parsed = _parse_missing_holdout_error(str(exc))
+    if parsed is None:
+        return exc
+
+    token, league = parsed
+    raw_path = Path(dataset_output)
+    clean_path = Path(clean_output)
+    if not raw_path.exists() or not clean_path.exists():
+        return exc
+
+    try:
+        import pandas as pd
+
+        raw_df = pd.read_parquet(raw_path)
+        clean_df = pd.read_parquet(clean_path, columns=["league", "season"])
+    except Exception:
+        return exc
+
+    if "league" not in raw_df.columns:
+        return exc
+
+    raw_league = raw_df[raw_df["league"].astype(str).str.strip() == league].copy()
+    if raw_league.empty:
+        return exc
+
+    raw_test = (
+        raw_league[raw_league["season"].astype(str) == str(test_season)].copy()
+        if "season" in raw_league.columns
+        else raw_league.copy()
+    )
+    if raw_test.empty:
+        return exc
+
+    clean_test = clean_df[
+        (clean_df["league"].astype(str).str.strip() == league)
+        & (clean_df["season"].astype(str) == str(test_season))
+    ].copy()
+    if not clean_test.empty:
+        return exc
+
+    notes: list[str] = [
+        f"League holdout {token!r} resolved to {league!r}, but that league is absent from the cleaned training dataset.",
+        f"It does exist in the upstream modeling dataset at {raw_path} ({len(raw_test):,} rows for test season {test_season}).",
+        f"The cleaned dataset at {clean_path} contains 0 rows for that league-season.",
+    ]
+
+    minute_cols = [col for col in ("minutes", "sofa_minutesPlayed") if col in raw_test.columns]
+    if minute_cols:
+        missing_minutes = True
+        for col in minute_cols:
+            series = pd.to_numeric(raw_test[col], errors="coerce")
+            if series.notna().any():
+                missing_minutes = False
+                break
+        if missing_minutes:
+            notes.append("Minutes are missing for all upstream rows.")
+
+    if "sofa_matched" in raw_test.columns:
+        sofa_matched = pd.to_numeric(raw_test["sofa_matched"], errors="coerce").fillna(0)
+        if len(sofa_matched) and (sofa_matched <= 0).all():
+            notes.append("`sofa_matched=0` across those rows, so provider enrichment did not attach Sofa minutes.")
+
+    notes.append(
+        "This usually means the cleaning step removed the league via the minimum-minutes filter. "
+        "Fix provider enrichment or remove that league from `--league-holdouts` for now."
+    )
+    return ValueError(" ".join(notes))
+
+
 def _load_json_snapshot(path: str | Path) -> dict | list | None:
     target = Path(path)
     if not target.exists():
@@ -127,6 +226,34 @@ def _load_json_snapshot(path: str | Path) -> dict | list | None:
         return json.loads(target.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def _manifest_lane_summary(manifest_payload: dict | None) -> dict[str, object]:
+    if not isinstance(manifest_payload, dict):
+        return {}
+    lanes: dict[str, object] = {}
+    for key in ("valuation_champion", "future_shortlist_champion"):
+        section = manifest_payload.get(key)
+        if not isinstance(section, dict):
+            continue
+        artifacts = section.get("artifacts") if isinstance(section.get("artifacts"), dict) else {}
+        config = section.get("config") if isinstance(section.get("config"), dict) else {}
+        role = str(section.get("role") or key.replace("_champion", ""))
+        lanes[role] = {
+            "role": role,
+            "label": section.get("label"),
+            "lane_state": section.get("lane_state"),
+            "promotion_state": section.get("promotion_state"),
+            "promotion_reasons": section.get("promotion_reasons"),
+            "generated_at_utc": section.get("generated_at_utc"),
+            "test_season": config.get("test_season"),
+            "artifact_paths": {
+                artifact_key: artifact_meta.get("path")
+                for artifact_key, artifact_meta in artifacts.items()
+                if isinstance(artifact_meta, dict)
+            },
+        }
+    return lanes
 
 
 def run_full_pipeline(
@@ -186,6 +313,7 @@ def run_full_pipeline(
     backtest_min_test_samples: int,
     backtest_min_test_under5m_samples: int,
     backtest_min_test_over20m_samples: int,
+    backtest_exclude_latest_season: bool,
     backtest_skip_incomplete_test_seasons: bool,
     backtest_drop_incomplete_league_seasons: bool,
     backtest_min_league_season_rows: int,
@@ -220,6 +348,13 @@ def run_full_pipeline(
 ) -> dict[str, object]:
     ext_dir = Path(external_dir)
     ext_dir.mkdir(parents=True, exist_ok=True)
+
+    output = Path(predictions_output)
+    val_output = output.with_name(f"{output.stem}_val{output.suffix or '.csv'}")
+    metrics_output = output.with_suffix(".metrics.json")
+    backtest_summary_json = Path(backtest_out_dir) / "rolling_backtest_summary.json"
+    backtest_summary_csv = Path(backtest_out_dir) / "rolling_backtest_summary.csv"
+    promotion_gate: dict[str, object] | None = None
 
     if provider_config_json:
         _step("Build provider external features")
@@ -352,38 +487,46 @@ def run_full_pipeline(
 
     if not skip_train:
         _step("Train and evaluate main market-value model")
-        _train_market_value_main(
-            dataset_path=clean_output,
-            val_season=val_season,
-            test_season=test_season,
-            output_path=predictions_output,
-            val_output_path=None,
-            metrics_output_path=None,
-            n_optuna_trials=trials,
-            recency_half_life=recency_half_life,
-            under_5m_weight=under_5m_weight,
-            mid_5m_to_20m_weight=mid_5m_to_20m_weight,
-            over_20m_weight=over_20m_weight,
-            exclude_prefixes=exclude_prefixes,
-            exclude_columns=exclude_columns,
-            optimize_metric=optimize_metric,
-            interval_q=interval_q,
-            two_stage_band_model=two_stage_band_model,
-            band_min_samples=band_min_samples,
-            band_blend_alpha=band_blend_alpha,
-            strict_leakage_guard=strict_leakage_guard,
-            strict_quality_gate=strict_quality_gate,
-            league_holdouts=league_holdouts,
-            drop_incomplete_league_seasons=drop_incomplete_league_seasons,
-            min_league_season_rows=min_league_season_rows,
-            min_league_season_completeness=min_league_season_completeness,
-            residual_calibration_min_samples=residual_calibration_min_samples,
-            mape_min_denom_eur=mape_min_denom_eur,
-            save_shap_artifacts=save_shap_artifacts,
-            holdout_n_optuna_trials=holdout_trials,
-            optuna_study_namespace=optuna_study_namespace,
-            optuna_load_if_exists=optuna_load_if_exists,
-        )
+        try:
+            _train_market_value_main(
+                dataset_path=clean_output,
+                val_season=val_season,
+                test_season=test_season,
+                output_path=predictions_output,
+                val_output_path=None,
+                metrics_output_path=None,
+                n_optuna_trials=trials,
+                recency_half_life=recency_half_life,
+                under_5m_weight=under_5m_weight,
+                mid_5m_to_20m_weight=mid_5m_to_20m_weight,
+                over_20m_weight=over_20m_weight,
+                exclude_prefixes=exclude_prefixes,
+                exclude_columns=exclude_columns,
+                optimize_metric=optimize_metric,
+                interval_q=interval_q,
+                two_stage_band_model=two_stage_band_model,
+                band_min_samples=band_min_samples,
+                band_blend_alpha=band_blend_alpha,
+                strict_leakage_guard=strict_leakage_guard,
+                strict_quality_gate=strict_quality_gate,
+                league_holdouts=league_holdouts,
+                drop_incomplete_league_seasons=drop_incomplete_league_seasons,
+                min_league_season_rows=min_league_season_rows,
+                min_league_season_completeness=min_league_season_completeness,
+                residual_calibration_min_samples=residual_calibration_min_samples,
+                mape_min_denom_eur=mape_min_denom_eur,
+                save_shap_artifacts=save_shap_artifacts,
+                holdout_n_optuna_trials=holdout_trials,
+                optuna_study_namespace=optuna_study_namespace,
+                optuna_load_if_exists=optuna_load_if_exists,
+            )
+        except ValueError as exc:
+            raise _augment_missing_holdout_error(
+                exc,
+                dataset_output=dataset_output,
+                clean_output=clean_output,
+                test_season=test_season,
+            ) from exc
     else:
         print("[pipeline] skip train")
 
@@ -428,6 +571,7 @@ def run_full_pipeline(
             min_test_samples=backtest_min_test_samples,
             min_test_under5m_samples=backtest_min_test_under5m_samples,
             min_test_over20m_samples=backtest_min_test_over20m_samples,
+            exclude_latest_dataset_season=backtest_exclude_latest_season,
             skip_incomplete_test_seasons=backtest_skip_incomplete_test_seasons,
             drop_incomplete_league_seasons=backtest_drop_incomplete_league_seasons,
             min_league_season_rows=backtest_min_league_season_rows,
@@ -441,11 +585,46 @@ def run_full_pipeline(
             exclude_columns=exclude_columns,
         )
 
+    if not skip_train:
+        promotion_gate = build_valuation_promotion_gate(
+            metrics_payload=_load_json_snapshot(metrics_output),
+            backtest_payload=_load_json_snapshot(backtest_summary_json) if with_backtest else None,
+            backtest_rows_path=backtest_summary_csv if with_backtest else None,
+            requested_backtest_test_seasons=backtest_test_seasons,
+            min_test_r2=backtest_min_test_r2,
+            max_test_wmape=backtest_max_test_wmape,
+            max_under5m_wmape=backtest_max_under5m_wmape,
+            max_lowmid_weighted_wmape=backtest_max_lowmid_weighted_wmape,
+            max_segment_weighted_wmape=backtest_max_segment_weighted_wmape,
+        )
+    else:
+        promotion_gate = {
+            "promotable": False,
+            "mode": "soft_warn",
+            "criteria": {
+                "requested_backtest_test_seasons": list(backtest_test_seasons or []),
+                "requested_holdouts": list(league_holdouts or []),
+            },
+            "failed_checks": ["Training was skipped, so valuation promotion cannot be evaluated."],
+            "warnings": [],
+            "holdout_coverage": {
+                "requested_count": len(list(league_holdouts or [])),
+                "successful_count": 0,
+                "successful_leagues": [],
+                "skipped_holdouts": [],
+                "missing_requested_holdouts": list(league_holdouts or []),
+            },
+            "backtest_window": {
+                "requested_test_seasons": list(backtest_test_seasons or []),
+                "completed_test_seasons": [],
+                "latest_dataset_season": None,
+                "excluded_latest_dataset_season": None,
+                "skipped_runs": [],
+            },
+        }
+
     if lock_artifacts:
         _step("Freeze active artifacts (manifest + env lock)")
-        output = Path(predictions_output)
-        val_output = output.with_name(f"{output.stem}_val{output.suffix or '.csv'}")
-        metrics_output = output.with_suffix(".metrics.json")
         build_lock_bundle(
             test_predictions=output,
             val_predictions=val_output,
@@ -454,6 +633,12 @@ def run_full_pipeline(
             env_out=Path(lock_env_out),
             strict_artifacts=bool(lock_strict_artifacts),
             label=str(lock_label),
+            valuation_promotion_state="promotable" if promotion_gate and promotion_gate.get("promotable") else "advisory_only",
+            valuation_promotion_reasons=list(
+                (promotion_gate or {}).get("failed_checks")
+                or (promotion_gate or {}).get("warnings")
+                or ["Valuation promotion review passed."]
+            ),
         )
 
     _step("Pipeline complete")
@@ -462,9 +647,6 @@ def run_full_pipeline(
     if with_future_targets:
         print(f"[pipeline] future-target dataset: {future_targets_output}")
     print(f"[pipeline] predictions: {predictions_output}")
-    output = Path(predictions_output)
-    val_output = output.with_name(f"{output.stem}_val{output.suffix or '.csv'}")
-    metrics_output = output.with_suffix(".metrics.json")
     artifacts: dict[str, dict[str, object]] = {}
 
     if not skip_dataset_build:
@@ -495,7 +677,7 @@ def run_full_pipeline(
         artifacts["ablation_bundle"] = _artifact_meta(Path(ablation_out_dir) / f"ablation_bundle_{test_season.replace('/', '-')}.json")
 
     if with_backtest:
-        artifacts["backtest_summary"] = _artifact_meta(Path(backtest_out_dir) / "rolling_backtest_summary.json")
+        artifacts["backtest_summary"] = _artifact_meta(backtest_summary_json)
 
     if provider_config_json:
         audit_json = provider_audit_json or str(Path(external_dir) / "provider_link_audit.json")
@@ -509,6 +691,21 @@ def run_full_pipeline(
     else:
         artifacts["lock_manifest"] = _artifact_meta(lock_manifest_out)
         artifacts["lock_env"] = _artifact_meta(lock_env_out)
+
+    ingestion_health_payload = None
+    ingestion_health_error = None
+    try:
+        ingestion_health_payload = regenerate_ingestion_health_report(clean_dataset_path=Path(clean_output))
+        artifacts["ingestion_health_csv"] = _require_artifact(
+            ingestion_health_payload["_meta"]["csv_path"], "ingestion health csv"
+        )
+        artifacts["ingestion_health_json"] = _require_artifact(
+            ingestion_health_payload["_meta"]["json_path"], "ingestion health json"
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        ingestion_health_error = str(exc)
+        artifacts["ingestion_health_csv"] = None
+        artifacts["ingestion_health_json"] = None
 
     summary: dict[str, object] = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -525,6 +722,8 @@ def run_full_pipeline(
             "holdout_trials": int(holdout_trials) if holdout_trials is not None else None,
             "optimize_metric": optimize_metric,
             "provider_config_json": str(Path(provider_config_json).resolve()) if provider_config_json else None,
+            "league_holdouts": list(league_holdouts or []),
+            "backtest_test_seasons": list(backtest_test_seasons or []),
         },
         "flags": {
             "with_future_targets": bool(with_future_targets),
@@ -534,16 +733,24 @@ def run_full_pipeline(
             "skip_dataset_build": bool(skip_dataset_build),
             "skip_clean": bool(skip_clean),
             "skip_train": bool(skip_train),
+            "backtest_exclude_latest_season": bool(backtest_exclude_latest_season),
         },
         "artifacts": artifacts,
         "snapshots": {
             "metrics": _load_json_snapshot(metrics_output),
-            "backtest": _load_json_snapshot(Path(backtest_out_dir) / "rolling_backtest_summary.json") if with_backtest else None,
+            "backtest": _load_json_snapshot(backtest_summary_json) if with_backtest else None,
             "ablation": _load_json_snapshot(Path(ablation_out_dir) / f"ablation_bundle_{test_season.replace('/', '-')}.json")
             if with_ablation
             else None,
+            "lock_manifest": _load_json_snapshot(lock_manifest_out) if lock_artifacts else None,
+            "ingestion_health": ingestion_health_payload,
         },
+        "promotion_gate": promotion_gate,
     }
+    if lock_artifacts:
+        summary["artifact_lanes"] = _manifest_lane_summary(summary["snapshots"]["lock_manifest"])
+    if ingestion_health_error:
+        summary["warnings"] = [f"Failed to refresh ingestion health report: {ingestion_health_error}"]
 
     if summary_json:
         out_path = Path(summary_json)
@@ -700,6 +907,12 @@ def main() -> None:
     parser.add_argument("--backtest-min-test-under5m-samples", type=int, default=50)
     parser.add_argument("--backtest-min-test-over20m-samples", type=int, default=25)
     parser.add_argument(
+        "--backtest-exclude-latest-season",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Exclude the chronologically latest dataset season from rolling backtests by default.",
+    )
+    parser.add_argument(
         "--backtest-skip-incomplete-test-seasons",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -837,6 +1050,7 @@ def main() -> None:
         backtest_min_test_samples=args.backtest_min_test_samples,
         backtest_min_test_under5m_samples=args.backtest_min_test_under5m_samples,
         backtest_min_test_over20m_samples=args.backtest_min_test_over20m_samples,
+        backtest_exclude_latest_season=args.backtest_exclude_latest_season,
         backtest_skip_incomplete_test_seasons=args.backtest_skip_incomplete_test_seasons,
         backtest_drop_incomplete_league_seasons=args.backtest_drop_incomplete_league_seasons,
         backtest_min_league_season_rows=args.backtest_min_league_season_rows,

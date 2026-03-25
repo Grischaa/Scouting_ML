@@ -80,9 +80,12 @@ def test_rolling_backtest_skips_incomplete_season(monkeypatch, tmp_path: Path) -
 
     pd.DataFrame(rows).to_parquet(dataset_path, index=False)
 
+    called_test_seasons: list[str] = []
+
     def _fake_train_market_value_main(**kwargs) -> None:
         metrics_path = Path(kwargs["metrics_output_path"])
         test_season = str(kwargs["test_season"])
+        called_test_seasons.append(test_season)
         if test_season == "2025/26":
             _write_metrics(
                 metrics_path,
@@ -113,13 +116,62 @@ def test_rolling_backtest_skips_incomplete_season(monkeypatch, tmp_path: Path) -
         min_test_samples=300,
         min_test_under5m_samples=50,
         min_test_over20m_samples=25,
+        exclude_latest_dataset_season=False,
         skip_incomplete_test_seasons=True,
     )
 
     summary = pd.read_csv(out_dir / "rolling_backtest_summary.csv")
     assert list(summary["test_season"]) == ["2024/25"]
+    assert called_test_seasons == ["2024/25"]
 
     summary_json = json.loads((out_dir / "rolling_backtest_summary.json").read_text(encoding="utf-8"))
     skipped_runs = summary_json.get("skipped_runs", [])
     assert len(skipped_runs) == 1
     assert skipped_runs[0]["test_season"] == "2025/26"
+    assert skipped_runs[0]["source"] == "precheck"
+
+
+def test_rolling_backtest_excludes_latest_dataset_season_by_default(monkeypatch, tmp_path: Path) -> None:
+    dataset_path = tmp_path / "clean.parquet"
+    out_dir = tmp_path / "backtests"
+
+    rows: list[dict[str, object]] = []
+    for season in ("2021/22", "2022/23", "2023/24", "2024/25", "2025/26"):
+        rows.extend({"season": season, "market_value_eur": 3_000_000.0} for _ in range(500))
+        rows.extend({"season": season, "market_value_eur": 10_000_000.0} for _ in range(120))
+        rows.extend({"season": season, "market_value_eur": 40_000_000.0} for _ in range(80))
+    pd.DataFrame(rows).to_parquet(dataset_path, index=False)
+
+    called_test_seasons: list[str] = []
+
+    def _fake_train_market_value_main(**kwargs) -> None:
+        called_test_seasons.append(str(kwargs["test_season"]))
+        _write_metrics(
+            Path(kwargs["metrics_output_path"]),
+            test_n=700,
+            under_5m_n=500,
+            mid_n=120,
+            over_20m_n=80,
+            test_r2=0.72,
+        )
+
+    monkeypatch.setattr(rb, "train_market_value_main", _fake_train_market_value_main)
+
+    rb.run_rolling_backtest(
+        dataset_path=str(dataset_path),
+        out_dir=str(out_dir),
+        trials=1,
+        min_train_seasons=2,
+        test_seasons=["2024/25", "2025/26"],
+        min_test_samples=300,
+        min_test_under5m_samples=50,
+        min_test_over20m_samples=25,
+        exclude_latest_dataset_season=True,
+        skip_incomplete_test_seasons=True,
+    )
+
+    assert called_test_seasons == ["2024/25"]
+    summary_json = json.loads((out_dir / "rolling_backtest_summary.json").read_text(encoding="utf-8"))
+    assert summary_json["latest_dataset_season"] == "2025/26"
+    assert summary_json["excluded_latest_dataset_season"] == "2025/26"
+    assert summary_json["skipped_runs"][0]["reasons"] == ["latest_dataset_season_excluded"]

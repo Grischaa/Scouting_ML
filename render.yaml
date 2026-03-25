@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: scoutml-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /market-value/health
+    autoDeploy: false
+    envVars:
+      - key: PYTHONPATH
+        value: src
+      - key: MODEL_ARTIFACTS_DIR
+        value: /app/data/model
+      - key: SCOUTING_API_CORS_ORIGINS
+        value: https://your-frontend.example.com

@@ -10,8 +10,9 @@
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="assets/styles.css?v=20260318_decision_ui" />
-    <script src="assets/app.js?v=20260318_decision_ui" defer></script>
+    <link rel="stylesheet" href="assets/styles.css?v=20260325_team_edition" />
+    <script src="assets/runtime-config.js?v=20260325_team_edition"></script>
+    <script src="assets/app.js?v=20260325_team_edition" defer></script>
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -22,30 +23,36 @@
       <div class="app-header__main card card--hero">
         <div class="app-header__copy">
           <p class="kicker">ScoutML</p>
-          <h1>Recruitment OS for undervalued football targets</h1>
+          <h1>Find undervalued football players using data-backed valuation</h1>
           <p class="subtitle">
-            A decision-first operating surface for scouts, analysts, and
-            sporting directors to price players, build conviction, and turn
-            shortlist ideas into recruitment actions.
+            ScoutML turns model pricing, shortlist ranking, and player briefs
+            into one lightweight recruitment workflow for scouts and analysts.
           </p>
+          <div class="hero-actions">
+            <button id="hero-explore-btn" type="button">Explore players</button>
+            <p class="hero-actions__note">
+              Start with the top picks, then open a player brief to decide who
+              deserves live follow-up.
+            </p>
+          </div>
           <div class="goal-pills">
-            <span class="goal-pill">Decision-first board</span>
+            <span class="goal-pill">Undervalued player search</span>
             <span class="goal-pill">Guardrailed pricing</span>
-            <span class="goal-pill">Scouting memo workflow</span>
+            <span class="goal-pill">Fast player briefs</span>
           </div>
         </div>
         <div class="header-signals">
           <article class="header-signal">
-            <span class="header-signal__label">Board</span>
-            <p>Put pursue, watch, price-only, or pass calls in front of the user before deeper analysis.</p>
+            <span class="header-signal__label">Start</span>
+            <p>Use the board to see who is worth opening first instead of scanning a raw valuation export.</p>
           </article>
           <article class="header-signal">
-            <span class="header-signal__label">Memo</span>
-            <p>Make the player rail feel like a decision workspace, not a dense diagnostic drawer.</p>
+            <span class="header-signal__label">Brief</span>
+            <p>Open a player brief to understand upside, evidence, and caution before committing scouting time.</p>
           </article>
           <article class="header-signal">
             <span class="header-signal__label">Funnel</span>
-            <p>Choose where to scout next, then decide which names deserve live follow-up.</p>
+            <p>Use the funnel later when you want to decide which leagues and roles deserve the next scouting block.</p>
           </article>
         </div>
       </div>
@@ -64,25 +71,67 @@
             id="api-base"
             type="url"
             spellcheck="false"
-            value="http://localhost:8000"
-            placeholder="http://localhost:8000"
+            value="http://127.0.0.1:8000"
+            placeholder="http://127.0.0.1:8000"
           />
           <div class="api-controls">
             <button id="connect-btn" type="button">Connect</button>
             <p class="utility-note">Use this only to point the frontend at the live backend. Recruitment work should happen below.</p>
           </div>
+          <section class="team-auth-panel">
+            <div class="team-auth-panel__header">
+              <div>
+                <p class="kicker">Team Edition</p>
+                <h3>Shared Workspace</h3>
+                <p id="team-auth-meta" class="utility-note">Team mode is off until the backend is configured with a database.</p>
+              </div>
+              <span id="team-status" class="status status--neutral">Local mode</span>
+            </div>
+            <div id="team-workspace-banner" class="workspace-banner" hidden>
+              <strong id="team-current-workspace">No workspace selected</strong>
+              <span id="team-current-user">Not signed in</span>
+            </div>
+            <div class="team-auth-grid">
+              <input id="team-email" type="email" placeholder="Scout email" autocomplete="username" />
+              <input id="team-password" type="password" placeholder="Password" autocomplete="current-password" />
+              <input id="team-full-name" type="text" placeholder="Full name (for bootstrap / invite accept)" autocomplete="name" />
+              <input id="team-workspace-name" type="text" placeholder="Workspace name (bootstrap / create)" />
+              <input id="team-invite-token" type="text" placeholder="Invite token (optional)" />
+              <select id="team-workspace-select">
+                <option value="">No workspace loaded</option>
+              </select>
+            </div>
+            <div class="detail-actions">
+              <button id="team-login-btn" type="button">Login</button>
+              <button id="team-bootstrap-btn" type="button" class="btn-ghost">Bootstrap Admin</button>
+              <button id="team-accept-invite-btn" type="button" class="btn-ghost">Accept Invite</button>
+              <button id="team-logout-btn" type="button" class="btn-ghost">Logout</button>
+            </div>
+            <div class="team-auth-grid team-auth-grid--admin">
+              <input id="team-new-workspace-name" type="text" placeholder="Create additional workspace" />
+              <input id="team-invite-email" type="email" placeholder="Invite email (optional)" />
+              <select id="team-invite-role">
+                <option value="scout">Scout</option>
+                <option value="viewer">Viewer</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button id="team-create-workspace-btn" type="button" class="btn-ghost">Create Workspace</button>
+              <button id="team-create-invite-btn" type="button" class="btn-ghost">Create Invite</button>
+            </div>
+            <p id="team-invite-output" class="metrics-meta">No invite link generated yet.</p>
+          </section>
         </div>
       </details>
     </header>
 
     <main class="main-wrap">
       <nav class="view-tabs card" aria-label="Views">
-        <button class="tab-btn is-active" data-view="overview" type="button">Overview</button>
-        <button class="tab-btn" data-view="workbench" type="button">Recruitment Board</button>
+        <button class="tab-btn" data-view="overview" type="button">Platform Readiness</button>
+        <button class="tab-btn is-active" data-view="workbench" type="button">Recruitment Board</button>
         <button class="tab-btn" data-view="funnel" type="button">Target Funnel</button>
       </nav>
 
-      <section id="view-overview" class="view view--active">
+      <section id="view-overview" class="view">
         <div class="overview-grid">
           <article class="card overview-readiness">
             <div class="overview-readiness__copy">
@@ -300,10 +349,139 @@
               </article>
             </div>
           </article>
+
+          <article class="card operator-card">
+            <h2>Operator Dashboard</h2>
+            <p class="card-intro">
+              One-screen operator view for ingestion health, active lanes, promotability, stale provider data, holdout coverage, and live current-season footprint.
+            </p>
+            <div class="snapshot-grid operator-grid">
+              <article class="snapshot-card">
+                <p class="snapshot-card__label">Ingestion health</p>
+                <p class="snapshot-card__value" id="operator-ingestion-status">-</p>
+                <p class="snapshot-card__meta" id="operator-ingestion-copy">Connect API to load ingestion health.</p>
+              </article>
+              <article class="snapshot-card">
+                <p class="snapshot-card__label">Valuation lane</p>
+                <p class="snapshot-card__value" id="operator-valuation-lane">-</p>
+                <p class="snapshot-card__meta" id="operator-valuation-copy">Connect API to load valuation-lane posture.</p>
+              </article>
+              <article class="snapshot-card">
+                <p class="snapshot-card__label">Future shortlist lane</p>
+                <p class="snapshot-card__value" id="operator-future-lane">-</p>
+                <p class="snapshot-card__meta" id="operator-future-copy">Connect API to load future-shortlist posture.</p>
+              </article>
+              <article class="snapshot-card">
+                <p class="snapshot-card__label">Promotion gate</p>
+                <p class="snapshot-card__value" id="operator-promotion-status">-</p>
+                <p class="snapshot-card__meta" id="operator-promotion-copy">Connect API to load promotability.</p>
+              </article>
+              <article class="snapshot-card">
+                <p class="snapshot-card__label">Stale provider snapshots</p>
+                <p class="snapshot-card__value" id="operator-stale-status">-</p>
+                <p class="snapshot-card__meta" id="operator-stale-copy">Connect API to load provider freshness risk.</p>
+              </article>
+              <article class="snapshot-card">
+                <p class="snapshot-card__label">Live footprint</p>
+                <p class="snapshot-card__value" id="operator-live-status">-</p>
+                <p class="snapshot-card__meta" id="operator-live-copy">Connect API to load live current-season footprint.</p>
+              </article>
+            </div>
+            <div class="operator-list-grid">
+              <article>
+                <p class="results-kicker">Leagues to watch</p>
+                <ul id="operator-blocked-list" class="risk-list">
+                  <li class="risk-item risk-item--none">No operator health loaded.</li>
+                </ul>
+              </article>
+              <article>
+                <p class="results-kicker">Lane + holdout notes</p>
+                <ul id="operator-lane-list" class="risk-list">
+                  <li class="risk-item risk-item--none">No operator health loaded.</li>
+                </ul>
+              </article>
+            </div>
+          </article>
         </div>
       </section>
 
-      <section id="view-workbench" class="view">
+      <section id="view-workbench" class="view view--active">
+        <section id="workbench-entry" class="workbench-intro">
+          <article class="card top-picks">
+            <div class="section-header section-header--split">
+              <div>
+                <p class="results-kicker">Start Here</p>
+                <h2 id="top-picks-title">Top Picks</h2>
+                <p id="top-picks-meta" class="card-intro">
+                  Loading players from the current recruitment brief.
+                </p>
+                <p id="board-lane-status" class="segment-note results-note">Waiting for active artifact lane context.</p>
+              </div>
+              <div class="top-picks__aside">
+                <p class="top-picks__note">
+                  Based on the current board order. Use this as the quickest
+                  path into a player brief.
+                </p>
+                <label class="playstyle-control" for="playstyle-select">
+                  <span>Playstyle lens</span>
+                  <select id="playstyle-select">
+                    <option value="">No style lens</option>
+                    <option value="possession">Possession</option>
+                    <option value="counter_attacking">Counter-Attacking</option>
+                    <option value="high_press">High Press</option>
+                    <option value="defensive">Defensive</option>
+                  </select>
+                </label>
+                <label class="playstyle-control" for="role-lens-select">
+                  <span>Role lens</span>
+                  <select id="role-lens-select">
+                    <option value="">No role lens</option>
+                    <option value="ball_playing_cb">Ball-playing CB</option>
+                    <option value="defensive_cb">Defensive CB</option>
+                    <option value="possession_midfielder">Possession Midfielder</option>
+                    <option value="ball_winning_midfielder">Ball-winning Midfielder</option>
+                    <option value="winger">Winger</option>
+                    <option value="striker">Striker</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div id="top-picks-grid" class="top-picks-grid">
+              <article class="top-pick-card top-pick-card--placeholder">
+                <p>Loading players...</p>
+              </article>
+            </div>
+          </article>
+          <article id="team-compare-section" class="card team-compare-panel" hidden>
+            <div class="section-header section-header--split">
+              <div>
+                <p class="results-kicker">Team Compare</p>
+                <h2>Shared Compare Workspace</h2>
+                <p id="team-compare-meta" class="card-intro">
+                  Add 2 to 4 players from the brief, then save the tray into a shared compare list for the team.
+                </p>
+              </div>
+              <div class="detail-actions">
+                <button id="team-compare-create-btn" type="button">Create Compare List</button>
+                <button id="team-compare-refresh-btn" type="button" class="btn-ghost">Refresh Compare Lists</button>
+              </div>
+            </div>
+            <div class="team-auth-grid">
+              <input id="team-compare-name" type="text" placeholder="Compare list name" />
+              <select id="team-compare-select">
+                <option value="">Choose saved compare list</option>
+              </select>
+              <button id="team-compare-save-btn" type="button" class="btn-ghost">Save Tray to Selected List</button>
+            </div>
+            <div id="team-compare-tray" class="compare-tray">
+              <p class="details-placeholder">Add players from the detail rail to start a shared compare tray.</p>
+            </div>
+            <div id="team-compare-lists" class="compare-lists">
+              <p class="details-placeholder">No compare lists loaded.</p>
+            </div>
+          </article>
+        </section>
+
         <div class="layout">
           <section class="controls card">
             <div class="panel-header">
@@ -319,6 +497,7 @@
                 <select id="mode-select">
                   <option value="shortlist" selected>Recruitment shortlist</option>
                   <option value="predictions">Valuation board</option>
+                  <option value="system_fit">System fit</option>
                 </select>
               </div>
               <div class="control">
@@ -328,7 +507,21 @@
                   <option value="val">Validation</option>
                 </select>
               </div>
-              <div class="control">
+              <div class="control" id="system-fit-template-control" hidden>
+                <label for="system-fit-template-select">System template</label>
+                <select id="system-fit-template-select">
+                  <option value="high_press_433">High-Press 4-3-3</option>
+                  <option value="transition_4231">Transition 4-2-3-1</option>
+                </select>
+              </div>
+              <div class="control" id="system-fit-lane-control" hidden>
+                <label for="system-fit-active-lane-select">Active lane</label>
+                <select id="system-fit-active-lane-select">
+                  <option value="valuation">Current Level / Pricing</option>
+                  <option value="future_shortlist">Future Potential / Advisory</option>
+                </select>
+              </div>
+              <div class="control" id="role-need-control">
                 <label for="role-need-select">Role need</label>
                 <select id="role-need-select">
                   <option value="">Any role</option>
@@ -458,6 +651,82 @@
                 </div>
               </div>
             </details>
+            <details id="team-preferences-panel" class="filter-panel" hidden>
+              <summary>Scout profile</summary>
+              <div class="controls__grid controls__grid--advanced">
+                <div class="control">
+                  <label for="team-pref-name">Profile name</label>
+                  <input id="team-pref-name" type="text" placeholder="Primary" />
+                </div>
+                <div class="control">
+                  <label for="team-pref-age-min">Target age min</label>
+                  <input id="team-pref-age-min" type="number" min="-1" max="40" step="1" />
+                </div>
+                <div class="control">
+                  <label for="team-pref-age-max">Target age max</label>
+                  <input id="team-pref-age-max" type="number" min="-1" max="40" step="1" />
+                </div>
+                <div class="control">
+                  <label for="team-pref-budget-posture">Budget posture</label>
+                  <select id="team-pref-budget-posture">
+                    <option value="balanced">Balanced</option>
+                    <option value="disciplined">Disciplined</option>
+                    <option value="stretch">Stretch</option>
+                  </select>
+                </div>
+                <div class="control">
+                  <label for="team-pref-trust-posture">League posture</label>
+                  <select id="team-pref-trust-posture">
+                    <option value="balanced">Balanced</option>
+                    <option value="trusted_first">Trusted first</option>
+                    <option value="frontier">Frontier-friendly</option>
+                  </select>
+                </div>
+                <div class="control">
+                  <label for="team-pref-risk">Risk tolerance</label>
+                  <select id="team-pref-risk">
+                    <option value="balanced">Balanced</option>
+                    <option value="conservative">Conservative</option>
+                    <option value="aggressive">Aggressive</option>
+                  </select>
+                </div>
+                <div class="control">
+                  <label for="team-pref-lane">Preferred lane</label>
+                  <select id="team-pref-lane">
+                    <option value="valuation">Current Level / Pricing</option>
+                    <option value="future_shortlist">Future Potential / Advisory</option>
+                  </select>
+                </div>
+                <div class="control">
+                  <label for="team-pref-system-template">Default system template</label>
+                  <select id="team-pref-system-template">
+                    <option value="">No default</option>
+                    <option value="high_press_433">High-Press 4-3-3</option>
+                    <option value="transition_4231">Transition 4-2-3-1</option>
+                  </select>
+                </div>
+                <div class="control control--wide">
+                  <label for="team-pref-role-priorities">Role priorities</label>
+                  <input id="team-pref-role-priorities" type="text" placeholder="FW:1.08, MF:1.03, CB:0.95" />
+                </div>
+                <div class="control control--wide">
+                  <label for="team-pref-must-have-tags">Must-have tags</label>
+                  <input id="team-pref-must-have-tags" type="text" placeholder="trajectory, high_confidence" />
+                </div>
+                <div class="control control--wide">
+                  <label for="team-pref-avoid-tags">Avoid tags</label>
+                  <input id="team-pref-avoid-tags" type="text" placeholder="league_risk, injury_risk" />
+                </div>
+                <div class="control control--checkbox control--checkbox-inline">
+                  <label for="team-pref-apply">Apply preferences to ranking</label>
+                  <input id="team-pref-apply" type="checkbox" checked />
+                </div>
+              </div>
+              <div class="detail-actions">
+                <button id="team-pref-save-btn" type="button">Save Profile</button>
+              </div>
+              <p id="team-pref-meta" class="metrics-meta">Scout preference profiles appear when team mode is active.</p>
+            </details>
 
             <div class="control control--actions">
               <button id="refresh-btn" type="button">Run Query</button>
@@ -467,9 +736,26 @@
             </div>
           </section>
 
-          <section class="results card">
+          <section class="results card" id="board-anchor">
             <p class="results-kicker">Board</p>
-            <p class="results-guide">Scan status first. Pursue and watch rows should dominate your attention before you open the memo.</p>
+            <p class="results-guide">Start with the top of the board, then open one player brief to decide whether the case is strong enough for live follow-up.</p>
+            <div id="board-highlights" class="board-highlights">
+              <article class="board-highlight">
+                <span class="board-highlight__label">Top pick</span>
+                <strong id="board-highlight-top-pick">-</strong>
+                <small id="board-highlight-top-pick-note">Loading board...</small>
+              </article>
+              <article class="board-highlight">
+                <span class="board-highlight__label">Largest gap</span>
+                <strong id="board-highlight-gap">-</strong>
+                <small id="board-highlight-gap-note">Waiting for current page.</small>
+              </article>
+              <article class="board-highlight">
+                <span class="board-highlight__label">Decision mix</span>
+                <strong id="board-highlight-mix">-</strong>
+                <small id="board-highlight-mix-note">Waiting for current page.</small>
+              </article>
+            </div>
             <div class="results__header">
               <h2 id="results-title">Recruitment Board</h2>
               <div class="results__meta">
@@ -480,23 +766,26 @@
             <p id="results-note" class="segment-note results-note">
               Connect API to load ranking diagnostics and score provenance.
             </p>
+            <div id="system-fit-slot-wrap" class="system-fit-slot-wrap" hidden>
+              <p id="system-fit-slot-meta" class="segment-note results-note">
+                Select a slot to inspect backend-ranked candidates for this system.
+              </p>
+              <div id="system-fit-slot-bar" class="system-fit-slot-bar"></div>
+            </div>
             <div class="table-wrap">
               <table id="results-table">
                 <thead>
                   <tr>
-                    <th>Target</th>
-                    <th>Status</th>
-                    <th>Pos</th>
-                    <th class="num">Age</th>
-                    <th class="num">Market</th>
-                    <th class="num">Cons. gap (capped)</th>
-                    <th class="num">Confidence</th>
-                    <th class="num">Minutes</th>
-                    <th>Next move</th>
+                    <th id="results-col-target">Target</th>
+                    <th id="results-col-decision">Decision</th>
+                    <th id="results-col-market" class="num">Market</th>
+                    <th id="results-col-expected" class="num">Expected</th>
+                    <th id="results-col-gap" class="num">Gap</th>
+                    <th id="results-col-confidence" class="num">Confidence</th>
                   </tr>
                 </thead>
                 <tbody id="results-body">
-                  <tr><td colspan="9">Connect API and run query.</td></tr>
+                  <tr><td colspan="6">Connect API and run query.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -507,16 +796,16 @@
           </section>
 
           <aside class="details card" id="detail-panel">
-            <p class="results-kicker">Decision rail</p>
+            <p class="results-kicker">Player view</p>
             <div class="detail-header">
               <div>
-                <h2>Recruitment Memo</h2>
-                <p class="detail-header__note">Start with the call. Only go deeper into fit or due diligence if the player still deserves live follow-up.</p>
+                <h2>Player Brief</h2>
+                <p class="detail-header__note">Start with the snapshot and why this player stands out. Go deeper only if the case still deserves live follow-up.</p>
               </div>
               <button id="detail-open-profile" type="button" class="btn-ghost">Open Profile</button>
             </div>
             <p class="details-placeholder" id="detail-placeholder">
-              Select a player to see recruitment status, price upside, confidence, and the recommended next move.
+              Select a player to see the valuation snapshot, key reasons he is interesting, and the recommended next move.
             </p>
             <div id="detail-content" hidden>
               <div class="decision-summary">
@@ -551,9 +840,10 @@
                 </div>
               </div>
               <div class="detail-tabbar" id="detail-tabbar">
-                <button class="detail-tab is-active" type="button" data-detail-tab="overview">Overview</button>
+                <button class="detail-tab is-active" type="button" data-detail-tab="overview">Why this player</button>
                 <button class="detail-tab" type="button" data-detail-tab="stats">Stats</button>
                 <button class="detail-tab" type="button" data-detail-tab="tactical">Fit</button>
+                <button class="detail-tab" type="button" data-detail-tab="trajectory">Trajectory</button>
                 <button class="detail-tab" type="button" data-detail-tab="risk">Due Diligence</button>
               </div>
               <section class="detail-panel-section is-active" data-detail-panel="overview">
@@ -574,14 +864,46 @@
                     <strong id="detail-lower">-</strong>
                   </div>
                 </div>
+                <div class="brief-grid">
+                  <article class="brief-card brief-card--summary">
+                    <p class="results-kicker">Why this player?</p>
+                    <p id="detail-summary" class="detail-summary">Select a player to load the player brief summary.</p>
+                  </article>
+                  <article class="brief-card">
+                    <h4>Top strengths</h4>
+                    <ul id="detail-strengths" class="risk-list">
+                      <li class="risk-item risk-item--none">Select a player to load strengths.</li>
+                    </ul>
+                  </article>
+                  <article class="brief-card">
+                    <h4>Signals and context</h4>
+                    <ul id="detail-context-glance" class="risk-list">
+                      <li class="risk-item risk-item--none">Select a player to load key signals and context.</li>
+                    </ul>
+                  </article>
+                </div>
+                <article id="detail-fit-card" class="brief-card brief-card--fit" hidden>
+                  <p class="results-kicker">Why this fit</p>
+                  <p id="detail-fit-summary" class="detail-summary">Select a player to see lens fit drivers.</p>
+                  <div id="detail-fit-drivers" class="fit-driver-list"></div>
+                </article>
+                <article id="detail-freshness-card" class="brief-card brief-card--freshness" hidden>
+                  <p class="results-kicker">Data freshness</p>
+                  <p id="detail-freshness-summary" class="detail-summary">Select a player to inspect freshness context.</p>
+                  <p id="detail-freshness-meta" class="detail-summary fit-driver-summary--muted"></p>
+                </article>
+                <article id="detail-talent-card" class="brief-card brief-card--talent" hidden>
+                  <p class="results-kicker">Talent View</p>
+                  <p id="detail-talent-summary" class="detail-summary">Select a player to inspect current level, future potential, and confidence.</p>
+                  <div id="detail-talent-scores" class="talent-score-grid"></div>
+                  <ul id="detail-talent-drivers" class="risk-list">
+                    <li class="risk-item risk-item--none">Select a player to load talent drivers.</li>
+                  </ul>
+                </article>
                 <dl id="detail-list" class="detail-list"></dl>
                 <details class="detail-group" open>
-                  <summary>Recruitment call</summary>
+                  <summary>Signals and evidence</summary>
                   <div class="detail-group__body">
-                    <div class="detail-section">
-                      <h4>Call Summary</h4>
-                      <p id="detail-summary" class="detail-summary">Select a player to load scouting summary.</p>
-                    </div>
                     <div class="detail-section">
                       <h4>Role Evidence</h4>
                       <p id="detail-role-summary" class="detail-summary">Select a player to inspect the position-specific metric lens.</p>
@@ -599,7 +921,7 @@
                   </div>
                 </details>
                 <details class="detail-group">
-                  <summary>Upside and caution</summary>
+                  <summary>Context and caution</summary>
                   <div class="detail-group__body">
                     <div class="detail-section">
                       <h4>Data / League Warnings</h4>
@@ -610,26 +932,20 @@
                     </div>
                     <div class="detail-section detail-section--split">
                       <div>
-                        <h4>Top Strengths</h4>
-                        <ul id="detail-strengths" class="risk-list">
-                          <li class="risk-item risk-item--none">Select a player to load strengths.</li>
-                        </ul>
-                      </div>
-                      <div>
                         <h4>Weaknesses</h4>
                         <ul id="detail-weaknesses" class="risk-list">
                           <li class="risk-item risk-item--none">Select a player to load weaknesses.</li>
                         </ul>
                       </div>
+                      <div>
+                        <h4>Development Levers</h4>
+                        <ul id="detail-levers" class="risk-list">
+                          <li class="risk-item risk-item--none">Select a player to load development levers.</li>
+                        </ul>
+                      </div>
                     </div>
                     <div class="detail-section">
-                      <h4>Development Levers</h4>
-                      <ul id="detail-levers" class="risk-list">
-                        <li class="risk-item risk-item--none">Select a player to load development levers.</li>
-                      </ul>
-                    </div>
-                    <div class="detail-section">
-                      <h4>Evidence Depth</h4>
+                      <h4>Evidence depth</h4>
                       <p id="detail-history" class="detail-summary">Select a player to load history-strength breakdown.</p>
                     </div>
                   </div>
@@ -683,6 +999,13 @@
                         <li class="risk-item risk-item--none">No similar players loaded.</li>
                       </ul>
                     </div>
+                    <div id="detail-proxy-section" class="detail-section" hidden>
+                      <h4>Estimated From Comparable Players</h4>
+                      <p id="detail-proxy-summary" class="detail-summary">Select a player to review advisory proxy estimates for missing metrics.</p>
+                      <ul id="detail-proxy-list" class="risk-list">
+                        <li class="risk-item risk-item--none">No advisory proxy estimates loaded.</li>
+                      </ul>
+                    </div>
                     <div class="detail-section">
                       <h4>Role Radar</h4>
                       <div class="radar-wrap">
@@ -698,6 +1021,44 @@
                     </div>
                   </div>
                 </details>
+              </section>
+
+              <section class="detail-panel-section" data-detail-panel="trajectory">
+                <article class="brief-card brief-card--trajectory">
+                  <div class="trajectory-panel__header">
+                    <div>
+                      <p class="results-kicker">Trajectory</p>
+                      <h4 id="detail-trajectory-badge" class="trajectory-badge trajectory-badge--stable">No trajectory loaded</h4>
+                    </div>
+                    <p id="detail-trajectory-project" class="trajectory-panel__project">Projected next value: -</p>
+                  </div>
+                  <p id="detail-trajectory-summary" class="detail-summary">Select a player to inspect the multi-season value trajectory.</p>
+                  <div id="detail-trajectory-chart" class="trajectory-chart-wrap">
+                    <p class="details-placeholder">No trajectory chart loaded yet.</p>
+                  </div>
+                </article>
+                <article class="brief-card brief-card--trajectory-table">
+                  <h4>Season-by-season snapshot</h4>
+                  <div class="table-wrap table-wrap--small trajectory-table-wrap">
+                    <table class="trajectory-table">
+                      <thead>
+                        <tr>
+                          <th>Season</th>
+                          <th class="num">Predicted</th>
+                          <th class="num">Value Δ</th>
+                          <th class="num">Market</th>
+                          <th class="num">Minutes</th>
+                          <th class="num">Goals</th>
+                          <th class="num">Assists</th>
+                          <th class="num">xG</th>
+                        </tr>
+                      </thead>
+                      <tbody id="detail-trajectory-table-body">
+                        <tr><td colspan="8">No trajectory history loaded.</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </article>
               </section>
 
               <section class="detail-panel-section" data-detail-panel="risk">
@@ -739,8 +1100,99 @@
                   <summary>Next action and export</summary>
                   <div class="detail-group__body">
                     <div class="detail-actions">
-                      <button id="detail-export-json" type="button" class="btn-ghost">Export Memo JSON</button>
-                      <button id="detail-export-csv" type="button" class="btn-ghost">Export Memo CSV</button>
+                      <button id="detail-export-pdf" type="button" class="btn-ghost">Export PDF Memo</button>
+                      <button id="detail-export-json" type="button" class="btn-ghost">Export Brief JSON</button>
+                      <button id="detail-export-csv" type="button" class="btn-ghost">Export Brief CSV</button>
+                    </div>
+                    <div class="detail-section">
+                      <h4>Scout Decision</h4>
+                      <div id="detail-latest-decision" class="decision-summary-strip" hidden>
+                        <div class="decision-summary-strip__top">
+                          <span id="detail-latest-decision-pill" class="decision-pill decision-pill--neutral">No decision logged</span>
+                          <span id="detail-latest-decision-meta" class="metrics-meta">No scout decision saved yet.</span>
+                        </div>
+                        <p id="detail-latest-decision-summary" class="detail-summary">
+                          Save a scout decision to capture why this player should move forward or drop out.
+                        </p>
+                        <p id="detail-latest-decision-note" class="decision-summary-strip__note" hidden></p>
+                      </div>
+                      <div id="detail-decision-action-bar" class="decision-action-bar">
+                        <button type="button" class="btn-ghost scout-decision-action" data-scout-action="shortlist">Shortlist</button>
+                        <button type="button" class="btn-ghost scout-decision-action" data-scout-action="watch_live">Watch Live</button>
+                        <button type="button" class="btn-ghost scout-decision-action" data-scout-action="request_report">Request Report</button>
+                        <button type="button" class="btn-ghost scout-decision-action" data-scout-action="pass">Pass</button>
+                      </div>
+                      <div id="detail-decision-reasons" class="decision-reason-grid">
+                        <span class="metrics-meta">Choose an action to see relevant reason tags.</span>
+                      </div>
+                      <textarea
+                        id="detail-decision-note-input"
+                        class="decision-note-input"
+                        rows="3"
+                        placeholder="Optional note for the scouting log"
+                      ></textarea>
+                      <div class="detail-actions">
+                        <button id="detail-decision-save-btn" type="button">Save Decision</button>
+                        <button id="detail-decision-clear-btn" type="button" class="btn-ghost">Clear</button>
+                      </div>
+                      <p id="detail-decision-meta" class="metrics-meta">Decision log is local-first and analytics-only in v1.</p>
+                    </div>
+                    <div id="team-collaboration-section" class="detail-section" hidden>
+                      <h4>Team Collaboration</h4>
+                      <div class="team-collab-grid">
+                        <div>
+                          <p class="detail-summary">Assignments</p>
+                          <div class="watchlist-form">
+                            <select id="team-assignee-select">
+                              <option value="">Assign to scout</option>
+                            </select>
+                            <select id="team-assignment-status">
+                              <option value="to_watch">To watch</option>
+                              <option value="watched">Watched</option>
+                              <option value="report_requested">Report requested</option>
+                              <option value="passed">Passed</option>
+                              <option value="shortlisted">Shortlisted</option>
+                            </select>
+                            <input id="team-assignment-due" type="date" />
+                          </div>
+                          <textarea
+                            id="team-assignment-note"
+                            class="decision-note-input"
+                            rows="2"
+                            placeholder="Assignment note"
+                          ></textarea>
+                          <div class="detail-actions">
+                            <button id="team-assignment-save-btn" type="button" class="btn-ghost">Save Assignment</button>
+                            <button id="team-compare-add-btn" type="button" class="btn-ghost">Add to Compare Tray</button>
+                          </div>
+                          <p id="team-assignment-meta" class="metrics-meta">Assignments are shared per workspace.</p>
+                          <ul id="team-assignment-list" class="risk-list">
+                            <li class="risk-item risk-item--none">No assignments loaded.</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <p class="detail-summary">Comments</p>
+                          <ul id="team-comments-list" class="risk-list">
+                            <li class="risk-item risk-item--none">No shared comments loaded.</li>
+                          </ul>
+                          <textarea
+                            id="team-comment-input"
+                            class="decision-note-input"
+                            rows="3"
+                            placeholder="Add a shared workspace note"
+                          ></textarea>
+                          <div class="detail-actions">
+                            <button id="team-comment-save-btn" type="button" class="btn-ghost">Save Comment</button>
+                          </div>
+                          <p id="team-comment-meta" class="metrics-meta">Comments are shared with the active workspace.</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p class="detail-summary">Workspace activity</p>
+                        <ul id="team-activity-list" class="risk-list">
+                          <li class="risk-item risk-item--none">No team activity loaded.</li>
+                        </ul>
+                      </div>
                     </div>
                     <div class="detail-section">
                       <h4>Watchlist</h4>
@@ -958,6 +1410,7 @@
             <p id="profile-modal-meta" class="detail-summary">Select a player to inspect the full profile.</p>
           </div>
           <div class="detail-actions">
+            <button id="profile-modal-export-pdf" type="button" class="btn-ghost">Export PDF</button>
             <button id="profile-modal-export-json" type="button" class="btn-ghost">Export JSON</button>
             <button id="profile-modal-export-csv" type="button" class="btn-ghost">Export CSV</button>
             <button id="profile-modal-close-btn" type="button" class="btn-ghost">Close</button>

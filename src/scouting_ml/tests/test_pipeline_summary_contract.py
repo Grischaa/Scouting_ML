@@ -97,6 +97,22 @@ def test_run_production_pipeline_emits_common_summary_contract(tmp_path: Path, m
 
     monkeypatch.setattr(rprod, "run_full_pipeline", _run_full_pipeline_stub)
     monkeypatch.setattr(rprod, "run_weekly_scout_ops", _weekly_stub)
+    monkeypatch.setattr(
+        rprod,
+        "regenerate_ingestion_health_report",
+        lambda clean_dataset_path: {
+            "summary": {"total": 1, "status_counts": {"healthy": 1, "watch": 0, "blocked": 0}},
+            "_meta": {
+                "csv_path": str(_write(tmp_path / "ingestion_health.csv", "league_slug,status\n").resolve()),
+                "json_path": str(
+                    _write(
+                        tmp_path / "ingestion_health.json",
+                        json.dumps({"summary": {"total": 1, "status_counts": {"healthy": 1, "watch": 0, "blocked": 0}}}),
+                    ).resolve()
+                ),
+            },
+        },
+    )
 
     summary = rprod.run_production_pipeline(
         players_source=str(tmp_path / "players"),
@@ -112,6 +128,7 @@ def test_run_production_pipeline_emits_common_summary_contract(tmp_path: Path, m
         min_minutes=450.0,
         trials=2,
         optimize_metric="lowmid_wmape",
+        league_holdouts=["Austrian Bundesliga"],
         band_min_samples=100,
         band_blend_alpha=0.3,
         mape_min_denom_eur=1_000_000.0,
@@ -126,6 +143,7 @@ def test_run_production_pipeline_emits_common_summary_contract(tmp_path: Path, m
         backtest_min_test_samples=100,
         backtest_min_test_under5m_samples=10,
         backtest_min_test_over20m_samples=10,
+        backtest_exclude_latest_season=True,
         backtest_skip_incomplete_test_seasons=True,
         drop_incomplete_league_seasons=True,
         min_league_season_rows=20,
@@ -158,6 +176,7 @@ def test_run_production_pipeline_emits_common_summary_contract(tmp_path: Path, m
     assert_common_summary_contract(summary)
     assert_common_summary_contract(summary["snapshots"]["full_pipeline"])
     assert_common_summary_contract(summary["snapshots"]["weekly_ops"])
+    assert summary["artifacts"]["ingestion_health_json"]["exists"] is True
 
 
 def test_run_provider_promotion_pipeline_emits_common_summary_contract(tmp_path: Path, monkeypatch) -> None:
@@ -262,6 +281,7 @@ def test_run_provider_promotion_pipeline_emits_common_summary_contract(tmp_path:
         band_blend_alpha=0.3,
         with_backtest=True,
         backtest_test_seasons=["2024/25"],
+        backtest_exclude_latest_season=True,
         review_confidence_threshold=0.75,
         skip_injuries=True,
         skip_contracts=True,

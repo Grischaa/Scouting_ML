@@ -123,7 +123,10 @@ def _future_benchmark_summary(
 ) -> dict[str, Any] | None:
     if not path:
         return None
-    payload = _load_json(path)
+    path_obj = Path(path)
+    if not path_obj.exists():
+        return None
+    payload = _load_json(path_obj)
     split_payload = payload.get("splits", {}).get(split, {})
     join = split_payload.get("join", {}) if isinstance(split_payload.get("join"), dict) else {}
     precision_rows = split_payload.get("precision_at_k", {}).get(label_key, [])
@@ -135,7 +138,7 @@ def _future_benchmark_summary(
             overall_row = row
             break
     return {
-        "path": str(path),
+        "path": str(path_obj),
         "split": split,
         "label_key": label_key,
         "k": int(k),

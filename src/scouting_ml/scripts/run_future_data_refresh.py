@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
+import pandas as pd
+
 from scouting_ml.models.build_dataset import main as build_dataset_main
 from scouting_ml.models.clean_dataset import clean_dataset
 from scouting_ml.reporting.future_value_benchmarks import (
@@ -66,6 +68,98 @@ def _load_json_snapshot(path: str | Path | None) -> dict | list | None:
         return json.loads(target.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def _append_future_promotion_args(
+    promotion_args: list[str],
+    *,
+    candidate_future_benchmark_json: str,
+    champion_future_benchmark_json: str | None,
+) -> None:
+    promotion_args.extend(
+        [
+            "--candidate-future-benchmark-json",
+            candidate_future_benchmark_json,
+            "--require-future-benchmark",
+        ]
+    )
+    if champion_future_benchmark_json and Path(champion_future_benchmark_json).exists():
+        promotion_args.extend(
+            [
+                "--champion-future-benchmark-json",
+                champion_future_benchmark_json,
+                "--require-future-precision-vs-champion",
+            ]
+        )
+
+
+def _manifest_lane_summary(manifest_payload: dict | None) -> dict[str, Any]:
+    if not isinstance(manifest_payload, dict):
+        return {}
+    lanes: dict[str, Any] = {}
+    for key in ("valuation_champion", "future_shortlist_champion"):
+        section = manifest_payload.get(key)
+        if not isinstance(section, dict):
+            continue
+        artifacts = section.get("artifacts") if isinstance(section.get("artifacts"), dict) else {}
+        config = section.get("config") if isinstance(section.get("config"), dict) else {}
+        role = str(section.get("role") or key.replace("_champion", ""))
+        lanes[role] = {
+            "role": role,
+            "label": section.get("label"),
+            "lane_state": section.get("lane_state"),
+            "promotion_state": section.get("promotion_state"),
+            "promotion_reasons": section.get("promotion_reasons"),
+            "generated_at_utc": section.get("generated_at_utc"),
+            "test_season": config.get("test_season"),
+            "artifact_paths": {
+                artifact_key: artifact_meta.get("path")
+                for artifact_key, artifact_meta in artifacts.items()
+                if isinstance(artifact_meta, dict)
+            },
+        }
+    return lanes
+
+
+def _confidence_distribution(series: pd.Series) -> dict[str, int]:
+    numeric = pd.to_numeric(series, errors="coerce")
+    return {
+        "high": int((numeric >= 70.0).sum()),
+        "medium": int(((numeric >= 45.0) & (numeric < 70.0)).sum()),
+        "low": int((numeric < 45.0).sum()),
+    }
+
+
+def _summarize_talent_outputs(path: str | Path | None) -> dict[str, Any]:
+    if path in (None, ""):
+        return {}
+    target = Path(path)
+    if not target.exists():
+        return {}
+    frame = pd.read_csv(target, low_memory=False)
+    summary: dict[str, Any] = {
+        "rows": int(len(frame)),
+        "position_family_counts": {},
+        "future_label_coverage": {
+            "labeled_rows": 0,
+            "total_rows": int(len(frame)),
+        },
+        "confidence_distribution": {"high": 0, "medium": 0, "low": 0},
+    }
+    if "talent_position_family" in frame.columns:
+        summary["position_family_counts"] = {
+            key: int(value)
+            for key, value in frame["talent_position_family"].astype(str).value_counts().sort_index().items()
+        }
+    if "has_next_season_target" in frame.columns:
+        labeled = pd.to_numeric(frame["has_next_season_target"], errors="coerce").fillna(0.0)
+        summary["future_label_coverage"] = {
+            "labeled_rows": int(labeled.sum()),
+            "total_rows": int(len(frame)),
+        }
+    if "future_potential_confidence" in frame.columns:
+        summary["confidence_distribution"] = _confidence_distribution(frame["future_potential_confidence"])
+    return summary
 
 
 def _copy_import_sources(
@@ -360,6 +454,9 @@ def run_future_data_refresh(
             "future_benchmark": _load_json_snapshot(future_report_paths["json"]),
             "future_benchmark_diagnostics": _load_json_snapshot(future_diagnostics_paths["json"]),
             "future_u23_nonbig5_benchmark": _load_json_snapshot(u23_report_paths["json"]) if u23_report_paths else None,
+            "lock_manifest": _load_json_snapshot(next((promotion_args[idx + 1] for idx, value in enumerate(promotion_args) if value == "--manifest-out"), None))
+            if promotion_enabled
+            else None,
         },
         "future_audit": {
             "total_rows": audit_payload.get("total_rows"),
@@ -375,6 +472,24 @@ def run_future_data_refresh(
         "promotion": {
             "enabled": bool(promotion_enabled),
             "rc": promotion_rc,
+        },
+    }
+    if promotion_enabled:
+        summary["artifact_lanes"] = _manifest_lane_summary(summary["snapshots"].get("lock_manifest"))
+    summary["talent_summary"] = {
+        "val": _summarize_talent_outputs(scored_val_output),
+        "test": _summarize_talent_outputs(scored_test_output),
+        "lane_posture": {
+            "valuation": (summary.get("artifact_lanes") or {}).get("valuation")
+            if isinstance(summary.get("artifact_lanes"), dict)
+            else None,
+            "future_shortlist": (summary.get("artifact_lanes") or {}).get("future_shortlist")
+            if isinstance(summary.get("artifact_lanes"), dict)
+            else {
+                "role": "future_shortlist",
+                "lane_state": "live",
+                "promotion_state": "advisory_only",
+            },
         },
     }
 
@@ -416,11 +531,11 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min-next-minutes", type=float, default=450.0)
     parser.add_argument(
         "--base-val-predictions",
-        default="data/model/reports/low_value_strategy_focused/cheap_aggressive_2024-25_val.csv",
+        default="data/model/champion_predictions_2024-25_val.csv",
     )
     parser.add_argument(
         "--base-test-predictions",
-        default="data/model/reports/low_value_strategy_focused/cheap_aggressive_2024-25.csv",
+        default="data/model/champion_predictions_2024-25.csv",
     )
     parser.add_argument(
         "--scored-val-output",
@@ -473,7 +588,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--champion-label", default="champion")
     parser.add_argument(
         "--candidate-metrics",
-        default="data/model/reports/low_value_strategy_focused/cheap_aggressive_2024-25.metrics.json",
+        default="data/model/champion_predictions_2024-25.metrics.json",
     )
     parser.add_argument(
         "--candidate-holdout-glob",
@@ -525,22 +640,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.candidate_metrics,
         "--candidate-holdout-glob",
         args.candidate_holdout_glob,
-        "--candidate-future-benchmark-json",
-        args.future_benchmark_json,
         "--candidate-label",
         args.candidate_label,
         "--reference-holdout-glob",
         args.reference_holdout_glob,
         "--reference-label",
         args.reference_label,
-        "--champion-future-benchmark-json",
-        args.champion_future_benchmark_json,
         "--comparison-out-json",
         args.comparison_out_json,
         "--comparison-out-md",
         args.comparison_out_md,
-        "--require-future-benchmark",
-        "--require-future-precision-vs-champion",
         "--onboarding-json",
         args.onboarding_json,
         "--ablation-bundle",
@@ -558,6 +667,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--primary-role",
         "future_shortlist",
     ]
+    _append_future_promotion_args(
+        promotion_args,
+        candidate_future_benchmark_json=args.future_benchmark_json,
+        champion_future_benchmark_json=args.champion_future_benchmark_json,
+    )
     if args.promote_on_pass:
         promotion_args.append("--promote-on-pass")
 

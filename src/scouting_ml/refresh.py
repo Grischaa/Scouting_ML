@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import argparse
 from typing import Iterable, List, Optional
 
-import typer
-
-from scouting_ml.league_registry import LEAGUES, get_league, list_leagues
+from scouting_ml.league_registry import get_league, list_leagues
 from scouting_ml.pipeline import merge_tm_sofa, run_sofascore, run_transfermarkt
+from scouting_ml.reporting.operator_health import regenerate_ingestion_health_report
 
 
 def refresh_league(
@@ -40,50 +40,84 @@ def refresh_league(
             sofa_path=sofa_path,
             force=force,
         )
+    report = regenerate_ingestion_health_report()
+    print(f"[refresh] updated ingestion health report -> {report['_meta']['json_path']}")
 
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Refresh Transfermarkt + Sofascore datasets for configured leagues."
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
-app = typer.Typer(help="Refresh Transfermarkt + Sofascore datasets for configured leagues.")
-
-
-@app.command()
-def league(
-    slug: str = typer.Argument(..., help="League slug, e.g. english_premier_league."),
-    season: List[str] = typer.Option(
-        None,
+    league_parser = subparsers.add_parser(
+        "league",
+        help="Refresh one configured league.",
+    )
+    league_parser.add_argument(
+        "slug",
+        help="League slug, e.g. english_premier_league.",
+    )
+    league_parser.add_argument(
         "--season",
         "-s",
-        help="Season label(s) to refresh (defaults to all seasons configured for the league).",
-    ),
-    force: bool = typer.Option(False, help="Redownload even if files already exist."),
-) -> None:
-    try:
-        refresh_league(slug, seasons=season or None, force=force)
-    except ValueError as exc:
-        typer.echo(f"[error] {exc}", err=True)
-        raise typer.Exit(1)
+        action="append",
+        default=[],
+        help="Season label to refresh. Repeat the flag to run multiple seasons.",
+    )
+    league_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Redownload even if files already exist.",
+    )
 
-
-@app.command()
-def all(
-    force: bool = typer.Option(False, help="Redownload even if files already exist."),
-    max_seasons: Optional[int] = typer.Option(
-        None,
+    all_parser = subparsers.add_parser(
+        "all",
+        help="Refresh every configured league.",
+    )
+    all_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Redownload even if files already exist.",
+    )
+    all_parser.add_argument(
         "--max-seasons",
         "-m",
+        type=int,
+        default=None,
         help="Limit to the first N seasons per league.",
-    ),
-) -> None:
+    )
+    return parser
+
+
+def _run_league_command(slug: str, seasons: list[str], force: bool) -> int:
+    try:
+        refresh_league(slug, seasons=seasons or None, force=force)
+    except ValueError as exc:
+        print(f"[error] {exc}")
+        return 1
+    return 0
+
+
+def _run_all_command(force: bool, max_seasons: Optional[int]) -> int:
     for config in list_leagues():
         seasons = config.seasons[:max_seasons] if max_seasons else None
         try:
             refresh_league(config.slug, seasons=seasons, force=force)
         except ValueError as exc:
-            typer.echo(f"[error] {exc}", err=True)
-            raise typer.Exit(1)
+            print(f"[error] {exc}")
+            return 1
+    return 0
 
 
 def main() -> None:
-    app()
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    if args.command == "league":
+        raise SystemExit(_run_league_command(args.slug, args.season, args.force))
+    if args.command == "all":
+        raise SystemExit(_run_all_command(args.force, args.max_seasons))
+    parser.error(f"Unknown command: {args.command}")
 
 
 if __name__ == "__main__":

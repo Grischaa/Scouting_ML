@@ -1,12 +1,12 @@
 {
-  "n_rows": 17346,
-  "n_columns": 234,
+  "n_rows": 20310,
+  "n_columns": 340,
   "missing_rates": {
     "market_value_eur": 0.0,
     "log_market_value": 0.0,
     "minutes": 0.0,
     "sofa_minutesPlayed": 0.0,
-    "age": 0.0004035512510088781,
+    "age": 0.00034465780403742,
     "season": 0.0,
     "league": 0.0,
     "position_group": 0.0
@@ -25,8 +25,18 @@
   "league_season_rows": [
     {
       "league": "Austrian Bundesliga",
+      "season": "2023/24",
+      "n_rows": 227
+    },
+    {
+      "league": "Austrian Bundesliga",
+      "season": "2024/25",
+      "n_rows": 230
+    },
+    {
+      "league": "Austrian Bundesliga",
       "season": "2025/26",
-      "n_rows": 130
+      "n_rows": 192
     },
     {
       "league": "Belgian Pro League",
@@ -42,6 +52,11 @@
       "league": "Belgian Pro League",
       "season": "2024/25",
       "n_rows": 321
+    },
+    {
+      "league": "Belgian Pro League",
+      "season": "2025/26",
+      "n_rows": 264
     },
     {
       "league": "Bundesliga",
@@ -72,6 +87,21 @@
       "league": "Bundesliga",
       "season": "2024/25",
       "n_rows": 339
+    },
+    {
+      "league": "Czech Fortuna Liga",
+      "season": "2024/25",
+      "n_rows": 320
+    },
+    {
+      "league": "Danish Superliga",
+      "season": "2023/24",
+      "n_rows": 207
+    },
+    {
+      "league": "Danish Superliga",
+      "season": "2024/25",
+      "n_rows": 221
     },
     {
       "league": "English Premier League",
@@ -119,9 +149,19 @@
       "n_rows": 343
     },
     {
+      "league": "Eredivisie",
+      "season": "2025/26",
+      "n_rows": 304
+    },
+    {
+      "league": "Estonian Meistriliiga",
+      "season": "2023/24",
+      "n_rows": 136
+    },
+    {
       "league": "Estonian Meistriliiga",
       "season": "2024/25",
-      "n_rows": 171
+      "n_rows": 178
     },
     {
       "league": "Greek Super League",
@@ -137,6 +177,11 @@
       "league": "Greek Super League",
       "season": "2024/25",
       "n_rows": 291
+    },
+    {
+      "league": "Greek Super League",
+      "season": "2025/26",
+      "n_rows": 232
     },
     {
       "league": "LaLiga",
@@ -214,6 +259,11 @@
       "n_rows": 349
     },
     {
+      "league": "Primeira Liga",
+      "season": "2025/26",
+      "n_rows": 278
+    },
+    {
       "league": "Scottish Premiership",
       "season": "2022/23",
       "n_rows": 239
@@ -227,6 +277,11 @@
       "league": "Scottish Premiership",
       "season": "2024/25",
       "n_rows": 244
+    },
+    {
+      "league": "Scottish Premiership",
+      "season": "2025/26",
+      "n_rows": 192
     },
     {
       "league": "Serie A",
@@ -272,6 +327,11 @@
       "league": "Turkish Super Lig",
       "season": "2024/25",
       "n_rows": 356
+    },
+    {
+      "league": "Turkish Super Lig",
+      "season": "2025/26",
+      "n_rows": 284
     }
   ],
   "scrape_success_rates": {
@@ -286,8 +346,8 @@
     "min_rows": 40,
     "min_completeness_ratio": 0.55,
     "dropped_groups": [],
-    "n_rows_before": 17346,
-    "n_rows_after": 17346,
+    "n_rows_before": 20310,
+    "n_rows_after": 20310,
     "n_rows_dropped": 0
   }
 }

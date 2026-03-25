@@ -21,6 +21,7 @@ BENCHMARK_REPORT_ENV = "SCOUTING_BENCHMARK_REPORT_PATH"
 ENABLE_RESIDUAL_CALIBRATION_ENV = "SCOUTING_ENABLE_RESIDUAL_CALIBRATION"
 CALIBRATION_MIN_SAMPLES_ENV = "SCOUTING_CALIBRATION_MIN_SAMPLES"
 WATCHLIST_PATH_ENV = "SCOUTING_WATCHLIST_PATH"
+DECISIONS_PATH_ENV = "SCOUTING_DECISIONS_PATH"
 VALUATION_TEST_PRED_ENV = "SCOUTING_VALUATION_TEST_PREDICTIONS_PATH"
 VALUATION_VAL_PRED_ENV = "SCOUTING_VALUATION_VAL_PREDICTIONS_PATH"
 VALUATION_METRICS_ENV = "SCOUTING_VALUATION_METRICS_PATH"
@@ -34,6 +35,7 @@ DEFAULT_METRICS = Path("data/model/big5_predictions_full_v2.metrics.json")
 DEFAULT_MODEL_MANIFEST = Path("data/model/model_manifest.json")
 DEFAULT_BENCHMARK_REPORT = Path("data/model/reports/market_value_benchmark_report.json")
 DEFAULT_WATCHLIST_PATH = Path("data/model/scout_watchlist.jsonl")
+DEFAULT_DECISIONS_PATH = Path("data/model/scout_decisions.jsonl")
 
 SPLIT_TO_PATH = {
     "test": (TEST_PRED_ENV, DEFAULT_TEST_PRED),
@@ -56,6 +58,10 @@ ROLE_ENV_NAMES: dict[ChampionRole, dict[str, str]] = {
     },
 }
 REQUIRED_ARTIFACT_ENVS = (TEST_PRED_ENV, VAL_PRED_ENV, METRICS_ENV)
+
+
+def lane_state_for_role(role: ChampionRole) -> str:
+    return "stable" if role == "valuation" else "live"
 
 
 def resolve_path(env_var: str, default_path: Path) -> Path:
@@ -84,7 +90,28 @@ def manifest_role_section(payload: dict[str, Any] | None, role: ChampionRole) ->
         return None
     key = ROLE_TO_MANIFEST_KEY[role]
     section = payload.get(key)
-    return section if isinstance(section, dict) else None
+    if isinstance(section, dict):
+        normalized = dict(section)
+        normalized.setdefault("lane_state", lane_state_for_role(role))
+        normalized.setdefault("promotion_state", "advisory_only")
+        normalized.setdefault("promotion_reasons", [])
+        return normalized
+    if legacy_default_role(payload) != role:
+        return None
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, dict):
+        return None
+    return {
+        "role": role,
+        "label": payload.get("label"),
+        "lane_state": lane_state_for_role(role),
+        "promotion_state": payload.get("promotion_state") or "advisory_only",
+        "promotion_reasons": payload.get("promotion_reasons") if isinstance(payload.get("promotion_reasons"), list) else [],
+        "generated_at_utc": payload.get("generated_at_utc"),
+        "artifacts": artifacts,
+        "config": payload.get("config") if isinstance(payload.get("config"), dict) else {},
+        "summary": payload.get("summary") if isinstance(payload.get("summary"), dict) else {},
+    }
 
 
 def legacy_default_role(payload: dict[str, Any] | None) -> ChampionRole:
@@ -201,6 +228,10 @@ def watchlist_path() -> Path:
     return resolve_path(WATCHLIST_PATH_ENV, DEFAULT_WATCHLIST_PATH)
 
 
+def decisions_path() -> Path:
+    return resolve_path(DECISIONS_PATH_ENV, DEFAULT_DECISIONS_PATH)
+
+
 def file_meta(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {
@@ -250,6 +281,9 @@ def get_active_artifacts() -> dict[str, Any]:
     metrics_path = Path(paths["metrics_path"])
     valuation_paths = resolve_role_artifact_paths("valuation")
     future_paths = resolve_role_artifact_paths("future_shortlist")
+    manifest_payload = load_manifest_payload()
+    valuation_section = manifest_role_section(manifest_payload, "valuation") or {}
+    future_section = manifest_role_section(manifest_payload, "future_shortlist") or {}
     return {
         "test_predictions_path": str(test_path),
         "val_predictions_path": str(val_path),
@@ -260,6 +294,10 @@ def get_active_artifacts() -> dict[str, Any]:
         "prediction_service_base_role": "valuation",
         "shortlist_overlay_role": "future_shortlist",
         "valuation": {
+            "role": "valuation",
+            "lane_state": valuation_section.get("lane_state") or lane_state_for_role("valuation"),
+            "promotion_state": valuation_section.get("promotion_state") or "advisory_only",
+            "promotion_reasons": valuation_section.get("promotion_reasons") or [],
             "test_predictions_path": str(valuation_paths["test_predictions"]),
             "val_predictions_path": str(valuation_paths["val_predictions"]),
             "metrics_path": str(valuation_paths["metrics"]),
@@ -268,6 +306,10 @@ def get_active_artifacts() -> dict[str, Any]:
             "metrics_sha256": sha256_file(valuation_paths["metrics"]),
         },
         "future_shortlist": {
+            "role": "future_shortlist",
+            "lane_state": future_section.get("lane_state") or lane_state_for_role("future_shortlist"),
+            "promotion_state": future_section.get("promotion_state") or "advisory_only",
+            "promotion_reasons": future_section.get("promotion_reasons") or [],
             "test_predictions_path": str(future_paths["test_predictions"]),
             "val_predictions_path": str(future_paths["val_predictions"]),
             "metrics_path": str(future_paths["metrics"]),
@@ -304,19 +346,23 @@ __all__ = [
     "CALIBRATION_MIN_SAMPLES_ENV",
     "ChampionRole",
     "DEFAULT_BENCHMARK_REPORT",
+    "DEFAULT_DECISIONS_PATH",
     "DEFAULT_METRICS",
     "DEFAULT_TEST_PRED",
     "DEFAULT_VAL_PRED",
+    "DECISIONS_PATH_ENV",
     "ENABLE_RESIDUAL_CALIBRATION_ENV",
     "METRICS_ENV",
     "MODEL_MANIFEST_ENV",
     "ROLE_TO_MANIFEST_KEY",
     "SPLIT_TO_PATH",
     "Split",
+    "decisions_path",
     "env_flag",
     "file_meta",
     "get_active_artifacts",
     "get_resolved_artifact_paths",
+    "lane_state_for_role",
     "legacy_default_role",
     "load_manifest_payload",
     "manifest_path",

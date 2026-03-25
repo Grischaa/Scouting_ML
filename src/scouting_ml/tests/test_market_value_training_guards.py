@@ -7,6 +7,7 @@ from scouting_ml.models.train_market_value_full import (
     _maybe_save_tree_shap_bar,
     _drop_low_coverage_features,
     _holdout_optuna_namespace,
+    _resolve_holdout_leagues,
     _validate_no_leakage_features,
     apply_confidence_scoring,
 )
@@ -123,3 +124,40 @@ def test_holdout_optuna_namespace_is_unique_per_league() -> None:
         _holdout_optuna_namespace(None, "Turkish Super Lig")
         == "holdout_turkish_super_lig"
     )
+
+
+def test_resolve_holdout_leagues_accepts_slug_and_display_name() -> None:
+    frame = pd.DataFrame(
+        [
+            {"league": "Austrian Bundesliga", "season": "2024/25"},
+            {"league": "Austrian Bundesliga", "season": "2023/24"},
+            {"league": "Eredivisie", "season": "2024/25"},
+        ]
+    )
+
+    resolved = _resolve_holdout_leagues(
+        frame,
+        ["austrian_bundesliga", "Austrian Bundesliga", "eredivisie"],
+        test_season="2024/25",
+    )
+
+    assert [(item.league, item.league_slug) for item in resolved] == [
+        ("Austrian Bundesliga", "austrian_bundesliga"),
+        ("Eredivisie", "dutch_eredivisie"),
+    ]
+    assert resolved[0].resolved_from == "slug"
+    assert resolved[1].resolved_from == "name"
+
+
+def test_resolve_holdout_leagues_raises_on_unknown_token() -> None:
+    frame = pd.DataFrame([{"league": "Austrian Bundesliga", "season": "2024/25"}])
+
+    with pytest.raises(ValueError, match="Unknown league holdout token"):
+        _resolve_holdout_leagues(frame, ["made_up_league"], test_season="2024/25")
+
+
+def test_resolve_holdout_leagues_raises_when_test_season_missing() -> None:
+    frame = pd.DataFrame([{"league": "Austrian Bundesliga", "season": "2023/24"}])
+
+    with pytest.raises(ValueError, match="zero rows for test season 2024/25"):
+        _resolve_holdout_leagues(frame, ["austrian_bundesliga"], test_season="2024/25")

@@ -1,12 +1,11 @@
 from __future__ import annotations
-from typing import Dict, Any, Optional
 
-from lightgbm import LGBMRegressor
-from xgboost import XGBRegressor
-from catboost import CatBoostRegressor
+from typing import Any, Dict, Optional
 
 
-def make_lgbm(params: Optional[Dict[str, Any]] = None) -> LGBMRegressor:
+def make_lgbm(params: Optional[Dict[str, Any]] = None):
+    from lightgbm import LGBMRegressor
+
     base = dict(
         objective="regression_l1",
         n_estimators=1200,
@@ -23,7 +22,9 @@ def make_lgbm(params: Optional[Dict[str, Any]] = None) -> LGBMRegressor:
     return LGBMRegressor(**base)
 
 
-def make_xgb() -> XGBRegressor:
+def make_xgb():
+    from xgboost import XGBRegressor
+
     return XGBRegressor(
         objective="reg:squarederror",
         n_estimators=1200,
@@ -38,7 +39,9 @@ def make_xgb() -> XGBRegressor:
     )
 
 
-def make_cat() -> CatBoostRegressor:
+def make_cat():
+    from catboost import CatBoostRegressor
+
     return CatBoostRegressor(
         iterations=1200,
         learning_rate=0.05,

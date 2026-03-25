@@ -109,15 +109,24 @@ def _build_champion_section(
     test_predictions: Path,
     val_predictions: Path,
     metrics_path: Path,
+    promotion_state: str | None = None,
+    promotion_reasons: list[str] | None = None,
 ) -> dict[str, Any]:
     for required in (test_predictions, val_predictions, metrics_path):
         if not required.exists():
             raise FileNotFoundError(f"Required artifact not found: {required}")
 
     metrics = _load_metrics(metrics_path)
+    lane_state = "stable" if role == "valuation" else "live"
     return {
         "role": role,
         "label": label,
+        "lane_state": lane_state,
+        "promotion_state": promotion_state or ("advisory_only" if role == "future_shortlist" else "advisory_only"),
+        "promotion_reasons": list(promotion_reasons or ([] if role == "valuation" else [
+            "future_shortlist is a live scouting lane and should be treated as advisory by default.",
+        ])),
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "artifacts": {
             "test_predictions": _meta(test_predictions),
             "val_predictions": _meta(val_predictions),
@@ -142,7 +151,26 @@ def _coerce_champion_section(payload: dict[str, Any] | None, role: ChampionRole)
     if not isinstance(payload, dict):
         return None
     section = payload.get(ROLE_TO_KEY[role])
-    return section if isinstance(section, dict) else None
+    if isinstance(section, dict):
+        return section
+
+    legacy_role = str(payload.get("legacy_default_role") or "valuation").strip()
+    if legacy_role != role:
+        return None
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, dict):
+        return None
+    return {
+        "role": role,
+        "label": str(payload.get("label") or f"{role}_champion"),
+        "lane_state": payload.get("lane_state") or ("stable" if role == "valuation" else "live"),
+        "promotion_state": payload.get("promotion_state") or "advisory_only",
+        "promotion_reasons": payload.get("promotion_reasons") if isinstance(payload.get("promotion_reasons"), list) else [],
+        "generated_at_utc": payload.get("generated_at_utc"),
+        "artifacts": artifacts,
+        "config": payload.get("config") if isinstance(payload.get("config"), dict) else {},
+        "summary": payload.get("summary") if isinstance(payload.get("summary"), dict) else {},
+    }
 
 
 def build_lock_bundle(
@@ -163,13 +191,19 @@ def build_lock_bundle(
     future_val_predictions: Path | None = None,
     future_metrics_path: Path | None = None,
     future_shortlist_label: str | None = None,
+    valuation_promotion_state: str | None = None,
+    valuation_promotion_reasons: list[str] | None = None,
+    future_shortlist_promotion_state: str | None = None,
+    future_shortlist_promotion_reasons: list[str] | None = None,
 ) -> None:
-    primary_section = _build_champion_section(
+    requested_primary_section = _build_champion_section(
         role=primary_role,
         label=label,
         test_predictions=test_predictions,
         val_predictions=val_predictions,
         metrics_path=metrics_path,
+        promotion_state=valuation_promotion_state if primary_role == "valuation" else future_shortlist_promotion_state,
+        promotion_reasons=valuation_promotion_reasons if primary_role == "valuation" else future_shortlist_promotion_reasons,
     )
     existing_manifest = _load_existing_manifest(manifest_out)
     has_explicit_dual_inputs = any(
@@ -192,9 +226,9 @@ def build_lock_bundle(
 
     if dual_role_enabled:
         if primary_role == "valuation":
-            valuation_section = primary_section
+            valuation_section = requested_primary_section
         else:
-            future_section = primary_section
+            future_section = requested_primary_section
 
         if all(value is not None for value in (valuation_test_predictions, valuation_val_predictions, valuation_metrics_path)):
             valuation_section = _build_champion_section(
@@ -203,6 +237,8 @@ def build_lock_bundle(
                 test_predictions=Path(valuation_test_predictions),
                 val_predictions=Path(valuation_val_predictions),
                 metrics_path=Path(valuation_metrics_path),
+                promotion_state=valuation_promotion_state,
+                promotion_reasons=valuation_promotion_reasons,
             )
         elif valuation_section is None:
             valuation_section = _coerce_champion_section(existing_manifest, "valuation")
@@ -214,15 +250,31 @@ def build_lock_bundle(
                 test_predictions=Path(future_test_predictions),
                 val_predictions=Path(future_val_predictions),
                 metrics_path=Path(future_metrics_path),
+                promotion_state=future_shortlist_promotion_state,
+                promotion_reasons=future_shortlist_promotion_reasons,
             )
         elif future_section is None:
             future_section = _coerce_champion_section(existing_manifest, "future_shortlist")
 
+    effective_primary_role = primary_role
+    primary_section = requested_primary_section
+    if dual_role_enabled:
+        if primary_role == "future_shortlist" and valuation_section is not None:
+            effective_primary_role = "valuation"
+            primary_section = valuation_section
+        elif primary_role == "valuation" and valuation_section is not None:
+            primary_section = valuation_section
+        elif primary_role == "future_shortlist" and future_section is not None:
+            primary_section = future_section
+
     payload = {
         "registry_version": 2 if dual_role_enabled else 1,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "label": label,
-        "legacy_default_role": primary_role,
+        "label": primary_section["label"],
+        "legacy_default_role": effective_primary_role,
+        "lane_state": primary_section.get("lane_state"),
+        "promotion_state": primary_section.get("promotion_state"),
+        "promotion_reasons": primary_section.get("promotion_reasons"),
         "artifacts": primary_section["artifacts"],
         "config": primary_section["config"],
         "summary": primary_section["summary"],
@@ -235,10 +287,14 @@ def build_lock_bundle(
     manifest_out.parent.mkdir(parents=True, exist_ok=True)
     manifest_out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
+    primary_artifacts = primary_section.get("artifacts", {})
+    primary_test = primary_artifacts.get("test_predictions", {}).get("path", str(test_predictions))
+    primary_val = primary_artifacts.get("val_predictions", {}).get("path", str(val_predictions))
+    primary_metrics = primary_artifacts.get("metrics", {}).get("path", str(metrics_path))
     env_lines = [
-        f"{TEST_ENV}={test_predictions}",
-        f"{VAL_ENV}={val_predictions}",
-        f"{METRICS_ENV}={metrics_path}",
+        f"{TEST_ENV}={primary_test}",
+        f"{VAL_ENV}={primary_val}",
+        f"{METRICS_ENV}={primary_metrics}",
         f"{MANIFEST_ENV}={manifest_out}",
         f"{STRICT_ENV}={'1' if strict_artifacts else '0'}",
     ]
@@ -282,6 +338,10 @@ def main() -> None:
     parser.add_argument("--future-val-predictions", default=None)
     parser.add_argument("--future-metrics", default=None)
     parser.add_argument("--future-shortlist-label", default=None)
+    parser.add_argument("--valuation-promotion-state", default=None)
+    parser.add_argument("--valuation-promotion-reasons", default="")
+    parser.add_argument("--future-shortlist-promotion-state", default=None)
+    parser.add_argument("--future-shortlist-promotion-reasons", default="")
     parser.add_argument(
         "--strict-artifacts",
         action=argparse.BooleanOptionalAction,
@@ -311,6 +371,14 @@ def main() -> None:
         future_val_predictions=Path(args.future_val_predictions) if args.future_val_predictions else None,
         future_metrics_path=Path(args.future_metrics) if args.future_metrics else None,
         future_shortlist_label=str(args.future_shortlist_label).strip() if args.future_shortlist_label else None,
+        valuation_promotion_state=str(args.valuation_promotion_state).strip() if args.valuation_promotion_state else None,
+        valuation_promotion_reasons=[item.strip() for item in str(args.valuation_promotion_reasons or "").split("||") if item.strip()],
+        future_shortlist_promotion_state=str(args.future_shortlist_promotion_state).strip()
+        if args.future_shortlist_promotion_state
+        else None,
+        future_shortlist_promotion_reasons=[
+            item.strip() for item in str(args.future_shortlist_promotion_reasons or "").split("||") if item.strip()
+        ],
     )
 
 

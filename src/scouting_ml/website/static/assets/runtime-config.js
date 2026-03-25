@@ -1,0 +1,1 @@
+window.SCOUTING_API_BASE = window.SCOUTING_API_BASE || "";

@@ -12,8 +12,23 @@ const decimalFmt = new Intl.NumberFormat("en-GB", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+const shortDateFmt = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const RESULTS_TABLE_COLSPAN = 6;
+const DEFAULT_PLAYSTYLE = localStorage.getItem("scoutml_playstyle_lens") || "";
+const DEFAULT_ROLE_LENS = localStorage.getItem("scoutml_role_lens") || "";
+const DEFAULT_SYSTEM_FIT_TEMPLATE = "high_press_433";
+const DEFAULT_SYSTEM_FIT_LANE = "valuation";
 
-const DEFAULT_API = localStorage.getItem("scoutml_api_base") || "http://localhost:8000";
+const INJECTED_API_BASE =
+  typeof window !== "undefined" && typeof window.SCOUTING_API_BASE === "string"
+    ? window.SCOUTING_API_BASE.trim()
+    : "";
+const DEFAULT_API = INJECTED_API_BASE || localStorage.getItem("scoutml_api_base") || "http://127.0.0.1:8000";
 const BIG5_LEAGUES = new Set([
   "english premier league",
   "premier league",
@@ -28,8 +43,9 @@ const state = {
   apiBase: DEFAULT_API,
   connected: false,
   loading: false,
+  initializing: true,
 
-  view: "overview",
+  view: "workbench",
 
   mode: "shortlist",
   split: "test",
@@ -37,6 +53,11 @@ const state = {
   league: "",
   position: "",
   roleNeed: "",
+  systemFitTemplate: DEFAULT_SYSTEM_FIT_TEMPLATE,
+  systemFitActiveLane: DEFAULT_SYSTEM_FIT_LANE,
+  systemFitSelectedSlot: "",
+  playstyle: DEFAULT_PLAYSTYLE,
+  roleLens: DEFAULT_ROLE_LENS,
   search: "",
   minMinutes: 900,
   minAge: 18,
@@ -54,37 +75,86 @@ const state = {
   shortlistTopN: 100,
 
   rows: [],
+  topPicks: [],
   total: 0,
   count: 0,
   selectedRow: null,
   selectedProfile: null,
   selectedReport: null,
   selectedHistory: null,
+  selectedSimilar: null,
+  selectedTrajectory: null,
+  selectedLatestDecision: null,
+  detailDecisionSourceSurface: "",
+  decisionDraftAction: "",
+  decisionDraftReasons: [],
+  decisionDraftNote: "",
   activeDetailTab: "overview",
   profileModalOpen: false,
   detailRequestId: 0,
   reportCache: new Map(),
   profileCache: new Map(),
+  similarCache: new Map(),
+  trajectoryCache: new Map(),
 
   health: null,
   metrics: null,
   modelManifest: null,
   benchmark: null,
   activeArtifacts: null,
+  operatorHealth: null,
   coverageRows: [],
   queryDiagnostics: null,
   funnelDiagnostics: null,
+  systemFitTemplates: [],
+  systemFitSlots: [],
+  systemFitLanePosture: null,
+  systemFitFiltersApplied: null,
 
   funnelRows: [],
   funnelTopRows: [],
   watchlistRows: [],
   watchlistTotal: 0,
+  teamEnabled: false,
+  teamAuthenticated: false,
+  teamUser: null,
+  teamWorkspaces: [],
+  teamActiveWorkspace: null,
+  teamAssignments: [],
+  teamComments: [],
+  teamActivity: [],
+  teamCompareLists: [],
+  teamCompareTray: [],
+  teamPreferenceProfile: null,
+  teamApplyPreferences: true,
 };
 
 const el = {
   apiBase: document.getElementById("api-base"),
   connectBtn: document.getElementById("connect-btn"),
   apiStatus: document.getElementById("api-status"),
+  heroExploreBtn: document.getElementById("hero-explore-btn"),
+  teamStatus: document.getElementById("team-status"),
+  teamAuthMeta: document.getElementById("team-auth-meta"),
+  teamWorkspaceBanner: document.getElementById("team-workspace-banner"),
+  teamCurrentWorkspace: document.getElementById("team-current-workspace"),
+  teamCurrentUser: document.getElementById("team-current-user"),
+  teamEmail: document.getElementById("team-email"),
+  teamPassword: document.getElementById("team-password"),
+  teamFullName: document.getElementById("team-full-name"),
+  teamWorkspaceName: document.getElementById("team-workspace-name"),
+  teamInviteToken: document.getElementById("team-invite-token"),
+  teamWorkspaceSelect: document.getElementById("team-workspace-select"),
+  teamLoginBtn: document.getElementById("team-login-btn"),
+  teamBootstrapBtn: document.getElementById("team-bootstrap-btn"),
+  teamAcceptInviteBtn: document.getElementById("team-accept-invite-btn"),
+  teamLogoutBtn: document.getElementById("team-logout-btn"),
+  teamNewWorkspaceName: document.getElementById("team-new-workspace-name"),
+  teamInviteEmail: document.getElementById("team-invite-email"),
+  teamInviteRole: document.getElementById("team-invite-role"),
+  teamCreateWorkspaceBtn: document.getElementById("team-create-workspace-btn"),
+  teamCreateInviteBtn: document.getElementById("team-create-invite-btn"),
+  teamInviteOutput: document.getElementById("team-invite-output"),
 
   tabButtons: Array.from(document.querySelectorAll(".tab-btn")),
   views: {
@@ -133,13 +203,32 @@ const el = {
   experimentBestCheap: document.getElementById("experiment-best-cheap"),
   experimentOnboarding: document.getElementById("experiment-onboarding"),
   experimentWeakest: document.getElementById("experiment-weakest"),
+  operatorIngestionStatus: document.getElementById("operator-ingestion-status"),
+  operatorIngestionCopy: document.getElementById("operator-ingestion-copy"),
+  operatorValuationLane: document.getElementById("operator-valuation-lane"),
+  operatorValuationCopy: document.getElementById("operator-valuation-copy"),
+  operatorFutureLane: document.getElementById("operator-future-lane"),
+  operatorFutureCopy: document.getElementById("operator-future-copy"),
+  operatorPromotionStatus: document.getElementById("operator-promotion-status"),
+  operatorPromotionCopy: document.getElementById("operator-promotion-copy"),
+  operatorStaleStatus: document.getElementById("operator-stale-status"),
+  operatorStaleCopy: document.getElementById("operator-stale-copy"),
+  operatorLiveStatus: document.getElementById("operator-live-status"),
+  operatorLiveCopy: document.getElementById("operator-live-copy"),
+  operatorBlockedList: document.getElementById("operator-blocked-list"),
+  operatorLaneList: document.getElementById("operator-lane-list"),
 
   mode: document.getElementById("mode-select"),
   split: document.getElementById("split-select"),
+  systemFitTemplate: document.getElementById("system-fit-template-select"),
+  systemFitTemplateControl: document.getElementById("system-fit-template-control"),
+  systemFitActiveLane: document.getElementById("system-fit-active-lane-select"),
+  systemFitLaneControl: document.getElementById("system-fit-lane-control"),
   season: document.getElementById("season-select"),
   league: document.getElementById("league-select"),
   position: document.getElementById("position-select"),
   roleNeed: document.getElementById("role-need-select"),
+  roleNeedControl: document.getElementById("role-need-control"),
   search: document.getElementById("search-input"),
   minMinutes: document.getElementById("min-minutes"),
   minAge: document.getElementById("min-age"),
@@ -158,11 +247,57 @@ const el = {
   reset: document.getElementById("reset-btn"),
   exportBtn: document.getElementById("export-btn"),
   exportPackBtn: document.getElementById("export-pack-btn"),
+  teamPreferencesPanel: document.getElementById("team-preferences-panel"),
+  teamPrefName: document.getElementById("team-pref-name"),
+  teamPrefAgeMin: document.getElementById("team-pref-age-min"),
+  teamPrefAgeMax: document.getElementById("team-pref-age-max"),
+  teamPrefBudgetPosture: document.getElementById("team-pref-budget-posture"),
+  teamPrefTrustPosture: document.getElementById("team-pref-trust-posture"),
+  teamPrefRisk: document.getElementById("team-pref-risk"),
+  teamPrefLane: document.getElementById("team-pref-lane"),
+  teamPrefSystemTemplate: document.getElementById("team-pref-system-template"),
+  teamPrefRolePriorities: document.getElementById("team-pref-role-priorities"),
+  teamPrefMustHaveTags: document.getElementById("team-pref-must-have-tags"),
+  teamPrefAvoidTags: document.getElementById("team-pref-avoid-tags"),
+  teamPrefApply: document.getElementById("team-pref-apply"),
+  teamPrefSaveBtn: document.getElementById("team-pref-save-btn"),
+  teamPrefMeta: document.getElementById("team-pref-meta"),
+  playstyle: document.getElementById("playstyle-select"),
+  roleLens: document.getElementById("role-lens-select"),
+  topPicksTitle: document.getElementById("top-picks-title"),
+  topPicksMeta: document.getElementById("top-picks-meta"),
+  boardLaneStatus: document.getElementById("board-lane-status"),
+  topPicksGrid: document.getElementById("top-picks-grid"),
+  teamCompareSection: document.getElementById("team-compare-section"),
+  teamCompareMeta: document.getElementById("team-compare-meta"),
+  teamCompareName: document.getElementById("team-compare-name"),
+  teamCompareSelect: document.getElementById("team-compare-select"),
+  teamCompareCreateBtn: document.getElementById("team-compare-create-btn"),
+  teamCompareRefreshBtn: document.getElementById("team-compare-refresh-btn"),
+  teamCompareSaveBtn: document.getElementById("team-compare-save-btn"),
+  teamCompareTray: document.getElementById("team-compare-tray"),
+  teamCompareLists: document.getElementById("team-compare-lists"),
+  boardAnchor: document.getElementById("board-anchor"),
+  boardHighlightTopPick: document.getElementById("board-highlight-top-pick"),
+  boardHighlightTopPickNote: document.getElementById("board-highlight-top-pick-note"),
+  boardHighlightGap: document.getElementById("board-highlight-gap"),
+  boardHighlightGapNote: document.getElementById("board-highlight-gap-note"),
+  boardHighlightMix: document.getElementById("board-highlight-mix"),
+  boardHighlightMixNote: document.getElementById("board-highlight-mix-note"),
 
   title: document.getElementById("results-title"),
   resultCount: document.getElementById("result-count"),
   resultRange: document.getElementById("result-range"),
   resultsNote: document.getElementById("results-note"),
+  systemFitSlotWrap: document.getElementById("system-fit-slot-wrap"),
+  systemFitSlotMeta: document.getElementById("system-fit-slot-meta"),
+  systemFitSlotBar: document.getElementById("system-fit-slot-bar"),
+  resultsColTarget: document.getElementById("results-col-target"),
+  resultsColDecision: document.getElementById("results-col-decision"),
+  resultsColMarket: document.getElementById("results-col-market"),
+  resultsColExpected: document.getElementById("results-col-expected"),
+  resultsColGap: document.getElementById("results-col-gap"),
+  resultsColConfidence: document.getElementById("results-col-confidence"),
   tbody: document.getElementById("results-body"),
   prevBtn: document.getElementById("prev-btn"),
   nextBtn: document.getElementById("next-btn"),
@@ -175,6 +310,31 @@ const el = {
   detailDecisionPill: document.getElementById("detail-decision-pill"),
   detailDecisionNext: document.getElementById("detail-decision-next"),
   detailDecisionReason: document.getElementById("detail-decision-reason"),
+  detailLatestDecision: document.getElementById("detail-latest-decision"),
+  detailLatestDecisionPill: document.getElementById("detail-latest-decision-pill"),
+  detailLatestDecisionMeta: document.getElementById("detail-latest-decision-meta"),
+  detailLatestDecisionSummary: document.getElementById("detail-latest-decision-summary"),
+  detailLatestDecisionNote: document.getElementById("detail-latest-decision-note"),
+  detailDecisionActionButtons: Array.from(document.querySelectorAll(".scout-decision-action")),
+  detailDecisionReasons: document.getElementById("detail-decision-reasons"),
+  detailDecisionNoteInput: document.getElementById("detail-decision-note-input"),
+  detailDecisionSaveBtn: document.getElementById("detail-decision-save-btn"),
+  detailDecisionClearBtn: document.getElementById("detail-decision-clear-btn"),
+  detailDecisionMeta: document.getElementById("detail-decision-meta"),
+  teamCollaborationSection: document.getElementById("team-collaboration-section"),
+  teamAssigneeSelect: document.getElementById("team-assignee-select"),
+  teamAssignmentStatus: document.getElementById("team-assignment-status"),
+  teamAssignmentDue: document.getElementById("team-assignment-due"),
+  teamAssignmentNote: document.getElementById("team-assignment-note"),
+  teamAssignmentSaveBtn: document.getElementById("team-assignment-save-btn"),
+  teamAssignmentMeta: document.getElementById("team-assignment-meta"),
+  teamAssignmentList: document.getElementById("team-assignment-list"),
+  teamCommentsList: document.getElementById("team-comments-list"),
+  teamCommentInput: document.getElementById("team-comment-input"),
+  teamCommentSaveBtn: document.getElementById("team-comment-save-btn"),
+  teamCommentMeta: document.getElementById("team-comment-meta"),
+  teamActivityList: document.getElementById("team-activity-list"),
+  teamCompareAddBtn: document.getElementById("team-compare-add-btn"),
   detailName: document.getElementById("detail-name"),
   detailMeta: document.getElementById("detail-meta"),
   detailGap: document.getElementById("detail-gap"),
@@ -193,6 +353,17 @@ const el = {
   detailCoverageList: document.getElementById("detail-coverage-list"),
   detailList: document.getElementById("detail-list"),
   detailSummary: document.getElementById("detail-summary"),
+  detailFitCard: document.getElementById("detail-fit-card"),
+  detailFitSummary: document.getElementById("detail-fit-summary"),
+  detailFitDrivers: document.getElementById("detail-fit-drivers"),
+  detailFreshnessCard: document.getElementById("detail-freshness-card"),
+  detailFreshnessSummary: document.getElementById("detail-freshness-summary"),
+  detailFreshnessMeta: document.getElementById("detail-freshness-meta"),
+  detailTalentCard: document.getElementById("detail-talent-card"),
+  detailTalentSummary: document.getElementById("detail-talent-summary"),
+  detailTalentScores: document.getElementById("detail-talent-scores"),
+  detailTalentDrivers: document.getElementById("detail-talent-drivers"),
+  detailContextGlance: document.getElementById("detail-context-glance"),
   detailRoleSummary: document.getElementById("detail-role-summary"),
   detailRoleMetrics: document.getElementById("detail-role-metrics"),
   detailStrengths: document.getElementById("detail-strengths"),
@@ -209,6 +380,14 @@ const el = {
   detailProviderTactical: document.getElementById("detail-provider-tactical"),
   detailSimilarSummary: document.getElementById("detail-similar-summary"),
   detailSimilar: document.getElementById("detail-similar"),
+  detailProxySection: document.getElementById("detail-proxy-section"),
+  detailProxySummary: document.getElementById("detail-proxy-summary"),
+  detailProxyList: document.getElementById("detail-proxy-list"),
+  detailTrajectoryBadge: document.getElementById("detail-trajectory-badge"),
+  detailTrajectorySummary: document.getElementById("detail-trajectory-summary"),
+  detailTrajectoryProject: document.getElementById("detail-trajectory-project"),
+  detailTrajectoryChart: document.getElementById("detail-trajectory-chart"),
+  detailTrajectoryTableBody: document.getElementById("detail-trajectory-table-body"),
   detailRadar: document.getElementById("detail-radar"),
   detailRadarMeta: document.getElementById("detail-radar-meta"),
   detailConfidence: document.getElementById("detail-confidence"),
@@ -217,6 +396,7 @@ const el = {
   detailAvailabilityList: document.getElementById("detail-availability-list"),
   detailMarketContextSummary: document.getElementById("detail-market-context-summary"),
   detailMarketContextList: document.getElementById("detail-market-context-list"),
+  detailExportPdf: document.getElementById("detail-export-pdf"),
   detailExportJson: document.getElementById("detail-export-json"),
   detailExportCsv: document.getElementById("detail-export-csv"),
   watchlistTag: document.getElementById("watchlist-tag"),
@@ -261,6 +441,7 @@ const el = {
   profileModalMeta: document.getElementById("profile-modal-meta"),
   profileModalBody: document.getElementById("profile-modal-body"),
   profileModalCloseBtn: document.getElementById("profile-modal-close-btn"),
+  profileModalExportPdf: document.getElementById("profile-modal-export-pdf"),
   profileModalExportJson: document.getElementById("profile-modal-export-json"),
   profileModalExportCsv: document.getElementById("profile-modal-export-csv"),
 };
@@ -269,6 +450,13 @@ function formatCurrency(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return "-";
   return currencyFmt.format(n);
+}
+
+function formatSignedCurrency(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "-";
+  if (n === 0) return currencyFmt.format(0);
+  return `${n > 0 ? "+" : "-"}${currencyFmt.format(Math.abs(n))}`;
 }
 
 function formatInt(v) {
@@ -318,6 +506,170 @@ function budgetLabel(maxBudget) {
   return `<= ${formatCurrency(n)}`;
 }
 
+function humanizeScoutDecisionAction(action) {
+  return SCOUT_DECISION_LABELS[String(action || "").trim()] || "Decision";
+}
+
+function humanizeScoutDecisionTag(tag) {
+  const lookup = [...SCOUT_DECISION_REASON_OPTIONS.positive, ...SCOUT_DECISION_REASON_OPTIONS.pass].find(
+    (item) => item.key === String(tag || "").trim()
+  );
+  return lookup?.label || safeText(String(tag || "").replace(/_/g, " "));
+}
+
+function scoutDecisionTone(action) {
+  if (action === "shortlist") return "pursue";
+  if (action === "watch_live") return "watch";
+  if (action === "request_report") return "price";
+  if (action === "pass") return "pass";
+  return "neutral";
+}
+
+function actionRequiresReason(action) {
+  return action === "shortlist" || action === "pass";
+}
+
+function decisionReasonOptions(action) {
+  return action === "pass" ? SCOUT_DECISION_REASON_OPTIONS.pass : SCOUT_DECISION_REASON_OPTIONS.positive;
+}
+
+function formatDecisionTimestamp(value) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return safeText(value);
+  return shortDateFmt.format(parsed);
+}
+
+function currentPlaystyleConfig() {
+  return PLAYSTYLE_CONFIG[state.playstyle] || null;
+}
+
+function playstyleLabel(key = state.playstyle) {
+  return PLAYSTYLE_CONFIG[key]?.label || "No style lens";
+}
+
+function currentRoleRankingConfig() {
+  return ROLE_RANKING_CONFIG[state.roleLens] || null;
+}
+
+function roleLensLabel(key = state.roleLens) {
+  return ROLE_RANKING_CONFIG[key]?.label || "No role lens";
+}
+
+function roleLensPluralLabel(key = state.roleLens) {
+  return ROLE_RANKING_CONFIG[key]?.pluralLabel || "No role lens";
+}
+
+function roleLensSummaryLabel(key = state.roleLens) {
+  const config = ROLE_RANKING_CONFIG[key];
+  if (!config?.profileLabel) return roleLensLabel(key).toLowerCase();
+  return config.profileLabel.replace(/\s+profile$/i, "");
+}
+
+function isSystemFitMode() {
+  return state.mode === "system_fit";
+}
+
+function systemFitTemplateMap() {
+  return new Map((state.systemFitTemplates || []).map((template) => [String(template.template_key || ""), template]));
+}
+
+function currentSystemFitTemplate() {
+  return systemFitTemplateMap().get(String(state.systemFitTemplate || "")) || null;
+}
+
+function currentSystemFitSlot() {
+  return (state.systemFitSlots || []).find((slot) => String(slot.slot_key || "") === String(state.systemFitSelectedSlot || "")) || null;
+}
+
+function systemFitLaneLabel(lane = state.systemFitActiveLane) {
+  return lane === "future_shortlist" ? "Future Potential / Advisory" : "Current Level / Pricing";
+}
+
+function currentWorkbenchSourceMode() {
+  if (isSystemFitMode()) return "system_fit";
+  if (state.mode === "shortlist") return "shortlist";
+  if (state.mode === "predictions") return "predictions";
+  return "workbench";
+}
+
+function currentWorkbenchDecisionSource() {
+  if (state.mode === "predictions") return "predictions";
+  if (isSystemFitMode()) return "system_fit";
+  return "workbench";
+}
+
+const SCOUT_DECISION_LABELS = {
+  shortlist: "Shortlist",
+  watch_live: "Watch Live",
+  request_report: "Request Report",
+  pass: "Pass",
+};
+
+const SCOUT_DECISION_REASON_OPTIONS = {
+  positive: [
+    { key: "system_fit", label: "System Fit" },
+    { key: "price_gap", label: "Price Gap" },
+    { key: "trajectory", label: "Trajectory" },
+    { key: "role_need", label: "Role Need" },
+    { key: "high_confidence", label: "High Confidence" },
+    { key: "availability", label: "Availability" },
+    { key: "market_opportunity", label: "Market Opportunity" },
+  ],
+  pass: [
+    { key: "too_expensive", label: "Too Expensive" },
+    { key: "data_too_thin", label: "Data Too Thin" },
+    { key: "league_risk", label: "League Risk" },
+    { key: "not_system_fit", label: "Not System Fit" },
+    { key: "athletic_concern", label: "Athletic Concern" },
+    { key: "technical_ceiling", label: "Technical Ceiling" },
+    { key: "injury_risk", label: "Injury Risk" },
+    { key: "contract_blocked", label: "Contract Blocked" },
+  ],
+};
+
+function hasActiveLens() {
+  if (isSystemFitMode()) return false;
+  return Boolean(state.playstyle || state.roleLens);
+}
+
+function activeLensDisplayLabel() {
+  if (state.playstyle && state.roleLens) {
+    return `${playstyleLabel()} + ${roleLensLabel()}`;
+  }
+  if (state.playstyle) return playstyleLabel();
+  if (state.roleLens) return roleLensLabel();
+  return "";
+}
+
+function activeLensTitleLabel() {
+  if (state.playstyle && state.roleLens) {
+    return `${playstyleLabel()} ${roleLensPluralLabel()}`;
+  }
+  if (state.playstyle) return `${playstyleLabel()} Teams`;
+  if (state.roleLens) return roleLensPluralLabel();
+  return "";
+}
+
+function activeLensProfileLabel() {
+  const roleConfig = currentRoleRankingConfig();
+  if (state.playstyle && roleConfig) {
+    return `${playstyleLabel().toLowerCase()} ${roleConfig.profileLabel}`;
+  }
+  if (roleConfig) return roleConfig.profileLabel;
+  if (state.playstyle) return `${playstyleLabel().toLowerCase()} profile`;
+  return "";
+}
+
+function activeLensSummaryLabel() {
+  if (state.playstyle && state.roleLens) {
+    return `${playstyleLabel().toLowerCase()} ${roleLensSummaryLabel()}`;
+  }
+  if (state.playstyle) return playstyleLabel().toLowerCase();
+  if (state.roleLens) return roleLensSummaryLabel();
+  return "active";
+}
+
 function humanizeExperimentLabel(value) {
   const text = String(value || "").trim();
   if (!text) return "-";
@@ -328,22 +680,178 @@ function humanizeExperimentLabel(value) {
 }
 
 const SCORE_COLUMN_LABELS = {
+  current_level_score: "Current level score",
+  future_potential_score: "Future potential score",
   future_scout_blend_score: "Future scout blend",
+  future_scout_blend_score_adjusted: "Future scout blend (trust-adjusted)",
   future_growth_probability: "Future growth probability",
+  future_growth_probability_adjusted: "Future growth probability (trust-adjusted)",
   scout_target_score: "Scout target score",
+  scout_target_score_adjusted: "Scout target score (trust-adjusted)",
   shortlist_score: "Shortlist score",
+  shortlist_score_adjusted: "Shortlist score (trust-adjusted)",
+  system_fit_score: "System fit score",
   undervaluation_score: "Undervaluation score",
   value_gap_capped_eur: "Capped conservative gap",
   value_gap_conservative_eur: "Conservative gap",
 };
 
 const RANKING_BASIS_LABELS = {
+  current_level_pricing_lane: "Current level / pricing lane",
+  future_potential_advisory_lane: "Future potential / advisory lane",
   future_target_tuned_blend: "Future-tuned blend of growth signal and current undervaluation",
   future_target_probability: "Future growth probability only",
   guardrailed_gap_confidence_history: "Guardrailed gap x confidence x history",
   guardrailed_gap_confidence_history_efficiency: "Guardrailed gap x confidence x history x value efficiency",
+  system_fit_slot_rank: "Backend slot-level system-fit rank",
   manual_sort: "Manual workbench sort",
   funnel_rank: "Talent funnel rank",
+};
+
+const PLAYSTYLE_CONFIG = {
+  possession: {
+    label: "Possession",
+    weights: {
+      sofa_accuratePassesPercentage: 1.0,
+      sb_progressive_passes_per90: 1.0,
+      sb_progressive_carries_per90: 0.7,
+      sofa_keyPasses_per90: 0.7,
+      sb_passes_into_box_per90: 0.8,
+      sofa_successfulDribbles_per90: 0.4,
+    },
+  },
+  counter_attacking: {
+    label: "Counter-Attacking",
+    weights: {
+      sb_progressive_carries_per90: 1.0,
+      sofa_successfulDribbles_per90: 0.9,
+      sofa_expectedGoals_per90: 0.8,
+      sofa_totalShots_per90: 0.6,
+      sb_passes_into_box_per90: 0.7,
+      sb_progressive_passes_per90: 0.5,
+    },
+  },
+  high_press: {
+    label: "High Press",
+    weights: {
+      sb_pressures_per90: 1.0,
+      sofa_tackles_per90: 0.8,
+      sofa_interceptions_per90: 0.8,
+      sofa_totalDuelsWonPercentage: 0.7,
+      sb_duel_win_rate: 0.7,
+      sofa_keyPasses_per90: 0.3,
+    },
+  },
+  defensive: {
+    label: "Defensive",
+    weights: {
+      sofa_interceptions_per90: 1.0,
+      sofa_tackles_per90: 0.9,
+      sofa_clearances_per90: 0.8,
+      sofa_totalDuelsWonPercentage: 0.9,
+      sb_duel_win_rate: 0.9,
+      sofa_accuratePassesPercentage: 0.4,
+    },
+  },
+};
+
+const PLAYSTYLE_METRIC_META = {
+  sofa_accuratePassesPercentage: { label: "Passing" },
+  sb_progressive_passes_per90: { label: "Progression" },
+  sb_progressive_carries_per90: { label: "Ball carrying" },
+  sofa_keyPasses_per90: { label: "Chance creation" },
+  sb_passes_into_box_per90: { label: "Box access" },
+  sofa_successfulDribbles_per90: { label: "Dribbling" },
+  sb_pressures_per90: { label: "Pressing activity" },
+  sofa_tackles_per90: { label: "Tackling" },
+  sofa_interceptions_per90: { label: "Interceptions" },
+  sofa_totalDuelsWonPercentage: { label: "Duel strength" },
+  sb_duel_win_rate: { label: "Duel strength" },
+  sofa_clearances_per90: { label: "Clearances" },
+  sofa_expectedGoals_per90: { label: "Goal threat" },
+  sofa_totalShots_per90: { label: "Shot volume" },
+  sofa_shotsOnTarget_per90: { label: "Shot accuracy" },
+};
+
+const ROLE_RANKING_CONFIG = {
+  ball_playing_cb: {
+    label: "Ball-playing CB",
+    pluralLabel: "Ball-playing CBs",
+    profileLabel: "ball-playing centre-back profile",
+    eligibleRoleKeys: ["CB", "DF"],
+    weights: {
+      sb_progressive_passes_per90: 1.0,
+      sofa_accuratePassesPercentage: 0.9,
+      sofa_interceptions_per90: 0.6,
+      sb_duel_win_rate: 0.6,
+      sofa_clearances_per90: 0.4,
+    },
+  },
+  defensive_cb: {
+    label: "Defensive CB",
+    pluralLabel: "Defensive CBs",
+    profileLabel: "defensive centre-back profile",
+    eligibleRoleKeys: ["CB", "DF"],
+    weights: {
+      sofa_clearances_per90: 1.0,
+      sofa_interceptions_per90: 0.9,
+      sb_duel_win_rate: 0.9,
+      sofa_tackles_per90: 0.7,
+      sofa_accuratePassesPercentage: 0.3,
+    },
+  },
+  possession_midfielder: {
+    label: "Possession Midfielder",
+    pluralLabel: "Possession Midfielders",
+    profileLabel: "possession midfielder profile",
+    eligibleRoleKeys: ["CM", "DM", "MF", "AM"],
+    weights: {
+      sb_progressive_passes_per90: 1.0,
+      sofa_accuratePassesPercentage: 1.0,
+      sofa_keyPasses_per90: 0.7,
+      sb_progressive_carries_per90: 0.6,
+      sofa_interceptions_per90: 0.3,
+    },
+  },
+  ball_winning_midfielder: {
+    label: "Ball-winning Midfielder",
+    pluralLabel: "Ball-winning Midfielders",
+    profileLabel: "ball-winning midfielder profile",
+    eligibleRoleKeys: ["DM", "CM", "MF"],
+    weights: {
+      sofa_tackles_per90: 1.0,
+      sofa_interceptions_per90: 1.0,
+      sb_duel_win_rate: 0.9,
+      sb_pressures_per90: 0.8,
+      sb_progressive_passes_per90: 0.3,
+    },
+  },
+  winger: {
+    label: "Winger",
+    pluralLabel: "Wingers",
+    profileLabel: "winger profile",
+    eligibleRoleKeys: ["W", "FW"],
+    weights: {
+      sofa_successfulDribbles_per90: 1.0,
+      sb_progressive_carries_per90: 0.9,
+      sb_passes_into_box_per90: 0.8,
+      sofa_keyPasses_per90: 0.6,
+      sofa_expectedGoals_per90: 0.4,
+    },
+  },
+  striker: {
+    label: "Striker",
+    pluralLabel: "Strikers",
+    profileLabel: "striker profile",
+    eligibleRoleKeys: ["ST", "SS", "FW"],
+    weights: {
+      sofa_expectedGoals_per90: 1.0,
+      sofa_totalShots_per90: 0.9,
+      sofa_shotsOnTarget_per90: 0.8,
+      sb_duel_win_rate: 0.4,
+      sofa_successfulDribbles_per90: 0.3,
+    },
+  },
 };
 
 const ROLE_LENS_CONFIG = {
@@ -601,8 +1109,211 @@ function rowSignalCoverage(row) {
   return { statsbomb, availability, market, future };
 }
 
+function parseFreshnessDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const isoLike = /^\d{4}-\d{2}-\d{2}$/;
+  const parsed = new Date(isoLike.test(raw) ? `${raw}T00:00:00Z` : raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatFreshnessDate(value) {
+  const parsed = parseFreshnessDate(value);
+  return parsed ? shortDateFmt.format(parsed) : "";
+}
+
+function latestFreshnessValue(values) {
+  let bestRaw = null;
+  let bestTime = -Infinity;
+  values.forEach((value) => {
+    const parsed = parseFreshnessDate(value);
+    if (!parsed) return;
+    const time = parsed.getTime();
+    if (time > bestTime) {
+      bestTime = time;
+      bestRaw = String(value);
+    }
+  });
+  return bestRaw;
+}
+
+function rowUsesFutureOverlay(row) {
+  return hasAnyFiniteSignal(row, ["future_scout_blend_score", "future_growth_probability", "future_scout_score"]);
+}
+
+function buildFreshnessState(row, profileFreshness = null) {
+  if (!row) {
+    return {
+      status: "limited",
+      compactLine: "Freshness limited",
+      summaryText: "Freshness is partially known because provider snapshot metadata is incomplete.",
+      metaLine: "Freshness limited",
+      partialSeason: false,
+      updatedAt: null,
+    };
+  }
+
+  const valuationEntry = manifestRoleEntry("valuation");
+  const futureEntry = manifestRoleEntry("future_shortlist");
+  const rowSeason = String(row?.season || "").trim();
+  const liveLane =
+    rowUsesFutureOverlay(row) &&
+    rowSeason &&
+    rowSeason === String(futureEntry?.config?.test_season || "").trim();
+  const coverage = rowSignalCoverage(row);
+  const hasProviderSignals = Boolean(coverage.statsbomb || coverage.availability || coverage.market);
+  const providerUpdatedAt = latestFreshnessValue([
+    row?.sb_snapshot_date,
+    row?.sb_retrieved_at,
+    row?.avail_snapshot_date,
+    row?.avail_retrieved_at,
+    row?.fixture_snapshot_date,
+    row?.fixture_retrieved_at,
+    row?.odds_snapshot_date,
+    row?.odds_retrieved_at,
+    profileFreshness?.latest_snapshot_date,
+    profileFreshness?.latest_retrieved_at,
+  ]);
+  const artifactEntry = liveLane ? futureEntry : valuationEntry;
+  const artifactUpdatedAt =
+    profileFreshness?.artifact_generated_at_utc ||
+    artifactEntry?.generated_at_utc ||
+    artifactEntry?.artifacts?.metrics?.mtime_utc ||
+    artifactEntry?.artifacts?.test_predictions?.mtime_utc ||
+    null;
+  const updatedAt = providerUpdatedAt || artifactUpdatedAt || null;
+  const providerMetaKnown = Boolean(providerUpdatedAt);
+
+  let status = String(profileFreshness?.status || "").trim().toLowerCase();
+  if (!status) {
+    if (!hasProviderSignals || !providerMetaKnown) {
+      status = "limited";
+    } else if (liveLane) {
+      status = "live";
+    } else {
+      status = "stable";
+    }
+  }
+
+  const partialSeason = Boolean(profileFreshness?.partial_season ?? (status === "live"));
+  const baseSummary =
+    profileFreshness?.message ||
+    (status === "live"
+      ? "Live current-season overlay. Fresh performance context is available, but season outcomes are still in progress."
+      : status === "stable"
+      ? "Stable valuation artifact. Use for benchmarked pricing and ranking."
+      : "Freshness is partially known because provider snapshot metadata is incomplete.");
+  const summaryText =
+    partialSeason && !/still in progress/i.test(baseSummary)
+      ? `${baseSummary} The current season is still in progress.`
+      : baseSummary;
+  const statusLabel =
+    status === "live" ? "Live season" : status === "stable" ? "Stable artifact" : "Freshness limited";
+  const compactLine =
+    status === "limited" ? "Freshness limited" : `${statusLabel} | updated ${formatFreshnessDate(updatedAt) || "-"}`;
+  const metaBits = [statusLabel];
+  if (updatedAt) metaBits.push(`updated ${formatFreshnessDate(updatedAt)}`);
+  const artifactLabel = String(profileFreshness?.artifact_label || artifactEntry?.label || "").trim();
+  if (artifactLabel) metaBits.push(artifactLabel);
+  return {
+    status,
+    compactLine,
+    summaryText,
+    metaLine: metaBits.join(" | "),
+    partialSeason,
+    updatedAt,
+  };
+}
+
 function buildBadgeChipMarkup(label, tone = "neutral") {
   return `<span class="badge-chip badge-chip--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+}
+
+function classifyTalentConfidence(score) {
+  const n = Number(score);
+  if (!Number.isFinite(n)) {
+    return { label: "Unknown", tone: "neutral", compact: "confidence unknown" };
+  }
+  if (n >= 70) return { label: "High", tone: "pursue", compact: "high confidence" };
+  if (n >= 45) return { label: "Medium", tone: "watch", compact: "medium confidence" };
+  return { label: "Low", tone: "price", compact: "low confidence" };
+}
+
+function getTalentView(row, profile = null) {
+  const talent = profile?.talent_view && typeof profile.talent_view === "object" ? profile.talent_view : {};
+  const scoreFamilies =
+    talent.score_families && typeof talent.score_families === "object"
+      ? talent.score_families
+      : row?.score_families && typeof row.score_families === "object"
+      ? row.score_families
+      : {};
+  const scoreExplanations =
+    talent.score_explanations && typeof talent.score_explanations === "object"
+      ? talent.score_explanations
+      : row?.score_explanations && typeof row.score_explanations === "object"
+      ? row.score_explanations
+      : {};
+  return {
+    talent_position_family: safeText(
+      talent.talent_position_family || row?.talent_position_family || inferRoleKey(row) || getPosition(row) || "-"
+    ),
+    current_level_score: firstFiniteNumber(talent.current_level_score, row?.current_level_score),
+    future_potential_score: firstFiniteNumber(talent.future_potential_score, row?.future_potential_score),
+    current_level_confidence: firstFiniteNumber(talent.current_level_confidence, row?.current_level_confidence),
+    future_potential_confidence: firstFiniteNumber(talent.future_potential_confidence, row?.future_potential_confidence),
+    current_level_confidence_reasons: Array.isArray(talent.current_level_confidence_reasons)
+      ? talent.current_level_confidence_reasons
+      : Array.isArray(row?.current_level_confidence_reasons)
+      ? row.current_level_confidence_reasons
+      : [],
+    future_potential_confidence_reasons: Array.isArray(talent.future_potential_confidence_reasons)
+      ? talent.future_potential_confidence_reasons
+      : Array.isArray(row?.future_potential_confidence_reasons)
+      ? row.future_potential_confidence_reasons
+      : [],
+    score_families: scoreFamilies,
+    score_explanations: scoreExplanations,
+  };
+}
+
+function activeTalentLaneKey(row) {
+  if (isSystemFitMode()) {
+    return state.systemFitActiveLane === "future_shortlist" ? "future_potential" : "current_level";
+  }
+  const freshness = buildFreshnessState(row);
+  return freshness.status === "live" || state.mode === "shortlist" ? "future_potential" : "current_level";
+}
+
+function topTalentDrivers(row, profile = null, laneKey = activeTalentLaneKey(row)) {
+  const talent = getTalentView(row, profile);
+  const entries = Array.isArray(talent.score_explanations?.[laneKey]) ? talent.score_explanations[laneKey] : [];
+  return entries.slice(0, 3);
+}
+
+function buildTalentCompactLine(row, profile = null) {
+  const talent = getTalentView(row, profile);
+  const laneKey = activeTalentLaneKey(row);
+  const confidenceScore =
+    laneKey === "future_potential" ? talent.future_potential_confidence : talent.current_level_confidence;
+  const confidence = classifyTalentConfidence(confidenceScore);
+  const currentLevel = Number(talent.current_level_score);
+  const futurePotential = Number(talent.future_potential_score);
+  return [
+    Number.isFinite(currentLevel) ? `Current ${formatNumber(currentLevel)}` : null,
+    Number.isFinite(futurePotential) ? `Future ${formatNumber(futurePotential)}` : null,
+    confidence.compact,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function buildTalentDriverLine(row, profile = null, laneKey = activeTalentLaneKey(row)) {
+  const entries = topTalentDrivers(row, profile, laneKey);
+  if (!entries.length) return "";
+  return entries
+    .slice(0, 2)
+    .map((entry) => `${safeText(entry.label)} ${formatNumber(entry.score)}`)
+    .join(" | ");
 }
 
 function buildDecisionPillMarkup(decision) {
@@ -729,6 +1440,7 @@ function summarizeRecruitmentDecision(row, report = null, { source = "workbench"
 function buildProvenanceBadges(row) {
   const coverage = rowSignalCoverage(row);
   const badges = [];
+  const adjustment = leagueAdjustmentMeta(row);
   if (coverage.future) {
     badges.push({ label: "Future-scored", tone: "future" });
   }
@@ -741,39 +1453,61 @@ function buildProvenanceBadges(row) {
   if (coverage.statsbomb) badges.push({ label: "StatsBomb", tone: "provider-soft" });
   if (coverage.availability) badges.push({ label: "Availability", tone: "provider-soft" });
   if (coverage.market) badges.push({ label: "Fixture/Market", tone: "provider-soft" });
+  if (adjustment.needsWarning) badges.push({ label: adjustment.label, tone: adjustment.tone });
   return badges;
 }
 
 function scoreValueForRow(row, scoreColumn) {
   const n = Number(row?.[scoreColumn]);
-  return Number.isFinite(n) ? n : NaN;
+  if (!Number.isFinite(n)) return NaN;
+  if (
+    [
+      "value_gap_capped_eur",
+      "value_gap_conservative_eur",
+      "value_gap_eur",
+      "undervaluation_score",
+      "fair_value_eur",
+      "expected_value_eur",
+    ].includes(String(scoreColumn || ""))
+  ) {
+    const reliability = firstFiniteNumber(row?.discovery_reliability_weight);
+    if (Number.isFinite(reliability)) return n * reliability;
+  }
+  return n;
 }
 
 function resolveRowScoreContext(row, diagnostics = null, source = "workbench") {
-  const scoreColumn =
-    diagnostics?.score_column ||
-    diagnostics?.scoreColumn ||
-    (source === "predictions" ? state.sortBy : null) ||
-    (hasFiniteSignal(row?.future_scout_blend_score)
-      ? "future_scout_blend_score"
-      : hasFiniteSignal(row?.future_growth_probability)
-      ? "future_growth_probability"
-      : hasFiniteSignal(row?.scout_target_score)
-      ? "scout_target_score"
-      : hasFiniteSignal(row?.shortlist_score)
-      ? "shortlist_score"
-      : "value_gap_capped_eur");
-  const rankingBasis =
-    diagnostics?.ranking_basis ||
-    diagnostics?.rankingBasis ||
-    (source === "predictions" ? "manual_sort" : source === "funnel" ? "funnel_rank" : null) ||
-    (scoreColumn === "future_scout_blend_score"
-      ? "future_target_tuned_blend"
-      : scoreColumn === "future_growth_probability"
-      ? "future_target_probability"
-      : scoreColumn === "scout_target_score"
-      ? "guardrailed_gap_confidence_history_efficiency"
-      : "guardrailed_gap_confidence_history");
+  const systemFitSource = source === "system_fit" || isSystemFitMode();
+  const scoreColumn = systemFitSource
+    ? "system_fit_score"
+    : diagnostics?.score_column ||
+      diagnostics?.scoreColumn ||
+      (source === "predictions" ? state.sortBy : null) ||
+      (hasFiniteSignal(row?.future_scout_blend_score)
+        ? "future_scout_blend_score"
+        : hasFiniteSignal(row?.future_growth_probability)
+        ? "future_growth_probability"
+        : hasFiniteSignal(row?.scout_target_score)
+        ? "scout_target_score"
+        : hasFiniteSignal(row?.shortlist_score)
+        ? "shortlist_score"
+        : "value_gap_capped_eur");
+  const rankingBasis = systemFitSource
+    ? "system_fit_slot_rank"
+    : diagnostics?.ranking_basis ||
+      diagnostics?.rankingBasis ||
+      (source === "predictions" ? "manual_sort" : source === "funnel" ? "funnel_rank" : null) ||
+      (scoreColumn === "current_level_score"
+        ? "current_level_pricing_lane"
+        : scoreColumn === "future_potential_score"
+        ? "future_potential_advisory_lane"
+        : scoreColumn === "future_scout_blend_score"
+        ? "future_target_tuned_blend"
+        : scoreColumn === "future_growth_probability"
+        ? "future_target_probability"
+        : scoreColumn === "scout_target_score"
+        ? "guardrailed_gap_confidence_history_efficiency"
+        : "guardrailed_gap_confidence_history");
   return {
     scoreColumn,
     scoreLabel: humanizeScoreColumn(scoreColumn),
@@ -781,6 +1515,487 @@ function resolveRowScoreContext(row, diagnostics = null, source = "workbench") {
     rankingBasisLabel: rankingBasisLabel(rankingBasis),
     scoreValue: scoreValueForRow(row, scoreColumn),
   };
+}
+
+function firstFiniteMetric(row, keys) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  for (const key of list) {
+    const n = Number(row?.[key]);
+    if (Number.isFinite(n)) return n;
+  }
+  return NaN;
+}
+
+function collectMetricValues(rows, metricKey) {
+  if (!Array.isArray(rows) || !rows.length) return [];
+  return rows
+    .map((row) => firstFiniteMetric(row, metricKey))
+    .filter((value) => Number.isFinite(value));
+}
+
+function metricLabel(metricKey) {
+  return PLAYSTYLE_METRIC_META[String(metricKey || "").trim()]?.label || humanizeKey(metricKey || "metric");
+}
+
+function mergeWeightMaps(...maps) {
+  return maps.reduce((acc, map) => {
+    if (!map) return acc;
+    Object.entries(map).forEach(([metricKey, weight]) => {
+      const numericWeight = Number(weight);
+      if (!Number.isFinite(numericWeight) || numericWeight <= 0) return;
+      acc[metricKey] = (acc[metricKey] || 0) + numericWeight;
+    });
+    return acc;
+  }, {});
+}
+
+function rowEligibleForRoleLens(row, roleConfig) {
+  if (!roleConfig) return true;
+  const allowed = Array.isArray(roleConfig.eligibleRoleKeys) ? roleConfig.eligibleRoleKeys : [];
+  if (!allowed.length) return true;
+  return allowed.includes(inferRoleKey(row));
+}
+
+function normalizeMetricAgainstRows(value, values) {
+  if (!Number.isFinite(value)) return 0;
+  const finiteValues = Array.isArray(values) ? values.filter((item) => Number.isFinite(item)) : [];
+  if (!finiteValues.length) return 0;
+  let min = finiteValues[0];
+  let max = finiteValues[0];
+  for (const item of finiteValues) {
+    if (item < min) min = item;
+    if (item > max) max = item;
+  }
+  if (max === min) return 0.5;
+  return Math.max(0, Math.min(1, (value - min) / (max - min)));
+}
+
+function computeStyleScore(player, weights, rows, metricValuesByKey = null) {
+  if (!player || !weights || !rows?.length) return 0;
+  let weightedSum = 0;
+  let totalWeight = 0;
+  for (const [metricKey, weight] of Object.entries(weights)) {
+    const numericWeight = Number(weight);
+    if (!Number.isFinite(numericWeight) || numericWeight <= 0) continue;
+    const playerValue = firstFiniteMetric(player, metricKey);
+    if (!Number.isFinite(playerValue)) continue;
+    const values = metricValuesByKey?.[metricKey] || collectMetricValues(rows, metricKey);
+    const normalized = normalizeMetricAgainstRows(playerValue, values);
+    weightedSum += normalized * numericWeight;
+    totalWeight += numericWeight;
+  }
+  if (totalWeight <= 0) return 0;
+  return weightedSum / totalWeight;
+}
+
+function computeLensScore(styleScore, roleScore) {
+  const safeStyle = Number.isFinite(styleScore) ? styleScore : 0;
+  const safeRole = Number.isFinite(roleScore) ? roleScore : 0;
+  if (state.playstyle && state.roleLens) return (2 * safeStyle + safeRole) / 3;
+  if (state.playstyle) return safeStyle;
+  if (state.roleLens) return safeRole;
+  return 0;
+}
+
+function uniqueDriverLabels(drivers, limit = 3) {
+  const seen = new Set();
+  const labels = [];
+  for (const driver of drivers || []) {
+    const label = String(driver?.label || "").trim();
+    const key = label.toLowerCase();
+    if (!label || seen.has(key)) continue;
+    seen.add(key);
+    labels.push(label);
+    if (labels.length >= limit) break;
+  }
+  return labels;
+}
+
+function joinNaturalList(labels) {
+  const items = (labels || []).filter(Boolean).map((label) => String(label).toLowerCase());
+  if (!items.length) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+function computeStyleFitDrivers(player, weights, rows, metricValuesByKey = null) {
+  if (!player || !weights || !rows?.length) {
+    return {
+      drivers: [],
+      availableMetricCount: 0,
+      availableWeight: 0,
+      totalConfiguredWeight: 0,
+      totalWeightedContribution: 0,
+    };
+  }
+
+  const drivers = [];
+  let availableMetricCount = 0;
+  let availableWeight = 0;
+  let totalConfiguredWeight = 0;
+  let totalWeightedContribution = 0;
+
+  for (const [metricKey, weight] of Object.entries(weights)) {
+    const numericWeight = Number(weight);
+    if (!Number.isFinite(numericWeight) || numericWeight <= 0) continue;
+    totalConfiguredWeight += numericWeight;
+    const playerValue = firstFiniteMetric(player, metricKey);
+    if (!Number.isFinite(playerValue)) continue;
+    const values = metricValuesByKey?.[metricKey] || collectMetricValues(rows, metricKey);
+    const normalizedValue = normalizeMetricAgainstRows(playerValue, values);
+    const contribution = normalizedValue * numericWeight;
+    drivers.push({
+      metricKey,
+      label: metricLabel(metricKey),
+      contribution,
+      value: playerValue,
+      normalizedValue,
+    });
+    availableMetricCount += 1;
+    availableWeight += numericWeight;
+    totalWeightedContribution += contribution;
+  }
+
+  drivers.sort((a, b) => {
+    if (b.contribution !== a.contribution) return b.contribution - a.contribution;
+    if (b.normalizedValue !== a.normalizedValue) return b.normalizedValue - a.normalizedValue;
+    return a.label.localeCompare(b.label);
+  });
+
+  return {
+    drivers: drivers.slice(0, 3),
+    availableMetricCount,
+    availableWeight,
+    totalConfiguredWeight,
+    totalWeightedContribution,
+  };
+}
+
+function buildLensFitExplanation(
+  player,
+  weights,
+  rows,
+  metricValuesByKey = null,
+  lensScore = NaN,
+  { roleEligible = true } = {}
+) {
+  if (!hasActiveLens() || !player || !weights || !rows?.length) {
+    return {
+      _styleFitDrivers: [],
+      _styleFitReasonLine: "",
+      _styleFitSummary: "",
+      _styleFitDataQuality: "",
+    };
+  }
+
+  const summaryLabel = activeLensSummaryLabel();
+  const profileLabel = activeLensProfileLabel();
+  const fitInfo = computeStyleFitDrivers(player, weights, rows, metricValuesByKey);
+  const availableWeightShare =
+    fitInfo.totalConfiguredWeight > 0 ? fitInfo.availableWeight / fitInfo.totalConfiguredWeight : 0;
+  const limited =
+    !roleEligible ||
+    fitInfo.availableMetricCount < 2 ||
+    availableWeightShare < 0.45 ||
+    fitInfo.totalWeightedContribution <= 0;
+  const labels = uniqueDriverLabels(fitInfo.drivers, 3);
+  const driverPhrase = joinNaturalList(labels.slice(0, 2));
+  const limitedScope = state.playstyle && state.roleLens ? "style and role" : state.roleLens ? "role" : "style";
+
+  if (!fitInfo.drivers.length || limited) {
+    return {
+      _styleFitDrivers: fitInfo.drivers,
+      _styleFitReasonLine: `Fit assessment is based on limited available ${limitedScope} data.`,
+      _styleFitSummary: `Current ${summaryLabel} fit is directionally estimated from limited available ${limitedScope} data.`,
+      _styleFitDataQuality: "limited",
+    };
+  }
+
+  let summary = `Profile aligns with ${summaryLabel} needs through ${driverPhrase}.`;
+  if (Number.isFinite(lensScore) && lensScore >= 0.67) {
+    summary = `Strong ${summaryLabel} fit driven by ${driverPhrase}.`;
+  } else if (Number.isFinite(lensScore) && lensScore < 0.4) {
+    summary = `Some ${summaryLabel}-fit signals come from ${driverPhrase}, but the picture is mixed.`;
+  }
+
+  const reasonLine =
+    state.roleLens && profileLabel
+      ? `Fit drivers: ${labels.slice(0, 3).join(", ")} (${profileLabel})`
+      : `Fit drivers: ${labels.slice(0, 3).join(", ")}`;
+
+  return {
+    _styleFitDrivers: fitInfo.drivers,
+    _styleFitReasonLine: reasonLine,
+    _styleFitSummary: summary,
+    _styleFitDataQuality: "ok",
+  };
+}
+
+function computeExistingScore(row, diagnostics, sourceMode) {
+  const context = resolveRowScoreContext(row, diagnostics, sourceMode);
+  if (Number.isFinite(context.scoreValue)) {
+    const sortOrder = diagnostics?.sort_order || diagnostics?.sortOrder || state.sortOrder;
+    return sourceMode === "predictions" && sortOrder === "asc" ? -context.scoreValue : context.scoreValue;
+  }
+  const gap = conservativeGapForRanking(row);
+  if (Number.isFinite(gap)) return gap;
+  if (sourceMode === "shortlist") {
+    const confidence = Number(row?.undervaluation_confidence);
+    if (Number.isFinite(confidence)) return confidence;
+    const undervaluation = Number(row?.undervaluation_score);
+    if (Number.isFinite(undervaluation)) return undervaluation;
+  }
+  return 0;
+}
+
+function styleFitLabel(score) {
+  if (!hasActiveLens() || !Number.isFinite(score)) return "";
+  if (score >= 0.67) return "Strong fit";
+  if (score >= 0.4) return "Moderate fit";
+  return "Weak fit";
+}
+
+function styleFitTone(score) {
+  if (!Number.isFinite(score)) return "neutral";
+  if (score >= 0.67) return "good";
+  if (score >= 0.4) return "warn";
+  return "neutral";
+}
+
+function buildStyleFitMarkup(row) {
+  if (!hasActiveLens() || !row?._styleFitLabel) return "";
+  return `<span class="fit-chip fit-chip--${escapeHtml(row._styleFitTone || "neutral")}">${escapeHtml(
+    row._styleFitLabel
+  )}</span>`;
+}
+
+function buildLensFitLine(row) {
+  if (!hasActiveLens()) return "";
+  if (state.playstyle && state.roleLens) {
+    return `Lens fit | ${activeLensDisplayLabel()} | style ${formatNumber(row?._styleScore)} | role ${formatNumber(
+      row?._roleScore
+    )}`;
+  }
+  if (state.playstyle) {
+    return `Playstyle fit | ${playstyleLabel()} | ${formatNumber(row?._styleScore)}`;
+  }
+  if (state.roleLens) {
+    return `Role fit | ${roleLensLabel()} | ${formatNumber(row?._roleScore)}`;
+  }
+  return "";
+}
+
+function renderDetailFit(row, { loading = false } = {}) {
+  if (!el.detailFitCard || !el.detailFitSummary || !el.detailFitDrivers) return;
+
+  if (isSystemFitMode()) {
+    if (!row) {
+      el.detailFitCard.hidden = true;
+      el.detailFitSummary.classList.remove("fit-driver-summary--muted");
+      el.detailFitSummary.textContent = "Select a player to inspect slot-level system fit.";
+      el.detailFitDrivers.innerHTML = "";
+      return;
+    }
+
+    if (loading) {
+      el.detailFitCard.hidden = false;
+      el.detailFitSummary.classList.remove("fit-driver-summary--muted");
+      el.detailFitSummary.textContent = "Loading system-fit summary...";
+      el.detailFitDrivers.innerHTML = '<span class="fit-driver-pill">Loading fit reasons...</span>';
+      return;
+    }
+
+    const reasons = Array.isArray(row.fit_reasons) ? row.fit_reasons : [];
+    const score = Number(row.system_fit_score);
+    const confidence = Number(row.system_fit_confidence);
+    const budgetStatus = safeText(row.budget_status || "unbounded").replace(/_/g, " ");
+    const slotLabel = safeText(row.slot_label || row.slot_key || "slot");
+    const roleLabel = safeText(row.role_template_label || row.role_template_key || "role");
+    const scoreText = Number.isFinite(score) ? formatNumber(score) : "-";
+    const confidenceText = Number.isFinite(confidence) ? formatNumber(confidence) : "-";
+    el.detailFitCard.hidden = false;
+    el.detailFitSummary.classList.remove("fit-driver-summary--muted");
+    el.detailFitSummary.textContent = `${slotLabel} | ${roleLabel} | system fit ${scoreText} | confidence ${confidenceText} | budget ${budgetStatus}.`;
+    el.detailFitDrivers.innerHTML = reasons.length
+      ? reasons.map((reason) => `<span class="fit-driver-pill">${escapeHtml(reason)}</span>`).join("")
+      : '<span class="fit-driver-pill">No fit reasons returned for this slot.</span>';
+    return;
+  }
+
+  if (!hasActiveLens()) {
+    el.detailFitCard.hidden = true;
+    el.detailFitSummary.classList.remove("fit-driver-summary--muted");
+    el.detailFitSummary.textContent = "Select a player to see lens fit drivers.";
+    el.detailFitDrivers.innerHTML = "";
+    return;
+  }
+
+  if (loading) {
+    el.detailFitCard.hidden = false;
+    el.detailFitSummary.classList.remove("fit-driver-summary--muted");
+    el.detailFitSummary.textContent = "Loading lens fit...";
+    el.detailFitDrivers.innerHTML = '<span class="fit-driver-pill">Loading fit drivers...</span>';
+    return;
+  }
+
+  if (!row?._styleFitSummary) {
+    el.detailFitCard.hidden = true;
+    el.detailFitSummary.classList.remove("fit-driver-summary--muted");
+    el.detailFitSummary.textContent = "Select a player to see lens fit drivers.";
+    el.detailFitDrivers.innerHTML = "";
+    return;
+  }
+
+  const labels = uniqueDriverLabels(row._styleFitDrivers, 3);
+  el.detailFitCard.hidden = false;
+  el.detailFitSummary.textContent = row._styleFitSummary;
+  el.detailFitSummary.classList.toggle("fit-driver-summary--muted", row._styleFitDataQuality === "limited");
+  el.detailFitDrivers.innerHTML = labels.length
+    ? labels.map((label) => `<span class="fit-driver-pill">${escapeHtml(label)}</span>`).join("")
+    : '<span class="fit-driver-pill">Limited style evidence</span>';
+}
+
+function renderDetailFreshness(row, profile = null, { loading = false } = {}) {
+  if (!el.detailFreshnessCard || !el.detailFreshnessSummary || !el.detailFreshnessMeta) return;
+
+  if (!row) {
+    el.detailFreshnessCard.hidden = true;
+    el.detailFreshnessSummary.textContent = "Select a player to inspect freshness context.";
+    el.detailFreshnessMeta.textContent = "";
+    return;
+  }
+
+  if (loading) {
+    el.detailFreshnessCard.hidden = false;
+    el.detailFreshnessSummary.textContent = "Loading data freshness...";
+    el.detailFreshnessMeta.textContent = "Checking artifact lane and provider snapshot metadata.";
+    return;
+  }
+
+  const freshness = buildFreshnessState(row, profile?.data_freshness || null);
+  el.detailFreshnessCard.hidden = false;
+  el.detailFreshnessSummary.textContent = freshness.summaryText;
+  el.detailFreshnessMeta.textContent = freshness.metaLine;
+}
+
+function renderDetailTalentView(row, profile = null, { loading = false, error = "" } = {}) {
+  if (!el.detailTalentCard || !el.detailTalentSummary || !el.detailTalentScores || !el.detailTalentDrivers) return;
+
+  if (!row) {
+    el.detailTalentCard.hidden = true;
+    el.detailTalentSummary.textContent = "Select a player to inspect current level, future potential, and confidence.";
+    el.detailTalentScores.innerHTML = "";
+    el.detailTalentDrivers.innerHTML = '<li class="risk-item risk-item--none">Select a player to load talent drivers.</li>';
+    return;
+  }
+
+  if (loading) {
+    el.detailTalentCard.hidden = false;
+    el.detailTalentSummary.textContent = "Loading talent view...";
+    el.detailTalentScores.innerHTML =
+      '<div class="talent-score-metric"><span>Talent view</span><strong>Loading</strong><small>Scoring current level, future potential, and confidence.</small></div>';
+    el.detailTalentDrivers.innerHTML = '<li class="risk-item risk-item--none">Loading talent drivers...</li>';
+    return;
+  }
+
+  if (error) {
+    el.detailTalentCard.hidden = false;
+    el.detailTalentSummary.textContent = `Talent view unavailable: ${error}`;
+    el.detailTalentScores.innerHTML = "";
+    el.detailTalentDrivers.innerHTML = '<li class="risk-item risk-item--none">Talent drivers unavailable.</li>';
+    return;
+  }
+
+  const talent = getTalentView(row, profile);
+  const laneKey = activeTalentLaneKey(row);
+  const currentConf = classifyTalentConfidence(talent.current_level_confidence);
+  const futureConf = classifyTalentConfidence(talent.future_potential_confidence);
+  const activeConf = laneKey === "future_potential" ? futureConf : currentConf;
+  const drivers = topTalentDrivers(row, profile, laneKey);
+  const family = safeText(talent.talent_position_family || inferRoleKey(row) || getPosition(row));
+  const laneCopy =
+    laneKey === "future_potential"
+      ? "Future Potential / Advisory is the active lens, so treat this as next-step upside rather than a stable valuation truth."
+      : "Current Level / Pricing is the active lens, so this view is anchored to the stable valuation lane.";
+  const confidenceReasons =
+    laneKey === "future_potential" ? talent.future_potential_confidence_reasons : talent.current_level_confidence_reasons;
+  const confidenceReason = Array.isArray(confidenceReasons) && confidenceReasons.length ? confidenceReasons[0] : "";
+  el.detailTalentCard.hidden = false;
+  el.detailTalentSummary.textContent = `${family} profile. ${laneCopy}${confidenceReason ? ` ${confidenceReason}` : ""}`;
+  el.detailTalentScores.innerHTML = `
+    <div class="talent-score-metric">
+      <span>Current level</span>
+      <strong>${Number.isFinite(Number(talent.current_level_score)) ? formatNumber(talent.current_level_score) : "-"}</strong>
+      <small>Stable valuation / pricing posture</small>
+    </div>
+    <div class="talent-score-metric">
+      <span>Future potential</span>
+      <strong>${Number.isFinite(Number(talent.future_potential_score)) ? formatNumber(talent.future_potential_score) : "-"}</strong>
+      <small>Next-step growth probability view</small>
+    </div>
+    <div class="talent-score-metric">
+      <span>Confidence</span>
+      <strong>${activeConf.label}</strong>
+      <small>${Number.isFinite(Number(laneKey === "future_potential" ? talent.future_potential_confidence : talent.current_level_confidence)) ? formatNumber(laneKey === "future_potential" ? talent.future_potential_confidence : talent.current_level_confidence) : "-"} / 100</small>
+    </div>
+  `;
+  el.detailTalentDrivers.innerHTML = buildNarrativeListMarkup(
+    drivers.map((entry) => ({
+      label: entry.label,
+      message: entry.message,
+      tone: entry.tone,
+    })),
+    "No family-level drivers were available for this player."
+  );
+}
+
+function applyLensRanking(rows, diagnostics, sourceMode) {
+  if (!hasActiveLens() || !Array.isArray(rows) || !rows.length) return [...rows];
+  const playstyle = currentPlaystyleConfig();
+  const roleConfig = currentRoleRankingConfig();
+  const finalWeights = mergeWeightMaps(playstyle?.weights, roleConfig?.weights);
+  const metricValuesByKey = Object.keys(finalWeights).reduce((acc, metricKey) => {
+    acc[metricKey] = collectMetricValues(rows, metricKey);
+    return acc;
+  }, {});
+
+  const ranked = rows.map((row) => {
+    const existingScore = computeExistingScore(row, diagnostics, sourceMode);
+    const roleEligible = rowEligibleForRoleLens(row, roleConfig);
+    const styleScore = playstyle ? computeStyleScore(row, playstyle.weights, rows, metricValuesByKey) : 0;
+    const roleScore = roleConfig && roleEligible ? computeStyleScore(row, roleConfig.weights, rows, metricValuesByKey) : 0;
+    const lensScore = computeLensScore(styleScore, roleScore);
+    const finalScore = existingScore + 0.2 * styleScore + 0.1 * roleScore;
+    const fitExplanation = buildLensFitExplanation(row, finalWeights, rows, metricValuesByKey, lensScore, {
+      roleEligible,
+    });
+    return {
+      ...row,
+      _existingScore: existingScore,
+      _styleScore: styleScore,
+      _roleScore: roleScore,
+      _lensScore: lensScore,
+      _finalScore: finalScore,
+      _styleFitLabel: styleFitLabel(lensScore),
+      _styleFitTone: styleFitTone(lensScore),
+      ...fitExplanation,
+    };
+  });
+
+  ranked.sort((a, b) => {
+    const finalDiff = (Number(b._finalScore) || 0) - (Number(a._finalScore) || 0);
+    if (finalDiff !== 0) return finalDiff;
+    const lensDiff = (Number(b._lensScore) || 0) - (Number(a._lensScore) || 0);
+    if (lensDiff !== 0) return lensDiff;
+    const gapDiff = (conservativeGapForRanking(b) || 0) - (conservativeGapForRanking(a) || 0);
+    if (gapDiff !== 0) return gapDiff;
+    const confDiff = (Number(b.undervaluation_confidence) || 0) - (Number(a.undervaluation_confidence) || 0);
+    if (confDiff !== 0) return confDiff;
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  });
+
+  return ranked;
 }
 
 function benchmarkLeagueRows() {
@@ -898,6 +2113,10 @@ function whyRankedItems(row, profile = null, scoreContext = null) {
   const context = scoreContext || resolveRowScoreContext(row, state.queryDiagnostics, state.mode);
   const gaps = deriveGapValues(row, profile);
   const roleLens = buildRoleLens(row, profile);
+  const freshness = buildFreshnessState(row, profile?.data_freshness || null);
+  const talent = getTalentView(row, profile);
+  const laneKey = activeTalentLaneKey(row);
+  const talentDrivers = topTalentDrivers(row, profile, laneKey);
   const items = [];
   const market = Number(row?.market_value_eur);
   const confidence = Number(row?.undervaluation_confidence);
@@ -909,6 +2128,15 @@ function whyRankedItems(row, profile = null, scoreContext = null) {
   items.push({
     label: "Score driver",
     message: `${context.scoreLabel} is the active ranking driver for this view${Number.isFinite(context.scoreValue) ? ` (${context.scoreColumn.endsWith("_eur") ? formatCurrency(context.scoreValue) : formatNumber(context.scoreValue)})` : ""}. ${context.rankingBasisLabel}.`,
+  });
+  items.push({
+    label: "Artifact lane",
+    message:
+      freshness.status === "live"
+        ? "This ranking is leaning on the live future_shortlist overlay, so it should be read as fresh but still advisory while the season is in progress."
+        : freshness.status === "limited"
+        ? "Freshness metadata is limited, so this ranking should be treated more cautiously than a fully benchmarked lane."
+        : "This ranking is grounded in the stable valuation lane and can be used as benchmarked pricing/ranking support.",
   });
   if (Number.isFinite(gaps.capped)) {
     items.push({
@@ -926,6 +2154,12 @@ function whyRankedItems(row, profile = null, scoreContext = null) {
     items.push({
       label: "Future signal",
       message: `Future growth probability is ${formatPct(futureProb)}, so this player is not only cheap on valuation but also favored by the future-outcome layer.`,
+    });
+  }
+  if (talentDrivers.length) {
+    items.push({
+      label: laneKey === "future_potential" ? "Future family drivers" : "Current-level drivers",
+      message: talentDrivers.map((entry) => entry.message).join(" "),
     });
   }
   if (Number.isFinite(age) || Number.isFinite(minutes)) {
@@ -950,7 +2184,17 @@ function whyRankedItems(row, profile = null, scoreContext = null) {
       message: `${roleLens.summary} Priority signals in the active artifact: ${metricsText}.`,
     });
   }
-  return items.slice(0, 5);
+  const confidenceReasons =
+    laneKey === "future_potential"
+      ? talent.future_potential_confidence_reasons
+      : talent.current_level_confidence_reasons;
+  if (Array.isArray(confidenceReasons) && confidenceReasons.length) {
+    items.push({
+      label: "Confidence posture",
+      message: confidenceReasons.join(" "),
+    });
+  }
+  return items.slice(0, 6);
 }
 
 function providerContextFallbackSummary(kind, row, context = null) {
@@ -1051,6 +2295,220 @@ function rowKey(row) {
   const playerId = String(row?.player_id || "").trim();
   const season = String(row?.season || "").trim();
   return `${playerId}::${season}`;
+}
+
+function currentScoutDecisionSource(row = state.selectedRow) {
+  if (state.detailDecisionSourceSurface) return state.detailDecisionSourceSurface;
+  if (Number.isFinite(Number(row?._funnelScore))) return "funnel";
+  return currentWorkbenchDecisionSource();
+}
+
+function currentDecisionRankingContext(row = state.selectedRow) {
+  if (!row) return {};
+  let sourceRows = [];
+  if (currentScoutDecisionSource(row) === "watchlist") {
+    sourceRows = Array.isArray(state.watchlistRows) ? state.watchlistRows : [];
+  } else if (Number.isFinite(Number(row?._funnelScore))) {
+    sourceRows = Array.isArray(state.funnelRows) ? state.funnelRows : [];
+  } else {
+    sourceRows = Array.isArray(state.rows) ? state.rows : [];
+  }
+  const rank = sourceRows.findIndex((item) => rowKey(item) === rowKey(row));
+  const diagnostics =
+    Number.isFinite(Number(row?._funnelScore)) && state.funnelDiagnostics ? state.funnelDiagnostics : state.queryDiagnostics;
+  const sourceSurface = currentScoutDecisionSource(row);
+  return {
+    mode: sourceSurface === "watchlist" ? "watchlist" : currentWorkbenchSourceMode(),
+    sort_by: diagnostics?.ranking_score_column || diagnostics?.score_column || state.sortBy,
+    rank: rank >= 0 ? rank + 1 : null,
+    active_lane: isSystemFitMode()
+      ? state.systemFitActiveLane
+      : state.mode === "shortlist"
+      ? "future_shortlist"
+      : "valuation",
+    system_template: isSystemFitMode() ? state.systemFitTemplate : null,
+    system_slot: isSystemFitMode() ? state.systemFitSelectedSlot : null,
+    discovery_reliability_weight: firstFiniteNumber(row?.discovery_reliability_weight),
+  };
+}
+
+function resetDecisionDraft() {
+  state.decisionDraftAction = "";
+  state.decisionDraftReasons = [];
+  state.decisionDraftNote = "";
+  if (el.detailDecisionNoteInput) {
+    el.detailDecisionNoteInput.value = "";
+  }
+}
+
+function setDecisionDraftAction(action) {
+  state.decisionDraftAction = String(action || "").trim();
+  state.decisionDraftReasons = [];
+  renderScoutDecisionComposer();
+}
+
+function toggleDecisionReason(tag) {
+  const key = String(tag || "").trim();
+  if (!key) return;
+  if (state.decisionDraftReasons.includes(key)) {
+    state.decisionDraftReasons = state.decisionDraftReasons.filter((item) => item !== key);
+  } else {
+    state.decisionDraftReasons = [...state.decisionDraftReasons, key];
+  }
+  renderScoutDecisionComposer();
+}
+
+function buildScoutDecisionSummary(decision) {
+  if (!decision || typeof decision !== "object") {
+    return {
+      available: false,
+      tone: "neutral",
+      actionLabel: "No decision logged",
+      meta: "No scout decision saved yet.",
+      summary: "Save a scout decision to capture why this player should move forward or drop out.",
+      note: "",
+    };
+  }
+  const action = String(decision.action || "").trim();
+  const reasons = Array.isArray(decision.reason_tags) ? decision.reason_tags.map(humanizeScoutDecisionTag) : [];
+  const source = safeText(decision.source_surface || "detail");
+  const note = String(decision.note || "").trim();
+  return {
+    available: true,
+    tone: scoutDecisionTone(action),
+    actionLabel: humanizeScoutDecisionAction(action),
+    meta: `${formatDecisionTimestamp(decision.created_at_utc)} | ${source.replace(/_/g, " ")}`,
+    summary: reasons.length
+      ? `Reasons: ${reasons.join(" | ")}`
+      : "No explicit reason tags were saved for this scout decision.",
+    note,
+  };
+}
+
+function renderScoutDecisionSummary(decision) {
+  if (
+    !el.detailLatestDecision ||
+    !el.detailLatestDecisionPill ||
+    !el.detailLatestDecisionMeta ||
+    !el.detailLatestDecisionSummary ||
+    !el.detailLatestDecisionNote
+  ) {
+    return;
+  }
+  const summary = buildScoutDecisionSummary(decision);
+  el.detailLatestDecision.hidden = !summary.available;
+  el.detailLatestDecisionPill.className = `decision-pill decision-pill--${summary.tone}`;
+  el.detailLatestDecisionPill.textContent = summary.actionLabel;
+  el.detailLatestDecisionMeta.textContent = summary.meta;
+  el.detailLatestDecisionSummary.textContent = summary.summary;
+  el.detailLatestDecisionNote.hidden = !summary.note;
+  el.detailLatestDecisionNote.textContent = summary.note ? `Note: ${summary.note}` : "";
+}
+
+function renderScoutDecisionComposer(message = "") {
+  if (!el.detailDecisionReasons || !el.detailDecisionMeta) return;
+  const action = state.decisionDraftAction;
+  const buttons = Array.isArray(el.detailDecisionActionButtons) ? el.detailDecisionActionButtons : [];
+  buttons.forEach((btn) => {
+    const selected = String(btn?.dataset?.scoutAction || "") === action;
+    btn.classList.toggle("is-selected", selected);
+  });
+  if (!action) {
+    el.detailDecisionReasons.innerHTML = '<span class="metrics-meta">Choose an action to see relevant reason tags.</span>';
+    el.detailDecisionMeta.textContent = message || "Decision log is local-first and analytics-only in v1.";
+    if (el.detailDecisionSaveBtn) el.detailDecisionSaveBtn.disabled = true;
+    return;
+  }
+  const options = decisionReasonOptions(action);
+  el.detailDecisionReasons.innerHTML = options
+    .map((option) => {
+      const selected = state.decisionDraftReasons.includes(option.key);
+      return `
+        <button
+          type="button"
+          class="decision-reason-chip${selected ? " is-selected" : ""}"
+          data-decision-reason="${escapeHtml(option.key)}"
+        >${escapeHtml(option.label)}</button>
+      `;
+    })
+    .join("");
+  const requirement = actionRequiresReason(action)
+    ? `Reason tag required for ${humanizeScoutDecisionAction(action).toLowerCase()}.`
+    : "Reason tags optional for this action.";
+  el.detailDecisionMeta.textContent = message || requirement;
+  if (el.detailDecisionSaveBtn) el.detailDecisionSaveBtn.disabled = !state.selectedRow;
+}
+
+async function saveScoutDecision() {
+  if (!state.selectedRow) {
+    renderScoutDecisionComposer("Select a player first.");
+    return;
+  }
+  const action = String(state.decisionDraftAction || "").trim();
+  if (!action) {
+    renderScoutDecisionComposer("Choose a scout decision action first.");
+    return;
+  }
+  if (actionRequiresReason(action) && !state.decisionDraftReasons.length) {
+    renderScoutDecisionComposer(`Select at least one reason tag for ${humanizeScoutDecisionAction(action).toLowerCase()}.`);
+    return;
+  }
+  const note = (el.detailDecisionNoteInput?.value || "").trim();
+  state.decisionDraftNote = note;
+  if (el.detailDecisionSaveBtn) {
+    el.detailDecisionSaveBtn.disabled = true;
+    el.detailDecisionSaveBtn.textContent = "Saving...";
+  }
+  renderScoutDecisionComposer("Saving scout decision...");
+  try {
+    const payload = await requestJson(isTeamAuthenticated() ? "/team/decisions" : "/market-value/decisions", {
+      method: "POST",
+      body: {
+        player_id: state.selectedRow.player_id,
+        split: state.split,
+        season: state.selectedRow.season || null,
+        action,
+        reason_tags: state.decisionDraftReasons,
+        note,
+        actor: isTeamAuthenticated() ? safeText(state.teamUser?.full_name || state.teamUser?.email || "team_scout") : "local",
+        source_surface: currentScoutDecisionSource(state.selectedRow),
+        ranking_context: currentDecisionRankingContext(state.selectedRow),
+      },
+    });
+    const latestDecision = payload?.latest_decision || payload?.decision || null;
+    state.selectedLatestDecision = latestDecision;
+    if (state.selectedProfile && typeof state.selectedProfile === "object") {
+      state.selectedProfile.latest_decision = latestDecision;
+    }
+    if (state.selectedReport && typeof state.selectedReport === "object") {
+      state.selectedReport.latest_decision = latestDecision;
+    }
+    renderScoutDecisionSummary(latestDecision);
+    resetDecisionDraft();
+    renderScoutDecisionComposer(
+      `${humanizeScoutDecisionAction(action)} saved${isTeamAuthenticated() ? " to the shared workspace" : ""}.`
+    );
+    if (action !== "pass") {
+      await refreshWatchlist();
+    }
+    if (isTeamAuthenticated()) {
+      await Promise.allSettled([refreshTeamActivity(), loadTeamCollaborationForSelectedRow()]);
+    }
+  } catch (err) {
+    renderScoutDecisionComposer(err instanceof Error ? err.message : String(err));
+  } finally {
+    if (el.detailDecisionSaveBtn) {
+      el.detailDecisionSaveBtn.disabled = !state.selectedRow || !state.decisionDraftAction;
+      el.detailDecisionSaveBtn.textContent = "Save Decision";
+    }
+  }
+}
+
+function focusScoutDecisionComposer() {
+  setDetailTab("risk");
+  window.setTimeout(() => {
+    el.detailDecisionActionButtons?.[0]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 40);
 }
 
 function humanizeKey(key) {
@@ -1265,16 +2723,77 @@ function deriveCapThreshold(row, guardrails = null) {
   return candidates.length ? Math.min(...candidates) : NaN;
 }
 
+function leagueAdjustmentMeta(row, report = null) {
+  const guardrails = report?.valuation_guardrails || null;
+  const bucket = String(
+    guardrails?.league_adjustment_bucket || row?.league_adjustment_bucket || ""
+  )
+    .trim()
+    .toLowerCase();
+  const reason = safeText(guardrails?.league_adjustment_reason || row?.league_adjustment_reason || "");
+  const alpha = firstFiniteNumber(guardrails?.league_adjustment_alpha, row?.league_adjustment_alpha);
+  const holdoutR2 = firstFiniteNumber(guardrails?.league_holdout_r2, row?.league_holdout_r2);
+  const holdoutWmape = firstFiniteNumber(guardrails?.league_holdout_wmape, row?.league_holdout_wmape);
+  const holdoutCoverage = firstFiniteNumber(
+    guardrails?.league_holdout_interval_coverage,
+    row?.league_holdout_interval_coverage
+  );
+  let tone = "neutral";
+  let label = "Standard pricing";
+  if (bucket === "weak") {
+    tone = "warn";
+    label = "Weak-league pricing adj.";
+  } else if (bucket === "failed") {
+    tone = "bad";
+    label = "Failed-league pricing adj.";
+  } else if (bucket === "severe_failed") {
+    tone = "bad";
+    label = "Heavy pricing adjustment";
+  } else if (bucket === "unknown") {
+    tone = "warn";
+    label = "Unknown-league pricing";
+  }
+  return {
+    bucket,
+    reason,
+    alpha,
+    holdoutR2,
+    holdoutWmape,
+    holdoutCoverage,
+    tone,
+    label,
+    needsWarning: bucket === "weak" || bucket === "failed" || bucket === "severe_failed",
+    isFailed: bucket === "failed" || bucket === "severe_failed",
+  };
+}
+
 function deriveGapValues(row, report = null) {
   const guardrails = report?.valuation_guardrails || null;
   const market = firstFiniteNumber(guardrails?.market_value_eur, row.market_value_eur);
-  const prediction = firstFiniteNumber(guardrails?.fair_value_eur, row.fair_value_eur, row.expected_value_eur);
-  const impliedRaw = Number.isFinite(market) && Number.isFinite(prediction) ? prediction - market : NaN;
-  const raw = firstFiniteNumber(guardrails?.value_gap_raw_eur, row.value_gap_eur, impliedRaw);
+  const adjustedFair = firstFiniteNumber(
+    guardrails?.league_adjusted_fair_value_eur,
+    guardrails?.fair_value_eur,
+    row.league_adjusted_fair_value_eur,
+    row.fair_value_eur,
+    row.expected_value_eur
+  );
+  const rawFair = firstFiniteNumber(
+    guardrails?.raw_fair_value_eur,
+    row.raw_fair_value_eur,
+    row.expected_value_raw_eur,
+    adjustedFair
+  );
+  const impliedRaw = Number.isFinite(market) && Number.isFinite(rawFair) ? rawFair - market : NaN;
+  const raw = firstFiniteNumber(guardrails?.value_gap_raw_eur, row.value_gap_raw_eur, row.value_gap_eur, impliedRaw);
   const conservative = firstFiniteNumber(
     guardrails?.value_gap_conservative_eur,
     row.value_gap_conservative_eur,
     raw
+  );
+  const adjustedGap = firstFiniteNumber(
+    guardrails?.league_adjusted_gap_eur,
+    row.league_adjusted_gap_eur,
+    Number.isFinite(market) && Number.isFinite(adjustedFair) ? adjustedFair - market : NaN
   );
   const capThreshold = firstFiniteNumber(guardrails?.cap_threshold_eur, deriveCapThreshold(row, guardrails));
   let capped = firstFiniteNumber(guardrails?.value_gap_capped_eur, row.value_gap_capped_eur);
@@ -1290,13 +2809,31 @@ function deriveGapValues(row, report = null) {
     typeof capAppliedFromReport === "boolean"
       ? capAppliedFromReport
       : Number.isFinite(conservative) && Number.isFinite(capped) && capped < conservative - 1;
-  return { raw, conservative, capped, capThreshold, capApplied };
+  const adjustment = leagueAdjustmentMeta(row, report);
+  return {
+    raw,
+    conservative,
+    capped,
+    capThreshold,
+    capApplied,
+    rawFair,
+    adjustedFair,
+    adjustedGap,
+    adjustmentBucket: adjustment.bucket,
+    adjustmentReason: adjustment.reason,
+    adjustmentAlpha: adjustment.alpha,
+  };
 }
 
 function withComputedConservativeGap(row) {
   const gaps = deriveGapValues(row);
   return {
     ...row,
+    raw_fair_value_eur: Number.isFinite(gaps.rawFair) ? gaps.rawFair : row.raw_fair_value_eur,
+    league_adjusted_fair_value_eur: Number.isFinite(gaps.adjustedFair)
+      ? gaps.adjustedFair
+      : row.league_adjusted_fair_value_eur,
+    league_adjusted_gap_eur: Number.isFinite(gaps.adjustedGap) ? gaps.adjustedGap : row.league_adjusted_gap_eur,
     value_gap_eur: Number.isFinite(gaps.raw) ? gaps.raw : row.value_gap_eur,
     value_gap_conservative_eur: Number.isFinite(gaps.conservative) ? gaps.conservative : row.value_gap_conservative_eur,
     value_gap_capped_eur: Number.isFinite(gaps.capped) ? gaps.capped : row.value_gap_capped_eur,
@@ -1343,9 +2880,18 @@ function getLeague(row) {
 
 function manifestRoleEntry(role) {
   const manifest = state.modelManifest || {};
-  if (role === "valuation") return manifest.valuation_champion || null;
-  if (role === "future_shortlist") return manifest.future_shortlist_champion || null;
-  return null;
+  if (role === "valuation" && manifest.valuation_champion) return manifest.valuation_champion;
+  if (role === "future_shortlist" && manifest.future_shortlist_champion) return manifest.future_shortlist_champion;
+  const legacyRole = String(manifest.legacy_default_role || "valuation").trim();
+  if (legacyRole !== role || !manifest.artifacts) return null;
+  return {
+    role,
+    label: manifest.label || role,
+    generated_at_utc: manifest.generated_at_utc || null,
+    artifacts: manifest.artifacts || {},
+    config: manifest.config || {},
+    summary: manifest.summary || {},
+  };
 }
 
 function manifestArtifactMeta(role, artifactKey) {
@@ -1362,6 +2908,69 @@ function activeChampionRoutingSummary() {
     predictionBaseRole: safeText(active.prediction_service_base_role || "valuation"),
     shortlistOverlayRole: safeText(active.shortlist_overlay_role || "future_shortlist"),
   };
+}
+
+function operatorLaneEntry(role) {
+  const lane = state.operatorHealth?.active_lanes?.[role] || state.activeArtifacts?.[role] || {};
+  return {
+    role,
+    laneState: safeText(lane.lane_state || lane.laneState || (role === "future_shortlist" ? "live" : "stable")),
+    promotionState: safeText(lane.promotion_state || lane.promotionState || "advisory_only"),
+    promotionReasons: Array.isArray(lane.promotion_reasons || lane.promotionReasons)
+      ? lane.promotion_reasons || lane.promotionReasons
+      : [],
+    label: safeText(lane.artifact_label || lane.label || role),
+    testSeason: safeText(lane.artifact_test_season || lane.test_season || lane.testSeason),
+  };
+}
+
+function laneStateLabel(stateValue) {
+  const lane = String(stateValue || "").trim().toLowerCase();
+  if (lane === "stable") return "Stable";
+  if (lane === "live") return "Live";
+  if (lane === "limited") return "Limited";
+  return "Unknown";
+}
+
+function boardLaneSummary() {
+  const champion = activeChampionRoutingSummary();
+  const valuationLane = operatorLaneEntry("valuation");
+  const futureLane = operatorLaneEntry("future_shortlist");
+  if (isSystemFitMode()) {
+    const laneIsFuture = state.systemFitActiveLane === "future_shortlist";
+    const runtimeLane = laneIsFuture ? futureLane : valuationLane;
+    const systemTemplate = currentSystemFitTemplate();
+    const label = `${systemFitLaneLabel()} | ${safeText(systemTemplate?.label || state.systemFitTemplate)} | ${laneStateLabel(runtimeLane.laneState)} ${laneIsFuture ? "advisory lane" : "valuation lane"}`;
+    const copy = laneIsFuture
+      ? "System-fit ranking is using the live future_shortlist lane. Treat it as advisory, growth-oriented role fit."
+      : "System-fit ranking is using the stable valuation lane. Treat it as the pricing-safe current-level view."
+    return { label, copy, runtime: `${champion.predictionBaseRole} -> ${champion.shortlistOverlayRole}` };
+  }
+  if (state.mode === "predictions") {
+    const label = `Current Level / Pricing | ${laneStateLabel(valuationLane.laneState)} valuation lane`;
+    const copy =
+      valuationLane.promotionState === "promotable"
+        ? "Use this lane for benchmarked pricing and current-level comparisons."
+        : "Use this lane for pricing guidance, but the current valuation artifact is still advisory-only.";
+    return { label, copy };
+  }
+  const label = `Future Potential / Advisory | ${laneStateLabel(futureLane.laneState)} shortlist overlay on ${laneStateLabel(valuationLane.laneState).toLowerCase()} valuation base`;
+  const copy =
+    futureLane.laneState === "live"
+      ? "Ordering is leaning on the live future_shortlist overlay. Treat it as advisory upside while the season is still in progress."
+      : "Ordering is leaning on the stable valuation base because no live future overlay is active.";
+  return { label, copy, runtime: `${champion.predictionBaseRole} -> ${champion.shortlistOverlayRole}` };
+}
+
+function laneAwareDecisionNote(row, baseText) {
+  const freshness = buildFreshnessState(row);
+  if (freshness.status === "live") {
+    return `${baseText} Live overlay guidance while the season is still in progress.`;
+  }
+  if (freshness.status === "limited") {
+    return `${baseText} Freshness is limited, so treat this as an advisory call.`;
+  }
+  return baseText;
 }
 
 function matchesRecruitmentWorkflow(row, filters = {}) {
@@ -1436,6 +3045,12 @@ function buildRecruitmentExportRow(row, extras = {}) {
     minutes: getMinutes(row),
     contract_years_left: row.contract_years_left ?? null,
     shortlist_score: row.shortlist_score ?? null,
+    system_fit_score: row.system_fit_score ?? null,
+    system_fit_confidence: row.system_fit_confidence ?? null,
+    slot_key: row.slot_key ?? null,
+    slot_label: row.slot_label ?? null,
+    role_template_key: row.role_template_key ?? null,
+    budget_status: row.budget_status ?? null,
     future_scout_blend_score: row.future_scout_blend_score ?? null,
     scout_target_score: row.scout_target_score ?? row._funnelScore ?? null,
     ranking_driver: extras.rankingDriver || null,
@@ -1503,8 +3118,27 @@ function buildUrl(path, params = {}) {
   return url.toString();
 }
 
+function activeTeamWorkspaceId() {
+  return String(state.teamActiveWorkspace?.workspace_id || "").trim();
+}
+
+function isTeamAuthenticated() {
+  return Boolean(state.teamEnabled && state.teamAuthenticated && activeTeamWorkspaceId());
+}
+
+function requestHeaders(baseHeaders = {}) {
+  const headers = { ...baseHeaders };
+  if (isTeamAuthenticated()) {
+    headers["X-ScoutML-Workspace"] = activeTeamWorkspaceId();
+  }
+  return headers;
+}
+
 async function getJson(path, params = {}) {
-  const response = await fetch(buildUrl(path, params));
+  const response = await fetch(buildUrl(path, params), {
+    credentials: "include",
+    headers: requestHeaders(),
+  });
   const text = await response.text();
   let payload = {};
   if (text) {
@@ -1521,9 +3155,13 @@ async function getJson(path, params = {}) {
 }
 
 async function requestJson(path, { method = "GET", params = {}, body = null } = {}) {
-  const options = { method };
+  const options = {
+    method,
+    credentials: "include",
+    headers: requestHeaders(),
+  };
   if (body !== null && body !== undefined) {
-    options.headers = { "Content-Type": "application/json" };
+    options.headers = requestHeaders({ "Content-Type": "application/json" });
     options.body = JSON.stringify(body);
   }
   const response = await fetch(buildUrl(path, params), options);
@@ -1542,24 +3180,156 @@ async function requestJson(path, { method = "GET", params = {}, body = null } = 
   return payload;
 }
 
-async function fetchAllPredictions(params = {}) {
-  const pageSize = 1000;
-  let offset = 0;
-  const out = [];
-  while (true) {
-    const payload = await getJson("/market-value/predictions", {
-      limit: pageSize,
-      offset,
-      ...params,
-    });
-    const items = payload.items || [];
-    out.push(...items);
-    offset += items.length;
-    if (!items.length || items.length < pageSize || offset >= Number(payload.total || 0)) {
-      break;
-    }
+async function getBlob(path, params = {}) {
+  const response = await fetch(buildUrl(path, params), {
+    credentials: "include",
+    headers: requestHeaders(),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `HTTP ${response.status}`);
   }
+  const filename = String(response.headers.get("content-disposition") || "")
+    .match(/filename=\"?([^\";]+)\"?/i)?.[1];
+  return {
+    blob: await response.blob(),
+    filename: filename || null,
+  };
+}
+
+function teamPreferenceRequestParams() {
+  if (!isTeamAuthenticated() || !state.teamApplyPreferences) {
+    return {};
+  }
+  const profileId = String(state.teamPreferenceProfile?.preference_profile_id || "").trim();
+  return {
+    apply_preferences: true,
+    preference_profile_id: profileId || null,
+  };
+}
+
+function parseTagList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseRolePriorityMap(value) {
+  const out = {};
+  String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((item) => {
+      const [key, rawWeight] = item.split(":").map((part) => part.trim());
+      const weight = Number(rawWeight);
+      if (!key || !Number.isFinite(weight)) return;
+      out[key.toUpperCase()] = weight;
+    });
   return out;
+}
+
+function syncSystemFitTemplateOptions() {
+  if (!el.systemFitTemplate) return;
+  const templates = Array.isArray(state.systemFitTemplates) ? state.systemFitTemplates : [];
+  if (!templates.length) {
+    el.systemFitTemplate.value = state.systemFitTemplate;
+    return;
+  }
+  el.systemFitTemplate.innerHTML = templates
+    .map(
+      (template) =>
+        `<option value="${escapeHtml(safeText(template.template_key))}">${escapeHtml(safeText(template.label))}</option>`
+    )
+    .join("");
+  const availableKeys = new Set(templates.map((template) => String(template.template_key || "")));
+  if (!availableKeys.has(state.systemFitTemplate)) {
+    state.systemFitTemplate = String(templates[0].template_key || DEFAULT_SYSTEM_FIT_TEMPLATE);
+  }
+  el.systemFitTemplate.value = state.systemFitTemplate;
+}
+
+async function loadSystemFitTemplates({ force = false } = {}) {
+  if (!force && Array.isArray(state.systemFitTemplates) && state.systemFitTemplates.length) {
+    syncSystemFitTemplateOptions();
+    return state.systemFitTemplates;
+  }
+  const payload = await getJson("/market-value/system-fit/templates");
+  state.systemFitTemplates = Array.isArray(payload.templates) ? payload.templates : [];
+  if (!state.systemFitTemplate && payload.default_template_key) {
+    state.systemFitTemplate = String(payload.default_template_key);
+  }
+  syncSystemFitTemplateOptions();
+  return state.systemFitTemplates;
+}
+
+function currentSystemFitRows() {
+  return Array.isArray(currentSystemFitSlot()?.items) ? currentSystemFitSlot().items : [];
+}
+
+function applyUiBootstrapPayload(payload = null) {
+  const seasons = Array.isArray(payload?.seasons)
+    ? payload.seasons.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const leagues = Array.isArray(payload?.leagues)
+    ? payload.leagues.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  state.coverageRows = Array.isArray(payload?.coverage_rows) ? payload.coverage_rows : [];
+  renderCoverageTable();
+  renderOverviewReadiness();
+
+  const prevSeason = state.season;
+  const prevLeague = state.league;
+  updateSelectOptions(el.season, seasons, prevSeason);
+  updateSelectOptions(el.league, leagues, prevLeague);
+  if (prevSeason && !seasons.includes(prevSeason)) state.season = "";
+  if (prevLeague && !leagues.includes(prevLeague)) state.league = "";
+  if (!state.season) el.season.value = "";
+  if (!state.league) el.league.value = "";
+}
+
+function renderSystemFitSlots() {
+  if (!el.systemFitSlotWrap || !el.systemFitSlotBar || !el.systemFitSlotMeta) return;
+  const active = isSystemFitMode();
+  el.systemFitSlotWrap.hidden = !active;
+  if (!active) {
+    el.systemFitSlotMeta.textContent = "Select a slot to inspect backend-ranked candidates for this system.";
+    el.systemFitSlotBar.innerHTML = "";
+    return;
+  }
+  const slots = Array.isArray(state.systemFitSlots) ? state.systemFitSlots : [];
+  if (!slots.length) {
+    el.systemFitSlotMeta.textContent = "Run a system-fit query to load slot candidates.";
+    el.systemFitSlotBar.innerHTML = '<span class="fit-driver-pill">No slots loaded yet.</span>';
+    return;
+  }
+  if (!slots.some((slot) => String(slot.slot_key || "") === String(state.systemFitSelectedSlot || ""))) {
+    state.systemFitSelectedSlot = String(slots[0].slot_key || "");
+  }
+  const selectedSlot = currentSystemFitSlot();
+  const laneLabel = state.systemFitLanePosture?.label || systemFitLaneLabel();
+  const selectedSummary = selectedSlot
+    ? `${safeText(selectedSlot.slot_label)} | ${safeText(selectedSlot.role_template_label)} | ${formatInt(
+        selectedSlot.result_count
+      )} candidates`
+    : "Select a slot to inspect candidates.";
+  el.systemFitSlotMeta.textContent = `${laneLabel}. ${selectedSummary}.`;
+  el.systemFitSlotBar.innerHTML = slots
+    .map((slot) => {
+      const selected = String(slot.slot_key || "") === String(state.systemFitSelectedSlot || "");
+      return `
+        <button
+          type="button"
+          class="system-fit-slot-chip${selected ? " is-active" : ""}"
+          data-slot-key="${escapeHtml(safeText(slot.slot_key))}"
+        >
+          <span>${escapeHtml(safeText(slot.slot_label))}</span>
+          <strong>${escapeHtml(safeText(slot.role_template_label))}</strong>
+        </button>
+      `;
+    })
+    .join("");
 }
 
 function setStatus(mode, message) {
@@ -1574,8 +3344,10 @@ function setLoading(loading) {
   el.prevBtn.disabled = loading;
   el.nextBtn.disabled = loading;
   if (loading) {
-    el.tbody.innerHTML = "<tr><td colspan=\"9\">Loading data...</td></tr>";
+    el.tbody.innerHTML = `<tr><td colspan="${RESULTS_TABLE_COLSPAN}">Loading players for the current recruitment brief...</td></tr>`;
   }
+  renderTopPicks();
+  renderBoardHighlights();
 }
 
 function setView(view) {
@@ -1594,6 +3366,8 @@ function syncWorkbenchControlsFromState() {
   el.apiBase.value = state.apiBase;
   el.mode.value = state.mode;
   el.split.value = state.split;
+  if (el.systemFitTemplate) el.systemFitTemplate.value = state.systemFitTemplate;
+  if (el.systemFitActiveLane) el.systemFitActiveLane.value = state.systemFitActiveLane;
   el.season.value = state.season;
   el.league.value = state.league;
   el.position.value = state.position;
@@ -1612,6 +3386,9 @@ function syncWorkbenchControlsFromState() {
   el.limit.value = String(state.limit);
   el.outsideBig5Only.checked = state.nonBig5Only;
   el.undervaluedOnly.checked = state.undervaluedOnly;
+  if (el.playstyle) el.playstyle.value = state.playstyle;
+  if (el.roleLens) el.roleLens.value = state.roleLens;
+  if (el.teamPrefApply) el.teamPrefApply.checked = Boolean(state.teamApplyPreferences);
   el.funnelSplit.value = state.split;
 }
 
@@ -1619,6 +3396,8 @@ function readWorkbenchControlsToState() {
   state.apiBase = el.apiBase.value.trim() || DEFAULT_API;
   state.mode = el.mode.value;
   state.split = el.split.value;
+  if (el.systemFitTemplate) state.systemFitTemplate = el.systemFitTemplate.value || DEFAULT_SYSTEM_FIT_TEMPLATE;
+  if (el.systemFitActiveLane) state.systemFitActiveLane = el.systemFitActiveLane.value || DEFAULT_SYSTEM_FIT_LANE;
   state.season = el.season.value;
   state.league = el.league.value;
   state.position = el.position.value;
@@ -1637,6 +3416,9 @@ function readWorkbenchControlsToState() {
   state.limit = Math.max(Math.round(parseNumberOr(el.limit.value, 50)), 1);
   state.nonBig5Only = el.outsideBig5Only.checked;
   state.undervaluedOnly = el.undervaluedOnly.checked;
+  if (el.playstyle) state.playstyle = el.playstyle.value;
+  if (el.roleLens) state.roleLens = el.roleLens.value;
+  if (el.teamPrefApply) state.teamApplyPreferences = el.teamPrefApply.checked;
 }
 
 function renderTrustCard() {
@@ -1645,6 +3427,9 @@ function renderTrustCard() {
   const artifacts = health.artifacts || {};
   const active = state.activeArtifacts || {};
   const champion = activeChampionRoutingSummary();
+  const valuationLane = operatorLaneEntry("valuation");
+  const futureLane = operatorLaneEntry("future_shortlist");
+  const promotion = state.operatorHealth?.promotion_gate || {};
   const valuationMetricsMeta = manifestArtifactMeta("valuation", "metrics");
   const shortlistTestMeta = manifestArtifactMeta("future_shortlist", "test_predictions");
   const valuationUpdated = valuationMetricsMeta?.mtime_utc || "-";
@@ -1673,10 +3458,10 @@ function renderTrustCard() {
     active.metrics_sha256
   )}]`;
   if (el.championValuation) {
-    el.championValuation.textContent = `${champion.valuationLabel} | ${fileLabel(active?.valuation?.metrics_path)}`;
+    el.championValuation.textContent = `${champion.valuationLabel} | ${laneStateLabel(valuationLane.laneState)} | ${valuationLane.promotionState}`;
   }
   if (el.championShortlist) {
-    el.championShortlist.textContent = `${champion.futureShortlistLabel} | ${fileLabel(active?.future_shortlist?.test_predictions_path)}`;
+    el.championShortlist.textContent = `${champion.futureShortlistLabel} | ${laneStateLabel(futureLane.laneState)} | ${futureLane.promotionState}`;
   }
   if (el.championRuntime) {
     el.championRuntime.textContent = `${champion.predictionBaseRole} base -> ${champion.shortlistOverlayRole} overlay`;
@@ -1695,6 +3480,9 @@ function renderTrustCard() {
     }
   } else {
     el.trustNote.textContent = "Connect API to load recruitment reliability diagnostics.";
+  }
+  if (promotion && promotion.promotable === false && Array.isArray(promotion.failed_checks) && promotion.failed_checks.length) {
+    el.trustNote.textContent += ` Promotion gate remains advisory-only: ${promotion.failed_checks[0]}`;
   }
 }
 
@@ -1760,6 +3548,17 @@ function renderCoverageTable() {
   const rows = benchmarkCoverage.length
     ? benchmarkCoverage
     : (() => {
+        if (
+          state.coverageRows.every(
+            (row) =>
+              row &&
+              typeof row === "object" &&
+              Object.prototype.hasOwnProperty.call(row, "rows") &&
+              Object.prototype.hasOwnProperty.call(row, "undervalued_share")
+          )
+        ) {
+          return [...state.coverageRows];
+        }
         const grouped = new Map();
         state.coverageRows.forEach((row) => {
           const league = getLeague(row) || "Unknown";
@@ -1875,8 +3674,141 @@ function renderBenchmarkCards() {
     : "No weak-slice diagnostics loaded";
 }
 
+function renderBoardLaneStatus() {
+  if (!el.boardLaneStatus) return;
+  if (!state.connected) {
+    el.boardLaneStatus.textContent = "Connect API to load active artifact lane context.";
+    return;
+  }
+  if (state.health?.status !== "ok") {
+    el.boardLaneStatus.textContent = "Active lane unavailable while backend artifacts are missing.";
+    return;
+  }
+  const summary = boardLaneSummary();
+  el.boardLaneStatus.textContent = `${summary.label}. ${summary.copy}`;
+}
+
+function renderOperatorDashboard() {
+  if (!el.operatorIngestionStatus) return;
+  const payload = state.operatorHealth || null;
+  if (!payload) {
+    el.operatorIngestionStatus.textContent = "-";
+    el.operatorIngestionCopy.textContent = "Connect API to load ingestion health.";
+    el.operatorValuationLane.textContent = "-";
+    el.operatorValuationCopy.textContent = "Connect API to load valuation-lane posture.";
+    el.operatorFutureLane.textContent = "-";
+    el.operatorFutureCopy.textContent = "Connect API to load future-shortlist posture.";
+    el.operatorPromotionStatus.textContent = "-";
+    el.operatorPromotionCopy.textContent = "Connect API to load promotability.";
+    el.operatorStaleStatus.textContent = "-";
+    el.operatorStaleCopy.textContent = "Connect API to load provider freshness risk.";
+    el.operatorLiveStatus.textContent = "-";
+    el.operatorLiveCopy.textContent = "Connect API to load live current-season footprint.";
+    el.operatorBlockedList.innerHTML = '<li class="risk-item risk-item--none">No operator health loaded.</li>';
+    el.operatorLaneList.innerHTML = '<li class="risk-item risk-item--none">No operator health loaded.</li>';
+    return;
+  }
+
+  const ingestion = payload.ingestion_health || {};
+  const ingestionSummary = ingestion.summary || {};
+  const statusCounts = ingestionSummary.status_counts || {};
+  const valuationLane = operatorLaneEntry("valuation");
+  const futureLane = operatorLaneEntry("future_shortlist");
+  const promotion = payload.promotion_gate || {};
+  const stale = payload.stale_provider_snapshots || {};
+  const live = payload.live_partial_footprint || {};
+  const holdouts = payload.holdout_coverage || {};
+
+  el.operatorIngestionStatus.textContent = `${formatInt(statusCounts.healthy)} healthy | ${formatInt(
+    statusCounts.watch
+  )} watch | ${formatInt(statusCounts.blocked)} blocked`;
+  el.operatorIngestionCopy.textContent = `${formatInt(ingestionSummary.total)} configured league-season rows in the current ingestion report.`;
+
+  el.operatorValuationLane.textContent = `${laneStateLabel(valuationLane.laneState)} | ${valuationLane.promotionState}`;
+  el.operatorValuationCopy.textContent = `${
+    valuationLane.promotionState === "promotable" ? "Stable valuation lane is promotable." : "Stable valuation lane is still advisory-only."
+  } ${valuationLane.label}.`;
+
+  el.operatorFutureLane.textContent = `${laneStateLabel(futureLane.laneState)} | ${futureLane.promotionState}`;
+  el.operatorFutureCopy.textContent = "future_shortlist stays live and advisory by design for current-season scouting.";
+
+  el.operatorPromotionStatus.textContent = promotion.promotable ? "Promotable" : "Advisory only";
+  el.operatorPromotionCopy.textContent = promotion.promotable
+    ? "Valuation artifact meets the current soft promotion gate."
+    : `${formatInt((promotion.failed_checks || []).length)} promotion checks still failing.`;
+
+  el.operatorStaleStatus.textContent = `${formatInt(stale.stale_count)} stale`;
+  el.operatorStaleCopy.textContent = stale.latest_snapshot_date
+    ? `Latest provider snapshot ${safeText(stale.latest_snapshot_date)}. Threshold: ${formatInt(stale.threshold_days)} days.`
+    : "Provider snapshot recency is still incomplete.";
+
+  el.operatorLiveStatus.textContent = `${formatInt(live.live_rows)} live rows`;
+  el.operatorLiveCopy.textContent = live.live_test_season
+    ? `${formatPct(Number(live.live_share) || 0)} of current test rows are in the live ${safeText(live.live_test_season)} overlay.`
+    : "No live current-season footprint is active right now.";
+
+  const blockedItems = []
+    .concat(
+      Array.isArray(ingestion.blocked_items)
+        ? ingestion.blocked_items.map((row) => ({
+            tone: "high",
+            label: `${safeText(row.league_name)} | ${safeText(row.season)}`,
+            message: `${safeText(row.status)} | ${(row.status_reasons || []).join(", ") || "blocked"}.`,
+          }))
+        : []
+    )
+    .concat(
+      Array.isArray(ingestion.watch_items)
+        ? ingestion.watch_items.slice(0, 4).map((row) => ({
+            tone: "medium",
+            label: `${safeText(row.league_name)} | ${safeText(row.season)}`,
+            message: `${safeText(row.status)} | ${(row.status_reasons || []).join(", ") || "watch"}.`,
+          }))
+        : []
+    );
+  el.operatorBlockedList.innerHTML = buildNarrativeListMarkup(
+    blockedItems,
+    "No blocked or watch league-seasons in the ingestion report."
+  );
+
+  const laneNotes = [
+    {
+      tone: valuationLane.promotionState === "promotable" ? "low" : "medium",
+      label: "Valuation lane",
+      message: `${valuationLane.label} | ${laneStateLabel(valuationLane.laneState)} | ${valuationLane.promotionState}. ${
+        (valuationLane.promotionReasons || [])[0] || "Valuation lane promotion posture loaded."
+      }`,
+    },
+    {
+      tone: futureLane.laneState === "live" ? "medium" : "low",
+      label: "future_shortlist lane",
+      message: `${futureLane.label} | ${laneStateLabel(futureLane.laneState)} | ${futureLane.promotionState}. ${
+        (futureLane.promotionReasons || [])[0] || "Live shortlist posture loaded."
+      }`,
+    },
+    {
+      tone: Number(holdouts.successful_count) >= 6 ? "low" : "medium",
+      label: "Holdout coverage",
+      message: `${formatInt(holdouts.successful_count)} successful holdouts out of ${formatInt(
+        holdouts.requested_count
+      )} requested.`,
+    },
+  ].concat(
+    (promotion.failed_checks || []).slice(0, 3).map((message) => ({
+      tone: "high",
+      label: "Promotion check",
+      message,
+    }))
+  );
+  el.operatorLaneList.innerHTML = buildNarrativeListMarkup(
+    laneNotes,
+    "Lane and holdout notes will appear here once operator health loads."
+  );
+}
+
 function renderOverviewReadiness() {
   if (!el.overviewPosturePill) return;
+  renderOperatorDashboard();
 
   if (!state.metrics) {
     el.overviewPosturePill.className = "decision-pill decision-pill--neutral";
@@ -1900,6 +3832,7 @@ function renderOverviewReadiness() {
   const under5 = segments.find((row) => row.segment === "under_5m");
   const under5Mape = Number(under5?.mape);
   const champion = activeChampionRoutingSummary();
+  const promotionGate = state.operatorHealth?.promotion_gate || {};
   const onboardingCounts = state.benchmark?.onboarding?.status_counts || {};
   const blocked = Number(onboardingCounts.blocked) || 0;
   const watch = Number(onboardingCounts.watch) || 0;
@@ -1919,6 +3852,11 @@ function renderOverviewReadiness() {
     pricingStatus = "Price with caution";
     pricingCopy = "Exact valuation is still too fragile in key segments. Treat the price layer as an anchor, not a verdict.";
   }
+  if (promotionGate.promotable === false) {
+    pricingTone = pricingTone === "price" ? "price" : "watch";
+    pricingStatus = "Advisory valuation lane";
+    pricingCopy = "Pipeline completed, but the valuation promotion gate is still advisory-only. Keep pricing posture conservative.";
+  }
 
   let rankingTone = "pursue";
   let rankingStatus = "Shortlist-ready";
@@ -1931,6 +3869,12 @@ function renderOverviewReadiness() {
     rankingTone = "watch";
     rankingStatus = "Functional, not decisive";
     rankingCopy = "Ranking is live, but the workflow still leans heavily on pricing posture and manual judgement.";
+  }
+  const futureLane = operatorLaneEntry("future_shortlist");
+  if (futureLane.laneState === "live") {
+    rankingTone = rankingTone === "pursue" ? "watch" : rankingTone;
+    rankingStatus = "Live overlay active";
+    rankingCopy = "Shortlist routing is fresh and useful, but the current season is still live. Treat ordering as advisory rather than final.";
   }
 
   let coverageTone = "pursue";
@@ -2000,20 +3944,398 @@ function renderWatchlist() {
   el.watchlistBody.innerHTML = rows
     .map((row) => {
       const watchId = safeText(row.watch_id);
+      const decisionAction = String(row.decision_action || "").trim();
+      const decisionLabel = decisionAction ? humanizeScoutDecisionAction(decisionAction) : "";
+      const decisionReasons = Array.isArray(row.decision_reason_tags)
+        ? row.decision_reason_tags.map(humanizeScoutDecisionTag).slice(0, 2).join(" | ")
+        : "";
       return `
         <tr>
           <td>${safeText(row.name)}</td>
           <td>${safeText(row.league)}</td>
           <td class="num">${formatCurrency(row.value_gap_capped_eur)}</td>
           <td class="num">${formatNumber(row.undervaluation_confidence)}</td>
-          <td>${safeText(row.tag)}</td>
-          <td>${safeText(row.created_at_utc)}</td>
-          <td><button type="button" class="btn-ghost watchlist-delete" data-watch-id="${watchId}">Remove</button></td>
+          <td>
+            <div class="watchlist-tag-cell">
+              <span>${safeText(row.tag)}</span>
+              ${
+                decisionLabel
+                  ? `<small>${escapeHtml(`Decision: ${decisionLabel}${decisionReasons ? ` | ${decisionReasons}` : ""}`)}</small>`
+                  : ""
+              }
+            </div>
+          </td>
+          <td>${safeText(row.last_decision_at_utc || row.created_at_utc)}</td>
+          <td>
+            <div class="watchlist-actions">
+              <button type="button" class="btn-ghost watchlist-open-decision" data-watch-id="${watchId}" data-player-id="${escapeHtml(
+                safeText(row.player_id)
+              )}" data-season="${escapeHtml(safeText(row.season))}">Update decision</button>
+              <button type="button" class="btn-ghost watchlist-delete" data-watch-id="${watchId}">Remove</button>
+            </div>
+          </td>
         </tr>
       `;
     })
     .join("");
   el.watchlistMeta.textContent = `${formatInt(rows.length)} shown / ${formatInt(state.watchlistTotal)} saved entries`;
+}
+
+function focusTagForIndex(index) {
+  if (index === 0) return { label: "Top pick", tone: "top" };
+  if (index > 0 && index < 3) return { label: "High upside", tone: "upside" };
+  return null;
+}
+
+function buildFocusTagMarkup(index) {
+  const tag = focusTagForIndex(index);
+  if (!tag) return "";
+  return `<span class="row-tag row-tag--${escapeHtml(tag.tone)}">${escapeHtml(tag.label)}</span>`;
+}
+
+function deriveTopPicks(rows) {
+  if (!Array.isArray(rows) || !rows.length) return [];
+  if (isSystemFitMode()) return rows.slice(0, 5);
+
+  const targetCount = 5;
+  const picks = [];
+  const leagueCounts = new Map();
+  let failedLeagueCount = 0;
+  const seenKeys = new Set();
+
+  const tryAddRow = (row, { enforceLeagueCap = true, enforceFailedCap = true } = {}) => {
+    const key = rowKey(row);
+    if (seenKeys.has(key)) return false;
+    const leagueKey = getLeague(row).trim().toLowerCase() || "__unknown__";
+    const adjustment = leagueAdjustmentMeta(row);
+    if (enforceLeagueCap && (leagueCounts.get(leagueKey) || 0) >= 2) return false;
+    if (enforceFailedCap && adjustment.isFailed && failedLeagueCount >= 1) return false;
+    picks.push(row);
+    seenKeys.add(key);
+    leagueCounts.set(leagueKey, (leagueCounts.get(leagueKey) || 0) + 1);
+    if (adjustment.isFailed) failedLeagueCount += 1;
+    return true;
+  };
+
+  rows.forEach((row) => {
+    if (picks.length < targetCount) tryAddRow(row, { enforceLeagueCap: true, enforceFailedCap: true });
+  });
+  rows.forEach((row) => {
+    if (picks.length < targetCount) tryAddRow(row, { enforceLeagueCap: true, enforceFailedCap: false });
+  });
+  rows.forEach((row) => {
+    if (picks.length < targetCount) tryAddRow(row, { enforceLeagueCap: false, enforceFailedCap: false });
+  });
+  return picks;
+}
+
+function scrollToBoard() {
+  const target = el.boardAnchor || document.getElementById("workbench-entry");
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderTopPicks() {
+  if (!el.topPicksGrid || !el.topPicksMeta) return;
+  renderBoardLaneStatus();
+  if (el.topPicksTitle) {
+    if (isSystemFitMode()) {
+      const slot = currentSystemFitSlot();
+      el.topPicksTitle.textContent = slot ? `${safeText(slot.slot_label)} Candidates` : "System Fit";
+    } else {
+      el.topPicksTitle.textContent = hasActiveLens() ? `Top Picks for ${activeLensTitleLabel()}` : "Top Picks";
+    }
+  }
+
+  if (state.initializing || state.loading) {
+    el.topPicksMeta.textContent = "Loading players from the current recruitment brief.";
+    el.topPicksGrid.innerHTML = Array.from({ length: 3 })
+      .map(
+        () => `
+          <article class="top-pick-card top-pick-card--placeholder">
+            <p>Loading players...</p>
+          </article>
+        `
+      )
+      .join("");
+    return;
+  }
+
+  if (state.connected && state.health?.status !== "ok") {
+    el.topPicksMeta.textContent =
+      "Backend artifacts are not ready. Review Platform Readiness for the operational details.";
+    el.topPicksGrid.innerHTML = `
+      <article class="top-pick-card top-pick-card--empty">
+        <h3>Top picks unavailable</h3>
+        <p>ScoutML could not load board artifacts from the current API target, so there is no shortlist to preview yet.</p>
+      </article>
+    `;
+    return;
+  }
+
+  if (!state.connected) {
+    el.topPicksMeta.textContent = `Connect API to load top picks from ${state.apiBase}.`;
+    el.topPicksGrid.innerHTML = `
+      <article class="top-pick-card top-pick-card--empty">
+        <h3>Connect the API</h3>
+        <p>Point the UI at a live backend to populate the recruitment board and preview cards.</p>
+      </article>
+    `;
+    return;
+  }
+
+  if (!state.topPicks.length) {
+    const emptyMessage =
+      isSystemFitMode()
+        ? "No candidates match the current system-fit slot. Relax the filters or switch slots."
+        : state.mode === "shortlist"
+        ? "No players match the current recruitment brief. Relax the brief to surface new targets."
+        : "No players match the current valuation filters. Widen the board to inspect more names.";
+    el.topPicksMeta.textContent = emptyMessage;
+    el.topPicksGrid.innerHTML = `
+      <article class="top-pick-card top-pick-card--empty">
+        <h3>No top picks right now</h3>
+        <p>${escapeHtml(emptyMessage)}</p>
+      </article>
+    `;
+    return;
+  }
+
+  el.topPicksMeta.textContent =
+    isSystemFitMode()
+      ? `Backend-ranked candidates for ${safeText(currentSystemFitSlot()?.slot_label || "the selected slot")} in ${safeText(
+          currentSystemFitTemplate()?.label || state.systemFitTemplate
+        )}.`
+      : state.mode === "shortlist"
+      ? `Best starting points from the current Future Potential / Advisory brief${
+          hasActiveLens() ? ` under the ${activeLensDisplayLabel()} lens` : ""
+        }.`
+      : `Current highest-priority names from the Current Level / Pricing board${
+          hasActiveLens() ? ` under the ${activeLensDisplayLabel()} lens` : ""
+        }.`;
+
+  el.topPicksGrid.innerHTML = state.topPicks
+    .map((row, idx) => {
+      if (isSystemFitMode()) {
+        const systemFit = Number(row.system_fit_score);
+        const confidence = Number(row.system_fit_confidence);
+        const currentLevel = Number(row.current_level_score);
+        const futurePotential = Number(row.future_potential_score);
+        const budgetStatus = safeText(row.budget_status || "unbounded").replace(/_/g, " ");
+        const reasons = Array.isArray(row.fit_reasons) ? row.fit_reasons : [];
+        return `
+          <button type="button" class="top-pick-card" data-index="${idx}">
+            <div class="top-pick-card__topline">
+              ${buildFocusTagMarkup(idx)}
+              <span class="fit-chip fit-chip--good">${escapeHtml(
+                `System fit ${Number.isFinite(systemFit) ? formatNumber(systemFit) : "-"}`
+              )}</span>
+            </div>
+            <strong class="top-pick-card__name">${escapeHtml(safeText(row.name))}</strong>
+            <span class="top-pick-card__meta">${escapeHtml(
+              `${safeText(row.club)} | ${safeText(row.league)}`
+            )}</span>
+            <span class="top-pick-card__meta top-pick-card__meta--secondary">${escapeHtml(
+              `${safeText(row.slot_label)} | ${safeText(row.role_template_label)}`
+            )}</span>
+            <div class="top-pick-card__metrics">
+              <div>
+                <span>Market</span>
+                <strong>${formatCurrency(row.market_value_eur)}</strong>
+              </div>
+              <div>
+                <span>Current</span>
+                <strong>${Number.isFinite(currentLevel) ? formatNumber(currentLevel) : "-"}</strong>
+              </div>
+              <div>
+                <span>Future</span>
+                <strong>${Number.isFinite(futurePotential) ? formatNumber(futurePotential) : "-"}</strong>
+              </div>
+            </div>
+            <p class="top-pick-card__note">${escapeHtml(
+              `Confidence ${Number.isFinite(confidence) ? formatNumber(confidence) : "-"} | ${budgetStatus}`
+            )}</p>
+            <p class="top-pick-card__fit">${escapeHtml(reasons.slice(0, 2).join(" | ") || "Backend-ranked slot fit.")}</p>
+          </button>
+        `;
+      }
+      const decision = summarizeRecruitmentDecision(row, null, {
+        source: currentWorkbenchDecisionSource(),
+      });
+      const laneDecision = laneAwareDecisionNote(row, decision.nextAction);
+      const gaps = deriveGapValues(row, null);
+      const expected = Number.isFinite(gaps.adjustedFair)
+        ? gaps.adjustedFair
+        : firstFiniteNumber(row.fair_value_eur, row.expected_value_eur);
+      const freshness = buildFreshnessState(row);
+      const talentLine = buildTalentCompactLine(row);
+      const talentDrivers = buildTalentDriverLine(row);
+      const adjustment = leagueAdjustmentMeta(row);
+      return `
+        <button type="button" class="top-pick-card" data-index="${idx}">
+          <div class="top-pick-card__topline">
+            ${buildFocusTagMarkup(idx)}
+            ${adjustment.needsWarning ? buildBadgeChipMarkup(adjustment.label, adjustment.tone) : ""}
+            ${buildStyleFitMarkup(row)}
+            ${buildDecisionPillMarkup(decision)}
+          </div>
+          <strong class="top-pick-card__name">${escapeHtml(safeText(row.name))}</strong>
+          <span class="top-pick-card__meta">${escapeHtml(
+            `${safeText(row.club)} | ${safeText(row.league)}`
+          )}</span>
+          <span class="top-pick-card__meta top-pick-card__meta--secondary">${escapeHtml(
+            `${safeText(getPosition(row))} | age ${formatNumber(row.age)}`
+          )}</span>
+          <div class="top-pick-card__metrics">
+            <div>
+              <span>Market</span>
+              <strong>${formatCurrency(row.market_value_eur)}</strong>
+            </div>
+            <div>
+              <span>Adj. fair</span>
+              <strong>${formatCurrency(expected)}</strong>
+            </div>
+            <div>
+              <span>Gap</span>
+              <strong class="${gaps.capped >= 0 ? "positive" : "negative"}">${formatCurrency(gaps.capped)}</strong>
+            </div>
+          </div>
+          <p class="top-pick-card__note">${escapeHtml(
+            adjustment.needsWarning && adjustment.reason ? `${laneDecision} ${adjustment.reason}` : laneDecision
+          )}</p>
+          <p class="top-pick-card__fit">${escapeHtml(talentLine)}</p>
+          ${
+            hasActiveLens() && (Number.isFinite(row._styleScore) || Number.isFinite(row._roleScore))
+              ? `<p class="top-pick-card__drivers${
+                  row._styleFitDataQuality === "limited" ? " top-pick-card__drivers--muted" : ""
+                }">${escapeHtml(buildLensFitLine(row))}</p>`
+              : ""
+          }
+          ${
+            talentDrivers
+              ? `<p class="top-pick-card__drivers">${escapeHtml(talentDrivers)}</p>`
+              : ""
+          }
+          ${
+            hasActiveLens() && row._styleFitReasonLine
+              ? `<p class="top-pick-card__drivers${
+                  row._styleFitDataQuality === "limited" ? " top-pick-card__drivers--muted" : ""
+                }">${escapeHtml(row._styleFitReasonLine)}</p>`
+              : ""
+          }
+          <p class="top-pick-card__freshness${
+            freshness.status === "limited" ? " top-pick-card__drivers--muted" : ""
+          }">${escapeHtml(freshness.compactLine)}</p>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderBoardHighlights() {
+  if (
+    !el.boardHighlightTopPick ||
+    !el.boardHighlightTopPickNote ||
+    !el.boardHighlightGap ||
+    !el.boardHighlightGapNote ||
+    !el.boardHighlightMix ||
+    !el.boardHighlightMixNote
+  ) {
+    return;
+  }
+
+  if (state.initializing || state.loading) {
+    el.boardHighlightTopPick.textContent = "-";
+    el.boardHighlightTopPickNote.textContent = "Loading board...";
+    el.boardHighlightGap.textContent = "-";
+    el.boardHighlightGapNote.textContent = "Waiting for current page.";
+    el.boardHighlightMix.textContent = "-";
+    el.boardHighlightMixNote.textContent = "Waiting for current page.";
+    return;
+  }
+
+  if (state.connected && state.health?.status !== "ok") {
+    el.boardHighlightTopPick.textContent = "Unavailable";
+    el.boardHighlightTopPickNote.textContent = "Backend artifacts are not ready.";
+    el.boardHighlightGap.textContent = "-";
+    el.boardHighlightGapNote.textContent = "Review Platform Readiness.";
+    el.boardHighlightMix.textContent = "-";
+    el.boardHighlightMixNote.textContent = "Board diagnostics unavailable.";
+    return;
+  }
+
+  if (!state.connected) {
+    el.boardHighlightTopPick.textContent = "Connect API";
+    el.boardHighlightTopPickNote.textContent = "Point the UI at a live backend to load the board.";
+    el.boardHighlightGap.textContent = "-";
+    el.boardHighlightGapNote.textContent = "No current board.";
+    el.boardHighlightMix.textContent = "-";
+    el.boardHighlightMixNote.textContent = "No current board.";
+    return;
+  }
+
+  if (!state.rows.length) {
+    el.boardHighlightTopPick.textContent = "No current board";
+    el.boardHighlightTopPickNote.textContent = "Widen the brief to surface candidates.";
+    el.boardHighlightGap.textContent = "-";
+    el.boardHighlightGapNote.textContent = "No current rows.";
+    el.boardHighlightMix.textContent = "-";
+    el.boardHighlightMixNote.textContent = "No current rows.";
+    return;
+  }
+
+  if (isSystemFitMode()) {
+    const topRow = state.rows[0];
+    const bestSystemFit = state.rows.reduce((best, row) => {
+      const score = Number(row.system_fit_score);
+      return !Number.isFinite(best) || score > best ? score : best;
+    }, NaN);
+    let withinBudgetCount = 0;
+    let stretchCount = 0;
+    state.rows.forEach((row) => {
+      const status = String(row.budget_status || "").toLowerCase();
+      if (status === "within_budget") withinBudgetCount += 1;
+      if (status === "stretch") stretchCount += 1;
+    });
+    el.boardHighlightTopPick.textContent = safeText(topRow.name);
+    el.boardHighlightTopPickNote.textContent = `${safeText(topRow.slot_label)} | ${safeText(
+      topRow.role_template_label
+    )} | ${safeText(topRow.club)}`;
+    el.boardHighlightGap.textContent = Number.isFinite(bestSystemFit) ? formatNumber(bestSystemFit) : "-";
+    el.boardHighlightGapNote.textContent = "Best backend system-fit score on the current slot page.";
+    el.boardHighlightMix.textContent = `${formatInt(withinBudgetCount)} budget / ${formatInt(stretchCount)} stretch`;
+    el.boardHighlightMixNote.textContent = "Budget posture mix across the current slot page.";
+    return;
+  }
+
+  const topRow = state.rows[0];
+  const topDecision = summarizeRecruitmentDecision(topRow, null, {
+    source: currentWorkbenchDecisionSource(),
+  });
+  const bestGap = state.rows.reduce((best, row) => {
+    const gap = conservativeGapForRanking(row);
+    return !Number.isFinite(best) || gap > best ? gap : best;
+  }, NaN);
+  let pursueCount = 0;
+  let watchCount = 0;
+  state.rows.forEach((row) => {
+    const decision = summarizeRecruitmentDecision(row, null, {
+      source: currentWorkbenchDecisionSource(),
+    });
+    if (decision.label === "Pursue") pursueCount += 1;
+    if (decision.label === "Watch") watchCount += 1;
+  });
+
+  el.boardHighlightTopPick.textContent = safeText(topRow.name);
+  el.boardHighlightTopPickNote.textContent = `${topDecision.label} | ${safeText(getPosition(topRow))} | ${safeText(
+    topRow.club
+  )}${hasActiveLens() && topRow._styleFitLabel ? ` | ${topRow._styleFitLabel}` : ""}`;
+  el.boardHighlightGap.textContent = formatCurrency(bestGap);
+  el.boardHighlightGapNote.textContent = "Largest capped conservative gap on the current page.";
+  el.boardHighlightMix.textContent = `${formatInt(pursueCount)} pursue / ${formatInt(watchCount)} watch`;
+  el.boardHighlightMixNote.textContent = hasActiveLens()
+    ? `Current page decision mix under the ${activeLensDisplayLabel()} lens.`
+    : "Current page decision mix.";
 }
 
 async function refreshWatchlist() {
@@ -2025,7 +4347,7 @@ async function refreshWatchlist() {
     return;
   }
   try {
-    const payload = await requestJson("/market-value/watchlist", {
+    const payload = await requestJson(isTeamAuthenticated() ? "/team/watchlist" : "/market-value/watchlist", {
       method: "GET",
       params: { split: state.split, limit: 50, offset: 0 },
     });
@@ -2055,7 +4377,7 @@ async function addSelectedToWatchlist() {
   const notes = (el.watchlistNotes?.value || "").trim();
   if (el.watchlistMeta) el.watchlistMeta.textContent = "Saving watchlist entry...";
   try {
-    await requestJson("/market-value/watchlist/items", {
+    await requestJson(isTeamAuthenticated() ? "/team/watchlist/items" : "/market-value/watchlist/items", {
       method: "POST",
       body: {
         player_id: playerId,
@@ -2069,6 +4391,9 @@ async function addSelectedToWatchlist() {
     if (el.watchlistNotes) el.watchlistNotes.value = "";
     await refreshWatchlist();
     if (el.watchlistMeta) el.watchlistMeta.textContent = "Recruitment watchlist entry saved.";
+    if (isTeamAuthenticated()) {
+      void refreshTeamActivity();
+    }
   } catch (err) {
     if (el.watchlistMeta) el.watchlistMeta.textContent = err instanceof Error ? err.message : String(err);
   }
@@ -2078,11 +4403,24 @@ async function deleteWatchlistItem(watchId) {
   const id = String(watchId || "").trim();
   if (!id) return;
   try {
-    await requestJson(`/market-value/watchlist/items/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await requestJson(
+      `${isTeamAuthenticated() ? "/team/watchlist/items" : "/market-value/watchlist/items"}/${encodeURIComponent(id)}`,
+      { method: "DELETE" }
+    );
     await refreshWatchlist();
+    if (isTeamAuthenticated()) {
+      void refreshTeamActivity();
+    }
   } catch (err) {
     if (el.watchlistMeta) el.watchlistMeta.textContent = err instanceof Error ? err.message : String(err);
   }
+}
+
+async function openWatchlistDecision(row) {
+  if (!row) return;
+  setView("workbench");
+  await loadDetailWithReport({ ...row, _decisionSourceSurface: "watchlist" });
+  focusScoutDecisionComposer();
 }
 
 function applyClientFilters(rows) {
@@ -2103,6 +4441,23 @@ function applyClientFilters(rows) {
     });
   }
   return out;
+}
+
+function applySystemFitSlotRows() {
+  const slot = currentSystemFitSlot();
+  let rows = Array.isArray(slot?.items) ? slot.items.map((row) => withComputedConservativeGap(row)) : [];
+  if (state.search) {
+    const q = state.search.toLowerCase();
+    rows = rows.filter((row) => {
+      const name = String(row.name || "").toLowerCase();
+      const club = String(row.club || "").toLowerCase();
+      return name.includes(q) || club.includes(q);
+    });
+  }
+  state.rows = rows;
+  state.total = Number(slot?.result_count) || rows.length;
+  state.count = rows.length;
+  state.topPicks = deriveTopPicks(rows);
 }
 
 function applyClientSort(rows) {
@@ -2133,67 +4488,207 @@ function applyClientSort(rows) {
 function renderRows() {
   if (!state.rows.length) {
     const emptyMessage =
-      state.mode === "shortlist"
-        ? "No recruitment targets matched the current filters. Lower the minutes / age thresholds or switch to Valuation Board to inspect the full artifact."
-        : "No valuation rows matched the current filters. Relax the manual sort filters or switch to Recruitment Board for score-driven ranking.";
-    el.tbody.innerHTML = `<tr><td colspan="9">${emptyMessage}</td></tr>`;
+      isSystemFitMode()
+        ? "No slot candidates match the current system-fit brief. Relax the filters or switch to another slot."
+        : state.mode === "shortlist"
+        ? "No recruitment targets match the current brief. Relax the brief or widen the filters to surface more names."
+        : "No valuation rows match the current filters. Widen the board to inspect more names.";
+    el.tbody.innerHTML = `<tr><td colspan="${RESULTS_TABLE_COLSPAN}">${emptyMessage}</td></tr>`;
     el.resultCount.textContent = "0 rows";
     el.resultRange.textContent = "offset 0";
+    renderBoardHighlights();
     return;
   }
 
   el.tbody.innerHTML = state.rows
     .map((row, idx) => {
+      if (isSystemFitMode()) {
+        const selected = state.selectedRow && rowKey(state.selectedRow) === rowKey(row) ? " selected-row" : "";
+        const currentLevel = Number(row.current_level_score);
+        const futurePotential = Number(row.future_potential_score);
+        const confidence = Number(row.system_fit_confidence);
+        const systemFit = Number(row.system_fit_score);
+        const budgetStatus = safeText(row.budget_status || "unbounded").replace(/_/g, " ");
+        const roleLabel = safeText(row.role_template_label || row.role_template_key || "-");
+        const reasons = Array.isArray(row.fit_reasons) ? row.fit_reasons : [];
+        const talentLine = buildTalentCompactLine(row);
+        const freshness = buildFreshnessState(row);
+        return `
+          <tr data-index="${idx}" class="${selected.trim()}">
+            <td class="player-cell">
+              <div class="player-cell__topline">
+                <strong>${safeText(row.name)}</strong>
+                ${buildFocusTagMarkup(idx)}
+              </div>
+              <span class="player-cell__sub">${safeText(row.club)} | ${safeText(row.league)} | ${safeText(row.season)}</span>
+              <span class="player-cell__meta">${safeText(row.slot_label)} | ${roleLabel} | ${safeText(
+                row.talent_position_family
+              )}</span>
+              <span class="player-cell__note">${escapeHtml(
+                `System fit ${Number.isFinite(systemFit) ? formatNumber(systemFit) : "-"} | ${budgetStatus}`
+              )}</span>
+              <span class="player-cell__note player-cell__note--style">${escapeHtml(talentLine)}</span>
+              ${
+                reasons.length
+                  ? `<span class="player-cell__note player-cell__note--fit-driver">${escapeHtml(reasons.slice(0, 2).join(" | "))}</span>`
+                  : ""
+              }
+              <span class="player-cell__note player-cell__note--freshness${
+                freshness.status === "limited" ? " fit-driver-summary--muted" : ""
+              }">${escapeHtml(freshness.compactLine)}</span>
+            </td>
+            <td>
+              <div class="table-status">
+                <div class="table-status__chips">
+                  <span class="decision-pill decision-pill--watch">System fit</span>
+                </div>
+                <span class="table-status__note">${escapeHtml(
+                  `${safeText(row.slot_label)} | ${roleLabel} | ${budgetStatus}`
+                )}</span>
+                <span class="table-status__sub">${escapeHtml(
+                  reasons.length ? reasons[0] : "Backend-ranked slot fit."
+                )}</span>
+              </div>
+            </td>
+            <td class="num">
+              <div class="value-stack">
+                <strong>${formatCurrency(row.market_value_eur)}</strong>
+                <span>Market value</span>
+              </div>
+            </td>
+            <td class="num">
+              <div class="value-stack">
+                <strong>${Number.isFinite(currentLevel) ? formatNumber(currentLevel) : "-"}</strong>
+                <span>Current level</span>
+              </div>
+            </td>
+            <td class="num">
+              <div class="value-stack">
+                <strong>${Number.isFinite(futurePotential) ? formatNumber(futurePotential) : "-"}</strong>
+                <span>Future potential</span>
+              </div>
+            </td>
+            <td class="num">
+              <div class="value-stack">
+                <strong>${Number.isFinite(confidence) ? formatNumber(confidence) : "-"}</strong>
+                <span>${escapeHtml(budgetStatus)}</span>
+              </div>
+            </td>
+          </tr>
+        `;
+      }
+      const gaps = deriveGapValues(row, null);
       const consGap = conservativeGapForRanking(row);
+      const expected = Number.isFinite(gaps.adjustedFair)
+        ? gaps.adjustedFair
+        : firstFiniteNumber(row.fair_value_eur, row.expected_value_eur);
       const selected = state.selectedRow && rowKey(state.selectedRow) === rowKey(row) ? " selected-row" : "";
       const decision = summarizeRecruitmentDecision(row, null, {
-        source: state.mode === "predictions" ? "predictions" : "workbench",
+        source: currentWorkbenchDecisionSource(),
       });
+      const laneDecision = laneAwareDecisionNote(row, decision.nextAction);
       const scoreContext = resolveRowScoreContext(
         row,
-        state.mode === "shortlist" ? state.queryDiagnostics : null,
-        state.mode === "shortlist" ? "shortlist" : "predictions"
+        state.mode === "shortlist" || isSystemFitMode() ? state.queryDiagnostics : null,
+        currentWorkbenchSourceMode()
       );
       const badges = buildProvenanceBadges(row)
         .map((badge) => buildBadgeChipMarkup(badge.label, badge.tone))
         .join("");
+      const freshness = buildFreshnessState(row);
+      const talentLine = buildTalentCompactLine(row);
+      const talentDrivers = buildTalentDriverLine(row);
       return `
         <tr data-index="${idx}" class="${selected.trim()}">
           <td class="player-cell">
-            <strong>${safeText(row.name)}</strong>
+            <div class="player-cell__topline">
+              <strong>${safeText(row.name)}</strong>
+              ${buildFocusTagMarkup(idx)}
+            </div>
             <span class="player-cell__sub">${safeText(row.club)} | ${safeText(row.league)} | ${safeText(row.season)}</span>
+            <span class="player-cell__meta">${safeText(getPosition(row))} | age ${formatNumber(row.age)} | ${formatInt(
+              getMinutes(row)
+            )} minutes</span>
             <div class="player-cell__badges">${badges}</div>
             <span class="player-cell__note">${escapeHtml(scoreContext.scoreLabel)}${
               Number.isFinite(scoreContext.scoreValue)
                 ? ` | ${scoreContext.scoreColumn.endsWith("_eur") ? formatCurrency(scoreContext.scoreValue) : formatNumber(scoreContext.scoreValue)}`
                 : ""
             }</span>
+            ${
+              hasActiveLens() && (Number.isFinite(row._styleScore) || Number.isFinite(row._roleScore))
+                ? `<span class="player-cell__note player-cell__note--style">${escapeHtml(buildLensFitLine(row))}</span>`
+                : ""
+            }
+            ${
+              hasActiveLens() && row._styleFitReasonLine
+                ? `<span class="player-cell__note player-cell__note--fit-driver${
+                    row._styleFitDataQuality === "limited" ? " fit-driver-summary--muted" : ""
+                  }">${escapeHtml(row._styleFitReasonLine)}</span>`
+                : ""
+            }
+            <span class="player-cell__note player-cell__note--style">${escapeHtml(talentLine)}</span>
+            ${
+              talentDrivers
+                ? `<span class="player-cell__note player-cell__note--fit-driver">${escapeHtml(talentDrivers)}</span>`
+                : ""
+            }
+            <span class="player-cell__note player-cell__note--freshness${
+              freshness.status === "limited" ? " fit-driver-summary--muted" : ""
+            }">${escapeHtml(freshness.compactLine)}</span>
           </td>
           <td>
             <div class="table-status">
-              ${buildDecisionPillMarkup(decision)}
-              <span class="table-status__note">${escapeHtml(decision.gapNote)}</span>
+              <div class="table-status__chips">
+                ${buildDecisionPillMarkup(decision)}
+                ${buildStyleFitMarkup(row)}
+              </div>
+              <span class="table-status__note">${escapeHtml(laneDecision)}</span>
+              <span class="table-status__sub">${escapeHtml(decision.gapNote)} | ${escapeHtml(talentLine)}</span>
             </div>
           </td>
-          <td>${safeText(getPosition(row))}</td>
-          <td class="num">${formatNumber(row.age)}</td>
-          <td class="num">${formatCurrency(row.market_value_eur)}</td>
-          <td class="num ${consGap >= 0 ? "positive" : "negative"}">${formatCurrency(consGap)}</td>
-          <td class="num">${formatNumber(row.undervaluation_confidence)}</td>
-          <td class="num">${formatInt(getMinutes(row))}</td>
-          <td><span class="action-copy">${escapeHtml(decision.nextAction)}</span></td>
+          <td class="num">
+            <div class="value-stack">
+              <strong>${formatCurrency(row.market_value_eur)}</strong>
+              <span>Current market</span>
+            </div>
+          </td>
+            <td class="num">
+              <div class="value-stack">
+                <strong>${formatCurrency(expected)}</strong>
+                <span>Adjusted fair value</span>
+              </div>
+            </td>
+          <td class="num">
+            <div class="value-stack value-stack--gap">
+              <strong class="${consGap >= 0 ? "positive" : "negative"}">${formatCurrency(consGap)}</strong>
+              <span>Conservative gap</span>
+            </div>
+          </td>
+          <td class="num">
+            <div class="value-stack">
+              <strong>${formatNumber(row.undervaluation_confidence)}</strong>
+              <span>${escapeHtml(decision.confidenceLabel)} confidence</span>
+            </div>
+          </td>
         </tr>
       `;
     })
     .join("");
 
-  const start = state.total === 0 ? 0 : state.offset + 1;
-  const end = Math.min(state.offset + state.count, state.total);
+  const start = state.total === 0 ? 0 : isSystemFitMode() ? 1 : state.offset + 1;
+  const end = isSystemFitMode() ? state.count : Math.min(state.offset + state.count, state.total);
   el.resultCount.textContent = `${formatInt(state.count)} / ${formatInt(state.total)} rows`;
-  el.resultRange.textContent = `showing ${start}-${end}`;
+  el.resultRange.textContent = isSystemFitMode() ? `showing top ${end}` : `showing ${start}-${end}`;
+  renderBoardHighlights();
 }
 
 function renderPager() {
+  if (isSystemFitMode()) {
+    el.prevBtn.disabled = true;
+    el.nextBtn.disabled = true;
+    return;
+  }
   el.prevBtn.disabled = state.loading || state.offset <= 0;
   el.nextBtn.disabled = state.loading || state.offset + state.count >= state.total;
 }
@@ -2310,6 +4805,17 @@ function setDetailTab(tab) {
   renderDetailTab();
 }
 
+async function activateDetailTab(tab) {
+  setDetailTab(tab);
+  if (tab === "trajectory") {
+    await ensureSelectedTrajectoryLoaded();
+    return;
+  }
+  if (tab === "tactical") {
+    await ensureSelectedSimilarLoaded();
+  }
+}
+
 function buildConfidenceSummary(row, report = null) {
   const guardrails = report?.valuation_guardrails || {};
   const confidence = report?.confidence || {};
@@ -2328,11 +4834,202 @@ function buildConfidenceSummary(row, report = null) {
   return parts.join(" | ");
 }
 
+function buildLoadingSkeletonMarkup(count = 3, { listOnly = false } = {}) {
+  const items = Array.from({ length: count })
+    .map(
+      () => `
+        <li class="skeleton-card">
+          <span class="skeleton-line skeleton-line--short"></span>
+          <span class="skeleton-line skeleton-line--long"></span>
+          <span class="skeleton-line skeleton-line--mid"></span>
+        </li>
+      `
+    )
+    .join("");
+  return listOnly ? items : `<ul class="loading-skeleton-list">${items}</ul>`;
+}
+
+function buildSimilarPlayerCardsMarkup(items, emptyMessage = "No similar-player matches returned.") {
+  if (!Array.isArray(items) || !items.length) {
+    return `<li class="risk-item risk-item--none">${escapeHtml(emptyMessage)}</li>`;
+  }
+  return items
+    .map((item) => {
+      const playerId = safeText(item?.player_id);
+      const season = safeText(item?.season);
+      const meta = [item?.club, item?.league, item?.position, item?.season]
+        .filter(Boolean)
+        .map((value) => safeText(value))
+        .join(" | ");
+      const similarity = firstFiniteNumber(item?.similarity_score, item?.score);
+      const predicted = firstFiniteNumber(item?.predicted_value);
+      const market = firstFiniteNumber(item?.market_value_eur);
+      const delta = Number.isFinite(predicted) && Number.isFinite(market) ? predicted - market : NaN;
+      return `
+        <li class="risk-item">
+          <button
+            type="button"
+            class="similar-card"
+            data-similar-player-id="${escapeHtml(playerId)}"
+            data-similar-player-season="${escapeHtml(season)}"
+          >
+            <div class="similar-card__header">
+              <span class="similar-card__name">${escapeHtml(safeText(item?.name || playerId))}</span>
+              <span class="similarity-badge">${Number.isFinite(similarity) ? formatPct(similarity) : "-"}</span>
+            </div>
+            <p class="similar-card__meta">${escapeHtml(meta || playerId)}</p>
+            <div class="similar-card__footer">
+              <span class="similar-card__delta">Position-aware match | Predicted vs market: ${Number.isFinite(delta) ? formatSignedCurrency(delta) : "-"}</span>
+              <span class="similar-card__values">${formatCurrency(predicted)} vs ${formatCurrency(market)}</span>
+            </div>
+          </button>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function buildProxyEstimateListMarkup(proxyPayload, emptyMessage = "No advisory proxy estimates available.") {
+  const metrics = Array.isArray(proxyPayload?.metrics) ? proxyPayload.metrics : [];
+  if (!metrics.length) {
+    return `<li class="risk-item risk-item--none">${escapeHtml(emptyMessage)}</li>`;
+  }
+  return metrics
+    .map(
+      (item) => `
+        <li class="risk-item">
+          <div class="risk-head">
+            <span class="risk-code">${escapeHtml(safeText(item?.label || item?.metric_key))}</span>
+            <span class="risk-severity risk-severity--medium">${escapeHtml(safeText(item?.support_label || "advisory"))}</span>
+          </div>
+          <p class="risk-message">
+            Estimated ${escapeHtml(formatNumber(item?.estimated_value))} | neighbors ${escapeHtml(
+        formatInt(item?.neighbor_count)
+      )} | mean similarity ${escapeHtml(formatPct(item?.mean_similarity))}
+          </p>
+        </li>
+      `
+    )
+    .join("");
+}
+
+function trajectoryLabelCopy(label) {
+  if (label === "ascending") return "↑ Ascending";
+  if (label === "declining") return "↓ Declining";
+  return "→ Stable";
+}
+
+function trajectoryTone(label) {
+  if (label === "ascending") return "ascending";
+  if (label === "declining") return "declining";
+  return "stable";
+}
+
+function buildTrajectoryChartMarkup(trajectory = null) {
+  const seasons = Array.isArray(trajectory?.seasons) ? trajectory.seasons : [];
+  const values = seasons
+    .map((item) => ({
+      season: safeText(item?.season),
+      value: firstFiniteNumber(item?.predicted_value),
+    }))
+    .filter((item) => Number.isFinite(item.value));
+  if (!values.length) {
+    return '<p class="details-placeholder">No trajectory chart available.</p>';
+  }
+
+  const projected = firstFiniteNumber(trajectory?.projected_next_value);
+  const chartValues = values.map((item) => item.value);
+  if (Number.isFinite(projected)) chartValues.push(projected);
+  const min = Math.min(...chartValues);
+  const max = Math.max(...chartValues);
+  const span = Math.max(max - min, 1);
+  const width = 760;
+  const height = 220;
+  const padX = 30;
+  const padY = 24;
+  const usableWidth = width - padX * 2;
+  const usableHeight = height - padY * 2;
+  const xForIndex = (idx, total) => padX + (usableWidth * idx) / Math.max(total - 1, 1);
+  const yForValue = (value) => padY + usableHeight - ((value - min) / span) * usableHeight;
+  const points = values.map((item, idx) => `${xForIndex(idx, values.length).toFixed(1)},${yForValue(item.value).toFixed(1)}`);
+  const guides = [0.25, 0.5, 0.75].map((fraction) => {
+    const y = padY + usableHeight * fraction;
+    return `<line x1="${padX}" y1="${y.toFixed(1)}" x2="${(width - padX).toFixed(1)}" y2="${y.toFixed(1)}" class="trajectory-chart__guide"></line>`;
+  });
+  const labels = values
+    .map(
+      (item, idx) => `
+        <text x="${xForIndex(idx, values.length).toFixed(1)}" y="${(height - 8).toFixed(1)}" text-anchor="middle" class="trajectory-chart__label">
+          ${escapeHtml(item.season)}
+        </text>
+      `
+    )
+    .join("");
+  const circles = values
+    .map(
+      (item, idx) => `
+        <circle
+          cx="${xForIndex(idx, values.length).toFixed(1)}"
+          cy="${yForValue(item.value).toFixed(1)}"
+          r="4"
+          class="trajectory-chart__point"
+        />
+      `
+    )
+    .join("");
+  let projectionMarkup = "";
+  if (Number.isFinite(projected)) {
+    const last = values[values.length - 1];
+    const startX = xForIndex(values.length - 1, values.length);
+    const startY = yForValue(last.value);
+    const endX = width - padX;
+    const endY = yForValue(projected);
+    projectionMarkup = `
+      <line x1="${startX.toFixed(1)}" y1="${startY.toFixed(1)}" x2="${endX.toFixed(1)}" y2="${endY.toFixed(1)}" class="trajectory-chart__projection"></line>
+      <circle cx="${endX.toFixed(1)}" cy="${endY.toFixed(1)}" r="4" class="trajectory-chart__point"></circle>
+      <text x="${endX.toFixed(1)}" y="${(height - 8).toFixed(1)}" text-anchor="end" class="trajectory-chart__label">Proj.</text>
+    `;
+  }
+  return `
+    <svg class="trajectory-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Player value trajectory">
+      <rect x="0" y="0" width="${width}" height="${height}" rx="16" class="trajectory-chart__surface"></rect>
+      ${guides.join("")}
+      <polyline points="${points.join(" ")}" class="trajectory-chart__line"></polyline>
+      ${projectionMarkup}
+      ${circles}
+      ${labels}
+    </svg>
+  `;
+}
+
+function buildTrajectoryTableRows(trajectory = null) {
+  const seasons = Array.isArray(trajectory?.seasons) ? trajectory.seasons.slice().reverse() : [];
+  if (!seasons.length) {
+    return '<tr><td colspan="8">No trajectory history loaded.</td></tr>';
+  }
+  return seasons
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(safeText(item?.season))}</td>
+          <td class="num">${formatCurrency(item?.predicted_value)}</td>
+          <td class="num">${formatSignedCurrency(item?.delta_predicted_value)}</td>
+          <td class="num">${formatCurrency(item?.market_value_eur)}</td>
+          <td class="num">${formatInt(item?.minutes)}</td>
+          <td class="num">${formatNumber(item?.goals)}</td>
+          <td class="num">${formatNumber(item?.assists)}</td>
+          <td class="num">${formatNumber(item?.xg)}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
 function renderSimilarPlayers(similarPayload = null, { loading = false, error = "" } = {}) {
   if (!el.detailSimilar || !el.detailSimilarSummary) return;
   if (loading) {
     el.detailSimilarSummary.textContent = "Loading similar players...";
-    el.detailSimilar.innerHTML = '<li class="risk-item risk-item--none">Loading similar players...</li>';
+    el.detailSimilar.innerHTML = buildLoadingSkeletonMarkup(3, { listOnly: true });
     return;
   }
   if (error) {
@@ -2350,33 +5047,103 @@ function renderSimilarPlayers(similarPayload = null, { loading = false, error = 
     return;
   }
   el.detailSimilarSummary.textContent = items.length
-    ? `Top ${items.length} nearest-profile matches from the similarity index.`
+    ? `Top ${items.length} position-aware matches from the similarity index using ${formatInt(
+        similarPayload?.feature_count_used
+      )} active metrics for ${safeText(similarPayload?.position_group || "this role")}.`
     : "No similar-player matches returned.";
-  if (!items.length) {
-    el.detailSimilar.innerHTML = '<li class="risk-item risk-item--none">No similar-player matches returned.</li>';
+  el.detailSimilar.innerHTML = buildSimilarPlayerCardsMarkup(items);
+}
+
+function renderProxyEstimates(proxyPayload = null, { loading = false, error = "" } = {}) {
+  if (!el.detailProxySummary || !el.detailProxyList || !el.detailProxySection) return;
+  if (loading) {
+    el.detailProxySection.hidden = false;
+    el.detailProxySummary.textContent = "Loading advisory proxy estimates...";
+    el.detailProxyList.innerHTML = buildLoadingSkeletonMarkup(3, { listOnly: true });
     return;
   }
-  el.detailSimilar.innerHTML = items
-    .map((item) => {
-      const meta = [
-        item?.club ? safeText(item.club) : null,
-        item?.league ? safeText(item.league) : null,
-        item?.position ? safeText(item.position) : null,
-      ]
-        .filter(Boolean)
-        .join(" | ");
-      return `
-        <li class="risk-item">
-          <div class="risk-head">
-            <span class="risk-code">${escapeHtml(safeText(item?.name || item?.player_id))}</span>
-            <span class="risk-severity risk-severity--medium">${Number.isFinite(Number(item?.score)) ? formatNumber(item.score) : "-"}</span>
-          </div>
-          <p class="risk-message">${escapeHtml(meta || safeText(item?.player_id))}</p>
-          <p class="formation-summary">${escapeHtml(safeText(item?.justification || ""))}</p>
-        </li>
-      `;
-    })
-    .join("");
+  if (error) {
+    el.detailProxySection.hidden = true;
+    return;
+  }
+  const available = proxyPayload?.available === true;
+  const metrics = Array.isArray(proxyPayload?.metrics) ? proxyPayload.metrics : [];
+  if (!available || !metrics.length) {
+    el.detailProxySection.hidden = true;
+    return;
+  }
+  el.detailProxySection.hidden = false;
+  el.detailProxySummary.textContent = `${safeText(
+    proxyPayload?.summary
+  )} Derived from comparable-player neighbors; do not treat as observed data.`;
+  el.detailProxyList.innerHTML = buildProxyEstimateListMarkup(proxyPayload);
+}
+
+function renderTrajectoryPanel(trajectory = null, { loading = false, error = "", deferred = false } = {}) {
+  if (
+    !el.detailTrajectoryBadge ||
+    !el.detailTrajectorySummary ||
+    !el.detailTrajectoryProject ||
+    !el.detailTrajectoryChart ||
+    !el.detailTrajectoryTableBody
+  ) {
+    return;
+  }
+  if (loading) {
+    el.detailTrajectoryBadge.className = "trajectory-badge trajectory-badge--stable";
+    el.detailTrajectoryBadge.textContent = "Loading trajectory...";
+    el.detailTrajectorySummary.textContent = "Building the multi-season value view...";
+    el.detailTrajectoryProject.textContent = "Projected next value: -";
+    el.detailTrajectoryChart.innerHTML = buildLoadingSkeletonMarkup(2);
+    el.detailTrajectoryTableBody.innerHTML = '<tr><td colspan="8">Loading trajectory history...</td></tr>';
+    return;
+  }
+  if (error) {
+    el.detailTrajectoryBadge.className = "trajectory-badge trajectory-badge--stable";
+    el.detailTrajectoryBadge.textContent = "Trajectory unavailable";
+    el.detailTrajectorySummary.textContent = `Trajectory unavailable: ${error}`;
+    el.detailTrajectoryProject.textContent = "Projected next value: -";
+    el.detailTrajectoryChart.innerHTML = '<p class="details-placeholder">Trajectory chart unavailable.</p>';
+    el.detailTrajectoryTableBody.innerHTML = '<tr><td colspan="8">Trajectory history unavailable.</td></tr>';
+    return;
+  }
+  if (deferred) {
+    el.detailTrajectoryBadge.className = "trajectory-badge trajectory-badge--stable";
+    el.detailTrajectoryBadge.textContent = "Trajectory on demand";
+    el.detailTrajectorySummary.textContent = "Open the Trajectory tab to load the multi-season value view.";
+    el.detailTrajectoryProject.textContent = "Projected next value: -";
+    el.detailTrajectoryChart.innerHTML = '<p class="details-placeholder">No trajectory chart loaded yet.</p>';
+    el.detailTrajectoryTableBody.innerHTML = '<tr><td colspan="8">Open the Trajectory tab to load history.</td></tr>';
+    return;
+  }
+  const seasonCount = Array.isArray(trajectory?.seasons) ? trajectory.seasons.length : 0;
+  if (!seasonCount) {
+    el.detailTrajectoryBadge.className = "trajectory-badge trajectory-badge--stable";
+    el.detailTrajectoryBadge.textContent = "Trajectory unavailable";
+    el.detailTrajectorySummary.textContent = "No multi-season history was available for this player.";
+    el.detailTrajectoryProject.textContent = "Projected next value: -";
+    el.detailTrajectoryChart.innerHTML = '<p class="details-placeholder">No trajectory chart available.</p>';
+    el.detailTrajectoryTableBody.innerHTML = '<tr><td colspan="8">No trajectory history loaded.</td></tr>';
+    return;
+  }
+  const label = String(trajectory?.trajectory_label || "stable");
+  const tone = trajectoryTone(label);
+  const slope = firstFiniteNumber(trajectory?.slope_pct);
+  const r2 = firstFiniteNumber(trajectory?.r2);
+  const projected = firstFiniteNumber(trajectory?.projected_next_value);
+  const peakSeason = safeText(trajectory?.peak_season || "-");
+  el.detailTrajectoryBadge.className = `trajectory-badge trajectory-badge--${tone}`;
+  el.detailTrajectoryBadge.textContent = trajectoryLabelCopy(label);
+  el.detailTrajectorySummary.textContent = [
+    Number.isFinite(slope) ? `Value slope ${slope > 0 ? "+" : ""}${formatNumber(slope)}%.` : null,
+    Number.isFinite(r2) ? `Consistency ${formatNumber(r2)} R².` : null,
+    peakSeason !== "-" ? `Peak season ${peakSeason}.` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  el.detailTrajectoryProject.textContent = `Projected next value: ${formatCurrency(projected)}`;
+  el.detailTrajectoryChart.innerHTML = buildTrajectoryChartMarkup(trajectory);
+  el.detailTrajectoryTableBody.innerHTML = buildTrajectoryTableRows(trajectory);
 }
 
 function renderRadarProfile(radarProfile = null, { loading = false, error = "" } = {}) {
@@ -2536,7 +5303,7 @@ function closeProfileModal() {
   document.body.classList.remove("modal-open");
 }
 
-function renderProfileModal(row, { profile = null, reportError = "" } = {}) {
+function renderProfileModal(row, { profile = null, trajectory = null, reportError = "" } = {}) {
   if (!el.profileModalBody || !el.profileModalTitle || !el.profileModalMeta) return;
   if (!row) {
     el.profileModalTitle.textContent = "Player Profile";
@@ -2560,7 +5327,20 @@ function renderProfileModal(row, { profile = null, reportError = "" } = {}) {
   const levers = Array.isArray(profile?.development_levers) ? profile.development_levers : [];
   const risks = Array.isArray(profile?.risk_flags) ? profile.risk_flags : [];
   const historyPayload = profile?.history_strength && typeof profile.history_strength === "object" ? profile.history_strength : null;
-  const similar = profile?.similar_players && typeof profile.similar_players === "object" ? profile.similar_players : null;
+  const similar =
+    state.selectedSimilar && typeof state.selectedSimilar === "object"
+      ? state.selectedSimilar
+      : profile?.similar_players && typeof profile.similar_players === "object"
+      ? profile.similar_players
+      : null;
+  const proxyEstimates =
+    profile?.proxy_estimates && typeof profile.proxy_estimates === "object" ? profile.proxy_estimates : null;
+  const trajectoryPayload =
+    trajectory && typeof trajectory === "object"
+      ? trajectory
+      : state.selectedTrajectory && typeof state.selectedTrajectory === "object"
+      ? state.selectedTrajectory
+      : null;
   const tacticalContext = profile?.external_tactical_context && typeof profile.external_tactical_context === "object" ? profile.external_tactical_context : null;
   const availabilityContext = profile?.availability_context && typeof profile.availability_context === "object" ? profile.availability_context : null;
   const marketContext = profile?.market_context && typeof profile.market_context === "object" ? profile.market_context : null;
@@ -2569,7 +5349,7 @@ function renderProfileModal(row, { profile = null, reportError = "" } = {}) {
   const scoreContext = resolveRowScoreContext(
     mergedRow,
     rankingDiagnostics,
-    Number.isFinite(Number(row?._funnelScore)) ? "funnel" : state.mode === "shortlist" ? "shortlist" : "predictions"
+    Number.isFinite(Number(row?._funnelScore)) ? "funnel" : currentWorkbenchSourceMode()
   );
   const roleLens = buildRoleLens(mergedRow, profile);
   const provenanceBadges = buildProvenanceBadges(mergedRow)
@@ -2743,32 +5523,46 @@ function renderProfileModal(row, { profile = null, reportError = "" } = {}) {
       </article>
       <article class="profile-card profile-grid__span-8">
         <h3>Similar Players</h3>
-        <ul class="risk-list">${
-          similar?.available === true && Array.isArray(similar?.items) && similar.items.length
-            ? similar.items
-                .map(
-                  (item) => `
-                    <li class="risk-item">
-                      <div class="risk-head">
-                        <span class="risk-code">${escapeHtml(safeText(item?.name || item?.player_id))}</span>
-                        <span class="risk-severity risk-severity--medium">${Number.isFinite(Number(item?.score)) ? formatNumber(item.score) : "-"}</span>
-                      </div>
-                      <p class="risk-message">${escapeHtml(
-                        [item?.club, item?.league, item?.position].filter(Boolean).map((value) => safeText(value)).join(" | ") ||
-                          safeText(item?.player_id)
-                      )}</p>
-                      <p class="formation-summary">${escapeHtml(safeText(item?.justification || ""))}</p>
-                    </li>
-                  `
-                )
-                .join("")
-            : DETAIL_EMPTY_LIST_ITEM
-        }</ul>
+        <p class="detail-summary">${escapeHtml(
+          similar?.available
+            ? `Position-aware similarity using ${formatInt(similar?.feature_count_used)} active metrics for ${safeText(
+                similar?.position_group || "this role"
+              )}.`
+            : "No similar-player matches available."
+        )}</p>
+        <ul class="risk-list">${buildSimilarPlayerCardsMarkup(
+          similar?.available === true && Array.isArray(similar?.items) ? similar.items : [],
+          "No similar-player matches available."
+        )}</ul>
       </article>
+      ${
+        proxyEstimates?.available === true && Array.isArray(proxyEstimates?.metrics) && proxyEstimates.metrics.length
+          ? `
+      <article class="profile-card profile-grid__span-4">
+        <h3>Estimated From Comparable Players</h3>
+        <p class="detail-summary">${escapeHtml(safeText(proxyEstimates?.summary || ""))}</p>
+        <ul class="risk-list">${buildProxyEstimateListMarkup(proxyEstimates, "No advisory proxy estimates available.")}</ul>
+      </article>
+      `
+          : ""
+      }
       <article class="profile-card profile-grid__span-4">
         <h3>Schedule + Market Context</h3>
         <p class="detail-summary">${escapeHtml(providerContextFallbackSummary("market", mergedRow, marketContext))}</p>
         <ul class="risk-list">${buildSignalListMarkup(marketContext?.signals, "No schedule or market context signals.")}</ul>
+      </article>
+      <article class="profile-card profile-grid__span-12">
+        <h3>Trajectory</h3>
+        <p class="detail-summary">${
+          trajectoryPayload
+            ? `${escapeHtml(trajectoryLabelCopy(trajectoryPayload.trajectory_label))} | slope ${
+                Number.isFinite(firstFiniteNumber(trajectoryPayload.slope_pct))
+                  ? `${firstFiniteNumber(trajectoryPayload.slope_pct) > 0 ? "+" : ""}${formatNumber(trajectoryPayload.slope_pct)}%`
+                  : "-"
+              } | projected next value ${formatCurrency(trajectoryPayload.projected_next_value)}.`
+            : "Trajectory history unavailable."
+        }</p>
+        <div class="trajectory-chart-wrap">${buildTrajectoryChartMarkup(trajectoryPayload)}</div>
       </article>
       <article class="profile-card profile-grid__span-12">
         <h3>Why Ranked Here</h3>
@@ -2821,6 +5615,11 @@ function clearDetail() {
   state.selectedProfile = null;
   state.selectedReport = null;
   state.selectedHistory = null;
+  state.selectedSimilar = null;
+  state.selectedTrajectory = null;
+  state.selectedLatestDecision = null;
+  state.detailDecisionSourceSurface = "";
+  resetDecisionDraft();
   el.detailContent.hidden = true;
   el.detailPlaceholder.hidden = false;
   el.detailDecisionPill.className = "decision-pill decision-pill--neutral";
@@ -2841,7 +5640,14 @@ function clearDetail() {
   el.barMarket.style.width = "0";
   el.barExpected.style.width = "0";
   el.barLower.style.width = "0";
-  el.detailSummary.textContent = "Select a player to load scouting summary.";
+  el.detailSummary.textContent = "Select a player to load the player brief summary.";
+  renderDetailFit(null);
+  renderDetailFreshness(null);
+  renderDetailTalentView(null);
+  if (el.detailContextGlance) {
+    el.detailContextGlance.innerHTML =
+      '<li class="risk-item risk-item--none">Select a player to load key signals and context.</li>';
+  }
   el.detailRoleSummary.textContent = "Select a player to inspect the position-specific metric lens.";
   el.detailRoleMetrics.innerHTML =
     '<li class="risk-item risk-item--none">Select a player to load position-specific evidence.</li>';
@@ -2864,6 +5670,33 @@ function clearDetail() {
   el.detailProviderTactical.innerHTML = '<li class="risk-item risk-item--none">No external tactical provider signals loaded.</li>';
   el.detailSimilarSummary.textContent = "Select a player to load similar-player matches.";
   el.detailSimilar.innerHTML = '<li class="risk-item risk-item--none">No similar players loaded.</li>';
+  if (el.detailProxySummary) {
+    el.detailProxySummary.textContent = "Select a player to review advisory proxy estimates for missing metrics.";
+  }
+  if (el.detailProxyList) {
+    el.detailProxyList.innerHTML = '<li class="risk-item risk-item--none">No advisory proxy estimates loaded.</li>';
+  }
+  if (el.detailProxySection) {
+    el.detailProxySection.hidden = true;
+  }
+  renderScoutDecisionSummary(null);
+  renderScoutDecisionComposer();
+  if (el.detailTrajectoryBadge) {
+    el.detailTrajectoryBadge.className = "trajectory-badge trajectory-badge--stable";
+    el.detailTrajectoryBadge.textContent = "No trajectory loaded";
+  }
+  if (el.detailTrajectorySummary) {
+    el.detailTrajectorySummary.textContent = "Select a player to inspect the multi-season value trajectory.";
+  }
+  if (el.detailTrajectoryProject) {
+    el.detailTrajectoryProject.textContent = "Projected next value: -";
+  }
+  if (el.detailTrajectoryChart) {
+    el.detailTrajectoryChart.innerHTML = '<p class="details-placeholder">No trajectory chart loaded yet.</p>';
+  }
+  if (el.detailTrajectoryTableBody) {
+    el.detailTrajectoryTableBody.innerHTML = '<tr><td colspan="8">No trajectory history loaded.</td></tr>';
+  }
   el.detailAvailabilitySummary.textContent = "Select a player to load provider availability context.";
   el.detailAvailabilityList.innerHTML = '<li class="risk-item risk-item--none">No provider availability signals loaded.</li>';
   el.detailMarketContextSummary.textContent = "Select a player to load schedule and market context.";
@@ -2871,16 +5704,88 @@ function clearDetail() {
   renderArchetypeProfile(null);
   renderFormationFitProfile(null);
   renderSimilarPlayers(null);
+  renderTrajectoryPanel(null);
   renderRadarProfile(null);
+  if (el.detailExportPdf) el.detailExportPdf.disabled = true;
   el.detailExportJson.disabled = true;
   el.detailExportCsv.disabled = true;
+  if (el.profileModalExportPdf) el.profileModalExportPdf.disabled = true;
   setDetailTab("overview");
   renderProfileModal(null);
   closeProfileModal();
   renderRows();
 }
 
-function renderDetail(row, { profile = null, reportLoading = false, reportError = "" } = {}) {
+function buildContextGlanceItems(
+  row,
+  decision,
+  scoreContext,
+  historyPayload,
+  tacticalContext,
+  availabilityContext,
+  marketContext
+) {
+  const items = [];
+  if (decision?.priceContext) {
+    items.push({
+      label: "Valuation stance",
+      message: decision.priceContext,
+      tone: decision.tone === "pass" ? "high" : "medium",
+    });
+  }
+  if (scoreContext?.scoreLabel) {
+    const valueText = Number.isFinite(scoreContext.scoreValue)
+      ? scoreContext.scoreColumn.endsWith("_eur")
+        ? formatCurrency(scoreContext.scoreValue)
+        : formatNumber(scoreContext.scoreValue)
+      : "signal only";
+    items.push({
+      label: "Ranking driver",
+      message: `${scoreContext.scoreLabel} | ${valueText} | ${scoreContext.rankingBasisLabel}.`,
+      tone: "medium",
+    });
+  }
+  if (historyPayload?.summary_text) {
+    items.push({
+      label: "Evidence depth",
+      message: historyPayload.summary_text,
+      tone: "medium",
+    });
+  }
+  [
+    { label: "Tactical context", key: "tactical", payload: tacticalContext },
+    { label: "Availability context", key: "availability", payload: availabilityContext },
+    { label: "Market context", key: "market", payload: marketContext },
+  ].forEach((item) => {
+    const summary = providerContextFallbackSummary(item.key, row, item.payload);
+    if (
+      summary &&
+      !/select a player/i.test(summary) &&
+      !/no .* loaded/i.test(summary) &&
+      !/^no /i.test(summary)
+    ) {
+      items.push({
+        label: item.label,
+        message: summary,
+        tone: "medium",
+      });
+    }
+  });
+  return items.slice(0, 5);
+}
+
+function renderDetail(
+  row,
+  {
+    profile = null,
+    similarPayload = null,
+    trajectory = null,
+    trajectoryError = "",
+    trajectoryDeferred = false,
+    reportLoading = false,
+    reportError = "",
+  } = {}
+) {
   if (!row) return clearDetail();
   const reportPlayer = profile?.player && typeof profile.player === "object" ? profile.player : {};
   const historyPayload = profile?.history_strength && typeof profile.history_strength === "object" ? profile.history_strength : null;
@@ -2888,6 +5793,7 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
   const availabilityContext = profile?.availability_context && typeof profile.availability_context === "object" ? profile.availability_context : null;
   const marketContext = profile?.market_context && typeof profile.market_context === "object" ? profile.market_context : null;
   const mergedRow = { ...row, ...reportPlayer };
+  const talent = getTalentView(mergedRow, profile);
   const statGroups = Array.isArray(profile?.stat_groups) ? profile.stat_groups : buildStatGroups(mergedRow, profile, null);
   const gaps = deriveGapValues(mergedRow, profile);
   const rankingDiagnostics =
@@ -2895,31 +5801,58 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
   const scoreContext = resolveRowScoreContext(
     mergedRow,
     rankingDiagnostics,
-    Number.isFinite(Number(row?._funnelScore)) ? "funnel" : state.mode === "shortlist" ? "shortlist" : "predictions"
+    Number.isFinite(Number(row?._funnelScore)) ? "funnel" : currentWorkbenchSourceMode()
   );
   const decision = summarizeRecruitmentDecision(mergedRow, profile, {
-    source: Number.isFinite(Number(row?._funnelScore)) ? "funnel" : state.mode === "predictions" ? "predictions" : "workbench",
+    source: Number.isFinite(Number(row?._funnelScore)) ? "funnel" : currentWorkbenchDecisionSource(),
   });
+  const laneDecision = laneAwareDecisionNote(mergedRow, decision.nextAction);
   const roleLens = buildRoleLens(mergedRow, profile);
   const leagueStatus = summarizeLeagueStatus(mergedRow.league);
+  const leagueAdjustment = leagueAdjustmentMeta(mergedRow, profile);
   const coverageWarnings = detailCoverageWarnings(mergedRow, profile);
   const provenanceBadges = buildProvenanceBadges(mergedRow)
     .concat([{ label: leagueStatus.label, tone: leagueStatus.tone }])
     .map((badge) => buildBadgeChipMarkup(badge.label, badge.tone))
     .join("");
   const whyRanked = whyRankedItems(mergedRow, profile, scoreContext);
+  const contextGlanceItems = buildContextGlanceItems(
+    mergedRow,
+    decision,
+    scoreContext,
+    historyPayload,
+    tacticalContext,
+    availabilityContext,
+    marketContext
+  );
   state.selectedRow = mergedRow;
   state.selectedProfile = profile || null;
   state.selectedReport = profile || null;
   state.selectedHistory = profile?.history_strength ? { history_strength: profile.history_strength } : null;
+  state.selectedSimilar = similarPayload || null;
+  state.selectedTrajectory = trajectory || null;
+  state.selectedLatestDecision = profile?.latest_decision || null;
+  state.detailDecisionSourceSurface = String(row?._decisionSourceSurface || "").trim();
   el.detailPlaceholder.hidden = true;
   el.detailContent.hidden = false;
-  el.detailExportJson.disabled = false;
-  el.detailExportCsv.disabled = false;
   renderRows();
+  renderScoutDecisionSummary(state.selectedLatestDecision);
+  renderScoutDecisionComposer();
 
   const market = firstFiniteNumber(profile?.valuation_guardrails?.market_value_eur, mergedRow.market_value_eur, 0);
-  const expected = firstFiniteNumber(profile?.valuation_guardrails?.fair_value_eur, mergedRow.expected_value_eur, 0);
+  const expected = firstFiniteNumber(
+    profile?.valuation_guardrails?.league_adjusted_fair_value_eur,
+    profile?.valuation_guardrails?.fair_value_eur,
+    mergedRow.league_adjusted_fair_value_eur,
+    mergedRow.fair_value_eur,
+    mergedRow.expected_value_eur,
+    0
+  );
+  const rawFair = firstFiniteNumber(
+    profile?.valuation_guardrails?.raw_fair_value_eur,
+    mergedRow.raw_fair_value_eur,
+    mergedRow.expected_value_raw_eur
+  );
   const lower = firstFiniteNumber(mergedRow.expected_value_low_eur, 0);
   const scaleMax = Math.max(market, expected, lower, 1);
 
@@ -2929,7 +5862,7 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
   )} | age ${formatNumber(mergedRow.age)} | ${formatInt(getMinutes(mergedRow))} minutes`;
   el.detailDecisionPill.className = `decision-pill decision-pill--${decision.tone}`;
   el.detailDecisionPill.textContent = decision.label;
-  el.detailDecisionNext.textContent = decision.nextAction;
+  el.detailDecisionNext.textContent = laneDecision;
   el.detailDecisionReason.textContent = decision.reason;
   el.detailGap.textContent = Number.isFinite(decision.gap) ? formatCurrency(decision.gap) : "-";
   el.detailGapNote.textContent = decision.gapNote;
@@ -2938,7 +5871,10 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
     : decision.confidenceLabel;
   el.detailConfidenceNote.textContent = decision.confidenceNote;
   el.detailPriceStance.textContent = decision.priceStance;
-  el.detailPriceContext.textContent = decision.priceContext;
+  el.detailPriceContext.textContent =
+    leagueAdjustment.needsWarning && leagueAdjustment.reason
+      ? `${decision.priceContext} ${leagueAdjustment.reason}`
+      : decision.priceContext;
   el.detailBadges.innerHTML = provenanceBadges;
   el.detailScoreDriver.textContent = `${scoreContext.scoreLabel}${
     Number.isFinite(scoreContext.scoreValue)
@@ -2968,11 +5904,28 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
   const rows = [
     ["League", safeText(mergedRow.league)],
     ["Price stance", decision.priceStance],
+    ["League-adjusted fair value", formatCurrency(expected)],
+    ["Raw model fair value", formatCurrency(rawFair)],
+    ["Current Level", Number.isFinite(Number(talent.current_level_score)) ? formatNumber(talent.current_level_score) : "-"],
+    ["Future Potential", Number.isFinite(Number(talent.future_potential_score)) ? formatNumber(talent.future_potential_score) : "-"],
     ["Age", formatNumber(mergedRow.age)],
     ["Minutes", formatInt(getMinutes(mergedRow))],
+    ["Talent Family", safeText(talent.talent_position_family)],
     ["Role Lens", safeText(roleLens.label)],
     ["Conservative Gap (capped)", formatCurrency(decision.gap)],
     ["Cap Threshold", formatCurrency(gaps.capThreshold)],
+    [
+      "League pricing adjustment",
+      leagueAdjustment.needsWarning
+        ? `${safeText(leagueAdjustment.bucket).replace(/_/g, " ")} | alpha ${Number.isFinite(leagueAdjustment.alpha) ? formatNumber(leagueAdjustment.alpha) : "-"}`
+        : "standard",
+    ],
+    [
+      "Holdout reliability",
+      `${Number.isFinite(leagueAdjustment.holdoutR2) ? formatPct(leagueAdjustment.holdoutR2) : "n/a"} R² | ${
+        Number.isFinite(leagueAdjustment.holdoutWmape) ? formatPct(leagueAdjustment.holdoutWmape) : "n/a"
+      } WMAPE`,
+    ],
     ["Confidence", Number.isFinite(decision.confidenceScore) ? `${decision.confidenceLabel} | ${formatNumber(decision.confidenceScore)}` : decision.confidenceLabel],
     ["Segment", safeText(mergedRow.value_segment)],
     ["Position Model", safeText(mergedRow.model_position)],
@@ -2987,10 +5940,21 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
   el.detailConfidence.textContent = buildConfidenceSummary(mergedRow, profile);
 
   if (reportLoading) {
-    el.detailSummary.textContent = "Loading scouting memo...";
+    if (el.detailExportPdf) el.detailExportPdf.disabled = true;
+    el.detailExportJson.disabled = true;
+    el.detailExportCsv.disabled = true;
+    if (el.profileModalExportPdf) el.profileModalExportPdf.disabled = true;
+    el.detailSummary.textContent = "Loading player brief...";
+    renderDetailFit(mergedRow, { loading: true });
+    renderDetailFreshness(mergedRow, profile, { loading: true });
+    renderDetailTalentView(mergedRow, profile, { loading: true });
+    if (el.detailContextGlance) {
+      el.detailContextGlance.innerHTML =
+        '<li class="risk-item risk-item--none">Loading key signals and context...</li>';
+    }
     el.detailRoleSummary.textContent = "Loading position-specific metric lens...";
     el.detailRoleMetrics.innerHTML = '<li class="risk-item risk-item--none">Loading role evidence...</li>';
-    el.detailHistory.textContent = "Loading history-strength breakdown...";
+    el.detailHistory.textContent = "Loading evidence depth...";
     el.detailStrengths.innerHTML = '<li class="risk-item risk-item--none">Loading strengths...</li>';
     el.detailWeaknesses.innerHTML = '<li class="risk-item risk-item--none">Loading weaknesses...</li>';
     el.detailLevers.innerHTML = '<li class="risk-item risk-item--none">Loading development levers...</li>';
@@ -3005,14 +5969,27 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
     renderArchetypeProfile(null, { loading: true });
     renderFormationFitProfile(null, { loading: true });
     renderSimilarPlayers(null, { loading: true });
+    renderProxyEstimates(null, { loading: true });
+    renderTrajectoryPanel(null, { deferred: true });
     renderRadarProfile(null, { loading: true });
     if (state.profileModalOpen) {
-      renderProfileModal(mergedRow, { profile, reportError });
+      renderProfileModal(mergedRow, { profile, trajectory, reportError });
     }
     return;
   }
   if (reportError) {
-    el.detailSummary.textContent = `Recruitment memo unavailable: ${reportError}`;
+    if (el.detailExportPdf) el.detailExportPdf.disabled = true;
+    el.detailExportJson.disabled = true;
+    el.detailExportCsv.disabled = true;
+    if (el.profileModalExportPdf) el.profileModalExportPdf.disabled = true;
+    el.detailSummary.textContent = `Player brief unavailable: ${reportError}`;
+    renderDetailFit(mergedRow);
+    renderDetailFreshness(mergedRow, profile);
+    renderDetailTalentView(mergedRow, profile, { error: reportError });
+    if (el.detailContextGlance) {
+      el.detailContextGlance.innerHTML =
+        '<li class="risk-item risk-item--none">Signals and context are unavailable for this player.</li>';
+    }
     el.detailRoleSummary.textContent = roleLens.summary;
     el.detailRoleMetrics.innerHTML = buildNarrativeListMarkup(
       roleLens.metrics.map((metric) => ({
@@ -3037,9 +6014,11 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
     renderArchetypeProfile(null, { error: reportError });
     renderFormationFitProfile(null, { error: reportError });
     renderSimilarPlayers(null, { error: reportError });
+    renderProxyEstimates(null, { error: reportError });
+    renderTrajectoryPanel(null, { error: reportError });
     renderRadarProfile(null, { error: reportError });
     if (state.profileModalOpen) {
-      renderProfileModal(mergedRow, { profile, reportError });
+      renderProfileModal(mergedRow, { profile, trajectory, reportError });
     }
     return;
   }
@@ -3048,7 +6027,20 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
     el.detailSummary.textContent = profile.summary_text;
   } else {
     el.detailSummary.textContent =
-      "No memo summary loaded. Use the export buttons to fetch a complete player report on demand.";
+      "No player brief summary loaded yet. Use the export actions if you need the full memo payload.";
+  }
+  if (el.detailExportPdf) el.detailExportPdf.disabled = false;
+  el.detailExportJson.disabled = false;
+  el.detailExportCsv.disabled = false;
+  if (el.profileModalExportPdf) el.profileModalExportPdf.disabled = false;
+  renderDetailFit(mergedRow);
+  renderDetailFreshness(mergedRow, profile);
+  renderDetailTalentView(mergedRow, profile);
+  if (el.detailContextGlance) {
+    el.detailContextGlance.innerHTML = buildNarrativeListMarkup(
+      contextGlanceItems,
+      "No additional signals or context were available for this player."
+    );
   }
   el.detailRoleSummary.textContent = roleLens.summary;
   el.detailRoleMetrics.innerHTML = buildNarrativeListMarkup(
@@ -3087,7 +6079,11 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
 
   renderArchetypeProfile(profile?.player_type);
   renderFormationFitProfile(profile?.formation_fit);
-  renderSimilarPlayers(profile?.similar_players);
+  renderSimilarPlayers(
+    similarPayload || (profile?.similar_players && typeof profile.similar_players === "object" ? profile.similar_players : null)
+  );
+  renderProxyEstimates(profile?.proxy_estimates && typeof profile.proxy_estimates === "object" ? profile.proxy_estimates : null);
+  renderTrajectoryPanel(trajectory, { error: trajectoryError, deferred: trajectoryDeferred && !trajectory && !trajectoryError });
   renderRadarProfile(profile?.radar_profile);
   el.detailProviderTacticalSummary.textContent =
     providerContextFallbackSummary("tactical", mergedRow, tacticalContext);
@@ -3119,26 +6115,70 @@ function renderDetail(row, { profile = null, reportLoading = false, reportError 
       .join("");
   }
   if (state.profileModalOpen) {
-    renderProfileModal(mergedRow, { profile, reportError });
+    renderProfileModal(mergedRow, { profile, trajectory, reportError });
   }
 }
 
 function renderModeAffordances() {
   const shortlist = state.mode === "shortlist";
-  el.title.textContent = shortlist ? "Recruitment Board" : "Valuation Board";
-  el.sort.disabled = shortlist;
-  el.sortDir.disabled = shortlist;
-  el.minConfidence.disabled = shortlist;
-  el.minGap.disabled = shortlist;
+  const systemFit = isSystemFitMode();
+  const selectedSlot = currentSystemFitSlot();
+  el.title.textContent = systemFit
+    ? safeText(selectedSlot?.slot_label || "System Fit Board")
+    : shortlist
+    ? "Recruitment Board"
+    : "Valuation Board";
+  el.sort.disabled = shortlist || systemFit;
+  el.sortDir.disabled = shortlist || systemFit;
+  el.minConfidence.disabled = shortlist ? true : false;
+  if (systemFit) el.minConfidence.disabled = false;
+  el.minGap.disabled = shortlist || systemFit;
   el.topN.disabled = !shortlist;
+  el.position.disabled = systemFit;
+  el.undervaluedOnly.disabled = shortlist || systemFit;
+  if (el.playstyle) el.playstyle.disabled = systemFit;
+  if (el.roleLens) el.roleLens.disabled = systemFit;
+  if (el.roleNeed) el.roleNeed.disabled = systemFit;
+  if (el.systemFitTemplateControl) el.systemFitTemplateControl.hidden = !systemFit;
+  if (el.systemFitLaneControl) el.systemFitLaneControl.hidden = !systemFit;
+  if (el.roleNeedControl) el.roleNeedControl.hidden = systemFit;
+  if (el.resultsColTarget) el.resultsColTarget.textContent = "Target";
+  if (el.resultsColDecision) el.resultsColDecision.textContent = systemFit ? "System fit" : "Decision";
+  if (el.resultsColMarket) el.resultsColMarket.textContent = "Market";
+  if (el.resultsColExpected) el.resultsColExpected.textContent = systemFit ? "Current" : "Adj. fair";
+  if (el.resultsColGap) el.resultsColGap.textContent = systemFit ? "Future" : "Gap";
+  if (el.resultsColConfidence) el.resultsColConfidence.textContent = systemFit ? "Confidence" : "Confidence";
+  renderSystemFitSlots();
   renderResultsNote();
 }
 
 function renderResultsNote() {
   if (!el.resultsNote) return;
   const filterSummary = describeRecruitmentFilters(currentWorkbenchWorkflowSummary());
+  const laneSummary = boardLaneSummary();
+  const laneNote = ` Active lane: ${laneSummary.label}. ${laneSummary.copy}`;
+  if (isSystemFitMode()) {
+    const slot = currentSystemFitSlot();
+    const template = currentSystemFitTemplate();
+    const slotText = slot
+      ? `${safeText(slot.slot_label)} | ${safeText(slot.role_template_label)}`
+      : "select a slot";
+    const budget = parseOptionalPositive(state.budgetBand);
+    const budgetText = budget ? ` Budget posture: ${budgetLabel(budget)}.` : "";
+    el.resultsNote.textContent = `System fit mode is backend-ranked for ${safeText(
+      template?.label || state.systemFitTemplate
+    )}. Current slot: ${slotText}. This view is canonical slot-level ranking, so frontend playstyle and role reranking are disabled.${budgetText}${laneNote}`;
+    return;
+  }
+  const lensNote = state.playstyle && state.roleLens
+    ? ` Active lenses: ${activeLensDisplayLabel()}. Style fit adds 20%; role fit adds 10% on top of the current ranking driver.`
+    : state.roleLens
+    ? ` Active role lens: ${roleLensLabel()}. Role fit adds 10% on top of the current ranking driver.`
+    : state.playstyle
+    ? ` Active playstyle lens: ${playstyleLabel()}. Style fit is a 20% frontend overlay on top of the current ranking driver.`
+    : "";
   if (state.mode === "predictions") {
-    el.resultsNote.textContent = `This is a valuation view, not a live pursuit order. Use it for price discipline under the active brief (${filterSummary}), then switch back to Recruitment Board or Target Funnel when you want decision-ready ranking.`;
+    el.resultsNote.textContent = `This is the Current Level / Pricing view, not a live pursuit order. Use it for price discipline under the active brief (${filterSummary}), then switch back to Recruitment Board or Target Funnel when you want advisory future-potential ranking.${laneNote}${lensNote}`;
     return;
   }
   const diagnostics = state.queryDiagnostics || {};
@@ -3148,9 +6188,9 @@ function renderResultsNote() {
   const p25 = precisionRows.find((row) => Number(row.k) === 25);
   const precisionText =
     p25 && Number.isFinite(Number(p25.precision)) ? ` Precision@25 ${formatPct(Number(p25.precision))}.` : "";
-  el.resultsNote.textContent = `Recruitment brief: ${filterSummary}. Scan pursue and watch calls first, then open one memo to decide the next action. Ranking driver: ${humanizeScoreColumn(
+  el.resultsNote.textContent = `Recruitment brief: ${filterSummary}. This board is ordered for Future Potential / Advisory review, so scan pursue and watch calls first, then open one memo to decide the next action. Ranking driver: ${humanizeScoreColumn(
     scoreColumn
-  )} | ${rankingBasisLabel(rankingBasis)}.${precisionText}`;
+  )} | ${rankingBasisLabel(rankingBasis)}.${precisionText}${laneNote}${lensNote}`;
 }
 
 function updateSelectOptions(select, values, keepValue = "") {
@@ -3179,33 +6219,19 @@ async function refreshCoverageAndOptions() {
     renderOverviewReadiness();
     return;
   }
-  const rows = await fetchAllPredictions({
+  const payload = await getJson("/market-value/ui-bootstrap", {
     split: state.split,
-    columns:
-      "season,league,undervalued_flag,undervaluation_confidence,value_gap_conservative_eur",
   });
-  state.coverageRows = rows;
-  renderCoverageTable();
-  renderOverviewReadiness();
-
-  const seasons = Array.from(new Set(rows.map((r) => String(r.season || "")).filter(Boolean))).sort(
-    (a, b) => seasonSortValue(b) - seasonSortValue(a)
-  );
-  const leagues = Array.from(new Set(rows.map((r) => getLeague(r)).filter(Boolean))).sort((a, b) =>
-    a.localeCompare(b)
-  );
-
-  const prevSeason = state.season;
-  const prevLeague = state.league;
-  updateSelectOptions(el.season, seasons, prevSeason);
-  updateSelectOptions(el.league, leagues, prevLeague);
-
-  if (prevSeason && !seasons.includes(prevSeason)) state.season = "";
-  if (prevLeague && !leagues.includes(prevLeague)) state.league = "";
+  applyUiBootstrapPayload(payload);
 }
 
 async function fetchPredictionsPage() {
   const maxBudget = parseOptionalPositive(state.budgetBand);
+  const diagnostics = {
+    score_column: state.sortBy,
+    ranking_basis: "manual_sort",
+    sort_order: state.sortOrder,
+  };
   const payload = await getJson("/market-value/predictions", {
     split: state.split,
     season: state.season || null,
@@ -3225,6 +6251,7 @@ async function fetchPredictionsPage() {
     sort_order: state.sortOrder,
     limit: state.limit,
     offset: state.offset,
+    ...teamPreferenceRequestParams(),
   });
 
   let rows = (payload.items || []).map((r) => withComputedConservativeGap(r));
@@ -3237,14 +6264,14 @@ async function fetchPredictionsPage() {
     });
   }
 
+  if (hasActiveLens()) {
+    rows = applyLensRanking(rows, diagnostics, "predictions");
+  }
+
   state.rows = rows;
   state.total = Number(payload.total) || rows.length;
   state.count = rows.length;
-  state.queryDiagnostics = {
-    score_column: state.sortBy,
-    ranking_basis: "manual_sort",
-    sort_order: state.sortOrder,
-  };
+  state.queryDiagnostics = diagnostics;
   renderResultsNote();
 }
 
@@ -3275,10 +6302,13 @@ async function fetchShortlistPage() {
     non_big5_only: state.nonBig5Only,
     max_market_value_eur: maxBudget,
     max_contract_years_left: state.maxContractYearsLeft,
+    ...teamPreferenceRequestParams(),
   });
 
   const filtered = applyClientFilters((payload.items || []).map((r) => withComputedConservativeGap(r)));
-  const sorted = sortShortlistRows(filtered);
+  const sorted = hasActiveLens()
+    ? applyLensRanking(filtered, payload.diagnostics || null, "shortlist")
+    : sortShortlistRows(filtered);
   const page = sorted.slice(state.offset, state.offset + state.limit);
 
   state.rows = page;
@@ -3288,40 +6318,105 @@ async function fetchShortlistPage() {
   renderResultsNote();
 }
 
+async function fetchSystemFitPage() {
+  await loadSystemFitTemplates();
+  const maxBudget = parseOptionalPositive(state.budgetBand);
+  const payload = await requestJson("/market-value/system-fit/query", {
+    method: "POST",
+    params: teamPreferenceRequestParams(),
+    body: {
+      template_key: state.systemFitTemplate || DEFAULT_SYSTEM_FIT_TEMPLATE,
+      split: state.split,
+      active_lane: state.systemFitActiveLane || DEFAULT_SYSTEM_FIT_LANE,
+      top_n_per_slot: state.limit,
+      trust_scope: "trusted_and_watch",
+      filters: {
+        season: state.season || null,
+        include_leagues: state.league ? [state.league] : null,
+        exclude_leagues: null,
+        min_age: state.minAge < 0 ? null : state.minAge,
+        max_age: state.maxAge < 0 ? null : state.maxAge,
+        min_minutes: state.minMinutes,
+        max_market_value_eur: maxBudget,
+        max_contract_years_left: state.maxContractYearsLeft,
+        min_confidence: state.minConfidence > 0 ? state.minConfidence : null,
+        non_big5_only: state.nonBig5Only,
+        budget_eur: maxBudget,
+      },
+    },
+  });
+
+  state.systemFitSlots = Array.isArray(payload.slots) ? payload.slots : [];
+  state.systemFitLanePosture = payload.lane_posture || null;
+  state.systemFitFiltersApplied = payload.filters_applied || null;
+  if (!state.systemFitSlots.some((slot) => String(slot.slot_key || "") === String(state.systemFitSelectedSlot || ""))) {
+    state.systemFitSelectedSlot = state.systemFitSlots[0]?.slot_key || "";
+  }
+  state.queryDiagnostics = {
+    score_column: "system_fit_score",
+    ranking_basis: "system_fit_slot_rank",
+    active_lane: payload.active_lane || state.systemFitActiveLane,
+    lane_posture: payload.lane_posture || null,
+    template_key: payload.system_profile?.template_key || state.systemFitTemplate,
+    trust_scope: payload.trust_scope || "trusted_and_watch",
+  };
+  renderSystemFitSlots();
+  applySystemFitSlotRows();
+  renderResultsNote();
+}
+
 async function runQuery() {
   readWorkbenchControlsToState();
   localStorage.setItem("scoutml_api_base", state.apiBase);
+  localStorage.setItem("scoutml_playstyle_lens", state.playstyle);
+  localStorage.setItem("scoutml_role_lens", state.roleLens);
   renderModeAffordances();
   if (!backendReady()) {
     state.rows = [];
+    state.topPicks = [];
     state.total = 0;
     state.count = 0;
     state.queryDiagnostics = null;
-    el.tbody.innerHTML =
-      '<tr><td colspan="10">Backend artifacts are not ready. Review Overview for readiness details.</td></tr>';
+    el.tbody.innerHTML = `<tr><td colspan="${RESULTS_TABLE_COLSPAN}">Backend artifacts are not ready. Review Platform Readiness for the operational details.</td></tr>`;
     renderResultsNote();
     renderPager();
+    renderTopPicks();
+    renderBoardHighlights();
     clearDetail();
     return;
   }
   setLoading(true);
   try {
-    if (state.mode === "shortlist") {
+    if (isSystemFitMode()) {
+      await fetchSystemFitPage();
+    } else if (state.mode === "shortlist") {
       await fetchShortlistPage();
     } else {
       await fetchPredictionsPage();
     }
+    if (!isSystemFitMode()) {
+      state.topPicks = deriveTopPicks(state.rows);
+    }
     renderRows();
+    renderSystemFitSlots();
+    renderTopPicks();
     renderPager();
     clearDetail();
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    el.tbody.innerHTML = `<tr><td colspan=\"10\">${msg}</td></tr>`;
+    el.tbody.innerHTML = `<tr><td colspan="${RESULTS_TABLE_COLSPAN}">${msg}</td></tr>`;
     state.rows = [];
+    state.topPicks = [];
     state.total = 0;
     state.count = 0;
     state.queryDiagnostics = null;
+    state.systemFitSlots = [];
+    state.systemFitLanePosture = null;
+    state.systemFitFiltersApplied = null;
     renderResultsNote();
+    renderSystemFitSlots();
+    renderTopPicks();
+    renderBoardHighlights();
     renderPager();
   } finally {
     setLoading(false);
@@ -3355,6 +6450,692 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function setButtonLoading(button, isLoading, loadingLabel) {
+  if (!button) return;
+  if (!button.dataset.defaultLabel) {
+    button.dataset.defaultLabel = button.textContent || "";
+  }
+  button.disabled = isLoading;
+  button.classList.toggle("is-loading", Boolean(isLoading));
+  button.textContent = isLoading ? loadingLabel : button.dataset.defaultLabel;
+}
+
+function renderTeamActivity() {
+  if (!el.teamActivityList) return;
+  const items = Array.isArray(state.teamActivity) ? state.teamActivity : [];
+  if (!isTeamAuthenticated()) {
+    el.teamActivityList.innerHTML = '<li class="risk-item risk-item--none">Team activity appears when a shared workspace session is active.</li>';
+    return;
+  }
+  if (!items.length) {
+    el.teamActivityList.innerHTML = '<li class="risk-item risk-item--none">No shared activity logged yet.</li>';
+    return;
+  }
+  el.teamActivityList.innerHTML = items
+    .slice(0, 8)
+    .map(
+      (item) => `<li class="risk-item"><strong>${escapeHtml(safeText(item.summary || "Team update"))}</strong><span>${escapeHtml(
+        safeText(item.actor_name || item.actor_email || "")
+      )} | ${escapeHtml(formatDecisionTimestamp(item.created_at_utc))}</span></li>`
+    )
+    .join("");
+}
+
+function renderTeamAssignments() {
+  if (!el.teamAssignmentList || !el.teamAssigneeSelect) return;
+  const members = Array.isArray(state.teamActiveWorkspace?.members) ? state.teamActiveWorkspace.members : [];
+  el.teamAssigneeSelect.innerHTML = [
+    '<option value="">Assign to scout</option>',
+    ...members.map(
+      (member) =>
+        `<option value="${escapeHtml(member.user_id)}">${escapeHtml(
+          safeText(member.full_name || member.email)
+        )} (${escapeHtml(safeText(member.role))})</option>`
+    ),
+  ].join("");
+  const items = Array.isArray(state.teamAssignments) ? state.teamAssignments : [];
+  if (!isTeamAuthenticated()) {
+    el.teamAssignmentList.innerHTML = '<li class="risk-item risk-item--none">Assignments are available in team mode.</li>';
+    return;
+  }
+  if (!items.length) {
+    el.teamAssignmentList.innerHTML = '<li class="risk-item risk-item--none">No assignment for this player yet.</li>';
+    return;
+  }
+  el.teamAssignmentList.innerHTML = items
+    .map(
+      (item) => `<li class="risk-item"><strong>${escapeHtml(humanizeKey(item.status))}</strong><span>${escapeHtml(
+        safeText(item.assignee_name || item.assignee_email || "Unassigned")
+      )}${item.due_date ? ` | due ${escapeHtml(formatDecisionTimestamp(item.due_date))}` : ""}</span></li>`
+    )
+    .join("");
+}
+
+function renderTeamComments() {
+  if (!el.teamCommentsList) return;
+  const items = Array.isArray(state.teamComments) ? state.teamComments : [];
+  if (!isTeamAuthenticated()) {
+    el.teamCommentsList.innerHTML = '<li class="risk-item risk-item--none">Shared comments are available in team mode.</li>';
+    return;
+  }
+  if (!items.length) {
+    el.teamCommentsList.innerHTML = '<li class="risk-item risk-item--none">No shared comments saved yet.</li>';
+    return;
+  }
+  el.teamCommentsList.innerHTML = items
+    .map(
+      (item) => `<li class="risk-item"><strong>${escapeHtml(safeText(item.author_name || item.author_email || "Scout"))}</strong><span>${escapeHtml(
+        formatDecisionTimestamp(item.created_at_utc)
+      )}</span><p>${escapeHtml(safeText(item.body))}</p></li>`
+    )
+    .join("");
+}
+
+function renderTeamCompareWorkspace() {
+  if (el.teamCompareSection) {
+    el.teamCompareSection.hidden = !isTeamAuthenticated();
+  }
+  if (!el.teamCompareTray || !el.teamCompareLists || !el.teamCompareSelect || !el.teamCompareMeta) return;
+  if (!isTeamAuthenticated()) {
+    el.teamCompareMeta.textContent = "Shared compare lists appear when a workspace session is active.";
+    el.teamCompareTray.innerHTML = '<p class="details-placeholder">Team compare tray unavailable in local mode.</p>';
+    el.teamCompareLists.innerHTML = '<p class="details-placeholder">No compare lists loaded.</p>';
+    el.teamCompareSelect.innerHTML = '<option value="">Choose saved compare list</option>';
+    return;
+  }
+  const tray = Array.isArray(state.teamCompareTray) ? state.teamCompareTray : [];
+  el.teamCompareTray.innerHTML = tray.length
+    ? tray
+        .map(
+          (row) => `<article class="compare-tray-card">
+            <strong>${escapeHtml(safeText(row.name || row.player_id))}</strong>
+            <span>${escapeHtml(safeText(row.club))} | ${escapeHtml(safeText(row.league))}</span>
+            <small>${escapeHtml(formatCurrency(row.market_value_eur))} market | ${escapeHtml(formatCurrency(row.fair_value_eur || row.expected_value_eur))} fair</small>
+            <button type="button" class="btn-ghost team-compare-remove" data-player-id="${escapeHtml(safeText(row.player_id))}">Remove</button>
+          </article>`
+        )
+        .join("")
+    : '<p class="details-placeholder">Add players from the detail rail to build a compare tray.</p>';
+  const lists = Array.isArray(state.teamCompareLists) ? state.teamCompareLists : [];
+  el.teamCompareSelect.innerHTML = [
+    '<option value="">Choose saved compare list</option>',
+    ...lists.map((item) => `<option value="${escapeHtml(item.compare_id)}">${escapeHtml(safeText(item.name))}</option>`),
+  ].join("");
+  el.teamCompareLists.innerHTML = lists.length
+    ? lists
+        .map((item) => {
+          const players = Array.isArray(item.players) ? item.players : [];
+          return `<article class="compare-list-card">
+            <div class="compare-list-card__header">
+              <strong>${escapeHtml(safeText(item.name))}</strong>
+              <span>${escapeHtml(safeText(item.owner_name || ""))}</span>
+            </div>
+            <p>${escapeHtml(safeText(item.notes || "")) || "No compare notes yet."}</p>
+            <div class="compare-list-card__players">
+              ${
+                players.length
+                  ? players
+                      .map(
+                        (player) => `<div class="compare-list-player">
+                          <strong>${escapeHtml(safeText(player.snapshot?.name || player.player_id))}</strong>
+                          <span>${escapeHtml(safeText(player.snapshot?.club || ""))} | ${escapeHtml(
+                            safeText(player.snapshot?.league || "")
+                          )}</span>
+                          <small>${escapeHtml(
+                            safeText(player.comparison?.trajectory_label || "No trajectory")
+                          )} | ${escapeHtml(formatCurrency(player.comparison?.market_value_eur))}</small>
+                        </div>`
+                      )
+                      .join("")
+                  : '<p class="details-placeholder">No players saved in this compare list yet.</p>'
+              }
+            </div>
+          </article>`;
+        })
+        .join("")
+    : '<p class="details-placeholder">No compare lists loaded.</p>';
+  el.teamCompareMeta.textContent = `${formatInt(tray.length)} in tray | ${formatInt(lists.length)} shared compare list${
+    lists.length === 1 ? "" : "s"
+  }.`;
+}
+
+function renderTeamPreferenceControls() {
+  if (el.teamPreferencesPanel) {
+    el.teamPreferencesPanel.hidden = !isTeamAuthenticated();
+  }
+  if (!el.teamPrefMeta) return;
+  if (!isTeamAuthenticated()) {
+    el.teamPrefMeta.textContent = "Scout preference profiles are available in team mode.";
+    return;
+  }
+  const profile = state.teamPreferenceProfile || {};
+  if (el.teamPrefName) el.teamPrefName.value = safeText(profile.name || "Primary");
+  if (el.teamPrefAgeMin) el.teamPrefAgeMin.value = profile.target_age_min ?? "";
+  if (el.teamPrefAgeMax) el.teamPrefAgeMax.value = profile.target_age_max ?? "";
+  if (el.teamPrefBudgetPosture) el.teamPrefBudgetPosture.value = safeText(profile.budget_posture || "balanced");
+  if (el.teamPrefTrustPosture) el.teamPrefTrustPosture.value = safeText(profile.trusted_league_posture || "balanced");
+  if (el.teamPrefRisk) el.teamPrefRisk.value = safeText(profile.risk_tolerance || "balanced");
+  if (el.teamPrefLane) el.teamPrefLane.value = safeText(profile.active_lane_preference || "valuation");
+  if (el.teamPrefSystemTemplate) el.teamPrefSystemTemplate.value = safeText(profile.system_template_default || "");
+  if (el.teamPrefRolePriorities) {
+    const rolePriorities = profile.role_priorities && typeof profile.role_priorities === "object" ? profile.role_priorities : {};
+    el.teamPrefRolePriorities.value = Object.entries(rolePriorities)
+      .map(([key, value]) => `${key}:${value}`)
+      .join(", ");
+  }
+  if (el.teamPrefMustHaveTags) el.teamPrefMustHaveTags.value = Array.isArray(profile.must_have_tags) ? profile.must_have_tags.join(", ") : "";
+  if (el.teamPrefAvoidTags) el.teamPrefAvoidTags.value = Array.isArray(profile.avoid_tags) ? profile.avoid_tags.join(", ") : "";
+  if (el.teamPrefApply) el.teamPrefApply.checked = Boolean(state.teamApplyPreferences);
+  el.teamPrefMeta.textContent = `Preference-aware reranking is ${state.teamApplyPreferences ? "active" : "off"} for this workspace session.`;
+}
+
+function renderTeamSessionState() {
+  if (el.teamStatus) {
+    if (!state.teamEnabled) {
+      el.teamStatus.className = "status status--neutral";
+      el.teamStatus.textContent = "Local mode";
+    } else if (!state.teamAuthenticated) {
+      el.teamStatus.className = "status status--warn";
+      el.teamStatus.textContent = "Team ready";
+    } else {
+      el.teamStatus.className = "status status--ok";
+      el.teamStatus.textContent = safeText(state.teamActiveWorkspace?.name || "Workspace active");
+    }
+  }
+  if (el.teamAuthMeta) {
+    el.teamAuthMeta.textContent = !state.teamEnabled
+      ? "Team mode is off until the backend is configured with a database."
+      : state.teamAuthenticated
+      ? "Shared workspace state is live. Decisions, watchlist, assignments, comments, and compare lists are now team-scoped."
+      : "Team mode is available. Login, bootstrap an admin, or accept an invite to enter the shared workspace.";
+  }
+  if (el.teamWorkspaceBanner) {
+    el.teamWorkspaceBanner.hidden = !state.teamAuthenticated;
+  }
+  if (el.teamCurrentWorkspace) {
+    el.teamCurrentWorkspace.textContent = safeText(state.teamActiveWorkspace?.name || "No workspace selected");
+  }
+  if (el.teamCurrentUser) {
+    el.teamCurrentUser.textContent = safeText(state.teamUser?.full_name || state.teamUser?.email || "Not signed in");
+  }
+  if (el.teamWorkspaceSelect) {
+    const workspaces = Array.isArray(state.teamWorkspaces) ? state.teamWorkspaces : [];
+    el.teamWorkspaceSelect.innerHTML = [
+      '<option value="">No workspace loaded</option>',
+      ...workspaces.map(
+        (workspace) =>
+          `<option value="${escapeHtml(workspace.workspace_id)}"${workspace.workspace_id === activeTeamWorkspaceId() ? " selected" : ""}>${escapeHtml(
+            safeText(workspace.name)
+          )} (${escapeHtml(safeText(workspace.role))})</option>`
+      ),
+    ].join("");
+  }
+  if (el.teamCollaborationSection) {
+    el.teamCollaborationSection.hidden = !isTeamAuthenticated();
+  }
+  renderTeamAssignments();
+  renderTeamComments();
+  renderTeamActivity();
+  renderTeamCompareWorkspace();
+  renderTeamPreferenceControls();
+}
+
+async function refreshTeamPreferences() {
+  if (!isTeamAuthenticated()) {
+    state.teamPreferenceProfile = null;
+    state.teamApplyPreferences = true;
+    renderTeamPreferenceControls();
+    return;
+  }
+  try {
+    state.teamPreferenceProfile = await getJson("/team/preferences/me");
+    state.teamApplyPreferences = state.teamPreferenceProfile?.apply_by_default !== false;
+  } catch {
+    state.teamPreferenceProfile = null;
+  }
+  renderTeamPreferenceControls();
+}
+
+async function refreshTeamCompareLists() {
+  if (!isTeamAuthenticated()) {
+    state.teamCompareLists = [];
+    renderTeamCompareWorkspace();
+    return;
+  }
+  try {
+    const payload = await getJson("/team/compare-lists");
+    state.teamCompareLists = Array.isArray(payload.items) ? payload.items : [];
+  } catch {
+    state.teamCompareLists = [];
+  }
+  renderTeamCompareWorkspace();
+}
+
+async function refreshTeamActivity() {
+  if (!isTeamAuthenticated()) {
+    state.teamActivity = [];
+    renderTeamActivity();
+    return;
+  }
+  try {
+    const payload = await getJson("/team/activity", { limit: 8 });
+    state.teamActivity = Array.isArray(payload.items) ? payload.items : [];
+  } catch {
+    state.teamActivity = [];
+  }
+  renderTeamActivity();
+}
+
+async function loadTeamCollaborationForSelectedRow() {
+  if (!isTeamAuthenticated() || !state.selectedRow) {
+    state.teamAssignments = [];
+    state.teamComments = [];
+    renderTeamAssignments();
+    renderTeamComments();
+    return;
+  }
+  const playerId = String(state.selectedRow.player_id || "").trim();
+  const season = String(state.selectedRow.season || state.season || "").trim();
+  try {
+    const [assignmentsPayload, commentsPayload] = await Promise.all([
+      getJson("/team/assignments", { player_id: playerId, limit: 20 }),
+      getJson(`/team/player/${encodeURIComponent(playerId)}/comments`, {
+        split: state.split,
+        season: season || null,
+        limit: 20,
+      }),
+    ]);
+    state.teamAssignments = Array.isArray(assignmentsPayload.items) ? assignmentsPayload.items : [];
+    state.teamComments = Array.isArray(commentsPayload.items) ? commentsPayload.items : [];
+  } catch (err) {
+    state.teamAssignments = [];
+    state.teamComments = [];
+    if (el.teamCommentMeta) {
+      el.teamCommentMeta.textContent = err instanceof Error ? err.message : String(err);
+    }
+  }
+  renderTeamAssignments();
+  renderTeamComments();
+}
+
+async function refreshTeamSession() {
+  const inviteToken = new URLSearchParams(window.location.search).get("invite_token") || "";
+  if (el.teamInviteToken && !el.teamInviteToken.value && inviteToken) {
+    el.teamInviteToken.value = inviteToken;
+  }
+  try {
+    const preferredWorkspaceId = localStorage.getItem("scoutml_team_workspace_id") || "";
+    const payload = await getJson("/auth/me", preferredWorkspaceId ? { workspace_id: preferredWorkspaceId } : {});
+    state.teamEnabled = Boolean(payload.team_mode);
+    state.teamAuthenticated = Boolean(payload.authenticated);
+    state.teamUser = payload.user || null;
+    state.teamWorkspaces = Array.isArray(payload.workspaces) ? payload.workspaces : [];
+    state.teamActiveWorkspace = payload.active_workspace || null;
+    if (state.teamAuthenticated && state.teamActiveWorkspace?.workspace_id) {
+      localStorage.setItem("scoutml_team_workspace_id", state.teamActiveWorkspace.workspace_id);
+      await Promise.allSettled([refreshTeamPreferences(), refreshTeamCompareLists(), refreshTeamActivity()]);
+      if (state.selectedRow) {
+        void loadTeamCollaborationForSelectedRow();
+      }
+    } else {
+      localStorage.removeItem("scoutml_team_workspace_id");
+      state.teamCompareLists = [];
+      state.teamPreferenceProfile = null;
+      state.teamAssignments = [];
+      state.teamComments = [];
+      state.teamActivity = [];
+    }
+  } catch (err) {
+    localStorage.removeItem("scoutml_team_workspace_id");
+    state.teamEnabled = false;
+    state.teamAuthenticated = false;
+    state.teamUser = null;
+    state.teamWorkspaces = [];
+    state.teamActiveWorkspace = null;
+    state.teamCompareLists = [];
+    state.teamPreferenceProfile = null;
+    state.teamAssignments = [];
+    state.teamComments = [];
+    state.teamActivity = [];
+    if (el.teamAuthMeta) {
+      el.teamAuthMeta.textContent = err instanceof Error ? err.message : String(err);
+    }
+  }
+  renderTeamSessionState();
+}
+
+function collectTeamPreferencePayload() {
+  return {
+    name: el.teamPrefName?.value?.trim() || "Primary",
+    target_age_min: el.teamPrefAgeMin?.value ? Number(el.teamPrefAgeMin.value) : null,
+    target_age_max: el.teamPrefAgeMax?.value ? Number(el.teamPrefAgeMax.value) : null,
+    budget_posture: el.teamPrefBudgetPosture?.value || "balanced",
+    trusted_league_posture: el.teamPrefTrustPosture?.value || "balanced",
+    role_priorities: parseRolePriorityMap(el.teamPrefRolePriorities?.value || ""),
+    system_template_default: el.teamPrefSystemTemplate?.value || "",
+    must_have_tags: parseTagList(el.teamPrefMustHaveTags?.value || ""),
+    avoid_tags: parseTagList(el.teamPrefAvoidTags?.value || ""),
+    risk_tolerance: el.teamPrefRisk?.value || "balanced",
+    active_lane_preference: el.teamPrefLane?.value || "valuation",
+    apply_by_default: Boolean(el.teamPrefApply?.checked),
+  };
+}
+
+async function handleTeamLogin() {
+  if (!el.teamEmail || !el.teamPassword) return;
+  setButtonLoading(el.teamLoginBtn, true, "Logging in...");
+  try {
+    await requestJson("/auth/login", {
+      method: "POST",
+      body: {
+        email: el.teamEmail.value.trim(),
+        password: el.teamPassword.value,
+        workspace_id: el.teamWorkspaceSelect?.value || null,
+      },
+    });
+    await refreshTeamSession();
+    await refreshWatchlist();
+    if (backendReady()) {
+      await runQuery();
+    }
+  } catch (err) {
+    if (el.teamAuthMeta) el.teamAuthMeta.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamLoginBtn, false, "Login");
+  }
+}
+
+async function handleTeamBootstrap() {
+  if (!el.teamEmail || !el.teamPassword) return;
+  setButtonLoading(el.teamBootstrapBtn, true, "Bootstrapping...");
+  try {
+    await requestJson("/auth/bootstrap-admin", {
+      method: "POST",
+      body: {
+        email: el.teamEmail.value.trim(),
+        password: el.teamPassword.value,
+        full_name: el.teamFullName?.value?.trim() || null,
+        workspace_name: el.teamWorkspaceName?.value?.trim() || null,
+      },
+    });
+    await refreshTeamSession();
+    await refreshWatchlist();
+    if (backendReady()) {
+      await runQuery();
+    }
+  } catch (err) {
+    if (el.teamAuthMeta) el.teamAuthMeta.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamBootstrapBtn, false, "Bootstrap Admin");
+  }
+}
+
+async function handleTeamAcceptInvite() {
+  if (!el.teamInviteToken || !el.teamEmail || !el.teamPassword) return;
+  const token = el.teamInviteToken.value.trim();
+  if (!token) {
+    if (el.teamAuthMeta) el.teamAuthMeta.textContent = "Paste an invite token first.";
+    return;
+  }
+  setButtonLoading(el.teamAcceptInviteBtn, true, "Accepting...");
+  try {
+    await requestJson(`/invites/${encodeURIComponent(token)}/accept`, {
+      method: "POST",
+      body: {
+        email: el.teamEmail.value.trim(),
+        password: el.teamPassword.value,
+        full_name: el.teamFullName?.value?.trim() || null,
+      },
+    });
+    await refreshTeamSession();
+    await refreshWatchlist();
+    if (backendReady()) {
+      await runQuery();
+    }
+  } catch (err) {
+    if (el.teamAuthMeta) el.teamAuthMeta.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamAcceptInviteBtn, false, "Accept Invite");
+  }
+}
+
+async function handleTeamLogout() {
+  setButtonLoading(el.teamLogoutBtn, true, "Logging out...");
+  try {
+    await requestJson("/auth/logout", { method: "POST" });
+    state.teamCompareTray = [];
+    await refreshTeamSession();
+    await refreshWatchlist();
+    if (backendReady()) {
+      await runQuery();
+    }
+  } catch (err) {
+    if (el.teamAuthMeta) el.teamAuthMeta.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamLogoutBtn, false, "Logout");
+  }
+}
+
+async function handleTeamCreateWorkspace() {
+  const name = el.teamNewWorkspaceName?.value?.trim() || el.teamWorkspaceName?.value?.trim() || "";
+  if (!name) {
+    if (el.teamAuthMeta) el.teamAuthMeta.textContent = "Enter a workspace name first.";
+    return;
+  }
+  setButtonLoading(el.teamCreateWorkspaceBtn, true, "Creating...");
+  try {
+    await requestJson("/workspaces", {
+      method: "POST",
+      body: { name },
+    });
+    await refreshTeamSession();
+  } catch (err) {
+    if (el.teamAuthMeta) el.teamAuthMeta.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamCreateWorkspaceBtn, false, "Create Workspace");
+  }
+}
+
+async function handleTeamCreateInvite() {
+  const workspaceId = activeTeamWorkspaceId();
+  if (!workspaceId) {
+    if (el.teamInviteOutput) el.teamInviteOutput.textContent = "Choose an active workspace first.";
+    return;
+  }
+  setButtonLoading(el.teamCreateInviteBtn, true, "Creating invite...");
+  try {
+    const payload = await requestJson(`/workspaces/${encodeURIComponent(workspaceId)}/invites`, {
+      method: "POST",
+      body: {
+        email: el.teamInviteEmail?.value?.trim() || null,
+        role: el.teamInviteRole?.value || "scout",
+      },
+    });
+    if (el.teamInviteOutput) {
+      el.teamInviteOutput.textContent = payload.invite_url
+        ? `${payload.invite_url} | token ${payload.token}`
+        : payload.token || "Invite created.";
+    }
+    await refreshTeamSession();
+  } catch (err) {
+    if (el.teamInviteOutput) el.teamInviteOutput.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamCreateInviteBtn, false, "Create Invite");
+  }
+}
+
+async function handleWorkspaceSwitch() {
+  if (!el.teamWorkspaceSelect) return;
+  const workspaceId = String(el.teamWorkspaceSelect.value || "").trim();
+  if (!workspaceId) return;
+  localStorage.setItem("scoutml_team_workspace_id", workspaceId);
+  await refreshTeamSession();
+  if (backendReady()) {
+    await refreshWatchlist();
+    await runQuery();
+  }
+}
+
+async function saveTeamPreferences() {
+  if (!isTeamAuthenticated()) return;
+  setButtonLoading(el.teamPrefSaveBtn, true, "Saving...");
+  try {
+    state.teamPreferenceProfile = await requestJson("/team/preferences/me", {
+      method: "PUT",
+      body: collectTeamPreferencePayload(),
+    });
+    state.teamApplyPreferences = state.teamPreferenceProfile?.apply_by_default !== false;
+    renderTeamPreferenceControls();
+    if (backendReady()) {
+      await runQuery();
+    }
+  } catch (err) {
+    if (el.teamPrefMeta) el.teamPrefMeta.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamPrefSaveBtn, false, "Save Profile");
+  }
+}
+
+async function saveTeamAssignment() {
+  if (!isTeamAuthenticated() || !state.selectedRow) return;
+  setButtonLoading(el.teamAssignmentSaveBtn, true, "Saving...");
+  try {
+    await requestJson("/team/assignments", {
+      method: "POST",
+      body: {
+        player_id: state.selectedRow.player_id,
+        split: state.split,
+        season: state.selectedRow.season || null,
+        assignee_user_id: el.teamAssigneeSelect?.value || null,
+        status: el.teamAssignmentStatus?.value || "to_watch",
+        due_date: el.teamAssignmentDue?.value || null,
+        note: el.teamAssignmentNote?.value?.trim() || null,
+      },
+    });
+    if (el.teamAssignmentMeta) el.teamAssignmentMeta.textContent = "Shared assignment saved.";
+    await Promise.allSettled([loadTeamCollaborationForSelectedRow(), refreshTeamActivity()]);
+  } catch (err) {
+    if (el.teamAssignmentMeta) el.teamAssignmentMeta.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamAssignmentSaveBtn, false, "Save Assignment");
+  }
+}
+
+async function saveTeamComment() {
+  if (!isTeamAuthenticated() || !state.selectedRow || !el.teamCommentInput) return;
+  const body = el.teamCommentInput.value.trim();
+  if (!body) {
+    if (el.teamCommentMeta) el.teamCommentMeta.textContent = "Write a shared note first.";
+    return;
+  }
+  setButtonLoading(el.teamCommentSaveBtn, true, "Saving...");
+  try {
+    await requestJson(`/team/player/${encodeURIComponent(state.selectedRow.player_id)}/comments`, {
+      method: "POST",
+      body: {
+        split: state.split,
+        season: state.selectedRow.season || null,
+        body,
+      },
+    });
+    el.teamCommentInput.value = "";
+    if (el.teamCommentMeta) el.teamCommentMeta.textContent = "Shared comment saved.";
+    await Promise.allSettled([loadTeamCollaborationForSelectedRow(), refreshTeamActivity()]);
+  } catch (err) {
+    if (el.teamCommentMeta) el.teamCommentMeta.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamCommentSaveBtn, false, "Save Comment");
+  }
+}
+
+function addSelectedToCompareTray() {
+  if (!isTeamAuthenticated() || !state.selectedRow) return;
+  const playerId = String(state.selectedRow.player_id || "").trim();
+  if (!playerId) return;
+  if (state.teamCompareTray.some((row) => String(row.player_id || "").trim() === playerId)) {
+    renderTeamCompareWorkspace();
+    if (el.teamCompareMeta) el.teamCompareMeta.textContent = "Player already in compare tray.";
+    return;
+  }
+  if (state.teamCompareTray.length >= 4) {
+    if (el.teamCompareMeta) el.teamCompareMeta.textContent = "Compare tray supports at most 4 players.";
+    return;
+  }
+  state.teamCompareTray = [...state.teamCompareTray, { ...state.selectedRow }];
+  renderTeamCompareWorkspace();
+}
+
+function removePlayerFromCompareTray(playerId) {
+  state.teamCompareTray = state.teamCompareTray.filter((row) => String(row.player_id || "").trim() !== String(playerId || "").trim());
+  renderTeamCompareWorkspace();
+}
+
+async function createTeamCompareListFromInput() {
+  if (!isTeamAuthenticated() || !el.teamCompareName) return;
+  const name = el.teamCompareName.value.trim();
+  if (!name) {
+    if (el.teamCompareMeta) el.teamCompareMeta.textContent = "Name the compare list first.";
+    return;
+  }
+  setButtonLoading(el.teamCompareCreateBtn, true, "Creating...");
+  try {
+    await requestJson("/team/compare-lists", {
+      method: "POST",
+      body: { name, notes: "" },
+    });
+    await refreshTeamCompareLists();
+  } catch (err) {
+    if (el.teamCompareMeta) el.teamCompareMeta.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamCompareCreateBtn, false, "Create Compare List");
+  }
+}
+
+async function saveCompareTrayToList() {
+  if (!isTeamAuthenticated() || !el.teamCompareSelect) return;
+  const compareId = String(el.teamCompareSelect.value || "").trim();
+  if (!compareId) {
+    if (el.teamCompareMeta) el.teamCompareMeta.textContent = "Choose a compare list first.";
+    return;
+  }
+  if (state.teamCompareTray.length < 2) {
+    if (el.teamCompareMeta) el.teamCompareMeta.textContent = "Add at least 2 players to the compare tray first.";
+    return;
+  }
+  setButtonLoading(el.teamCompareSaveBtn, true, "Saving...");
+  try {
+    await Promise.all(
+      state.teamCompareTray.map((row) =>
+        requestJson(`/team/compare-lists/${encodeURIComponent(compareId)}/players`, {
+          method: "POST",
+          body: {
+            player_id: row.player_id,
+            split: state.split,
+            season: row.season || null,
+            pinned: false,
+            notes: "",
+          },
+        })
+      )
+    );
+    if (el.teamCompareMeta) el.teamCompareMeta.textContent = "Compare tray saved to the shared compare list.";
+    await Promise.allSettled([refreshTeamCompareLists(), refreshTeamActivity()]);
+  } catch (err) {
+    if (el.teamCompareMeta) el.teamCompareMeta.textContent = err instanceof Error ? err.message : String(err);
+  } finally {
+    setButtonLoading(el.teamCompareSaveBtn, false, "Save Tray to Selected List");
+  }
+}
+
 function reportCacheKey(row) {
   const playerId = String(row?.player_id || "").trim();
   const season = String(row?.season || state.season || "");
@@ -3380,6 +7161,54 @@ async function fetchPlayerProfileForRow(row) {
   const profile = payload.profile || null;
   if (profile) state.profileCache.set(key, profile);
   return profile;
+}
+
+async function fetchPlayerSimilarForRow(row) {
+  const playerId = String(row?.player_id || "").trim();
+  if (!playerId) {
+    throw new Error("Selected row has no player_id.");
+  }
+  const season = String(row?.season || state.season || "").trim();
+  const key = `${reportCacheKey(row)}|similar`;
+  if (state.similarCache.has(key)) {
+    return state.similarCache.get(key);
+  }
+  const payload = await getJson(`/market-value/player/${encodeURIComponent(playerId)}/similar`, {
+    split: state.split,
+    season: season || null,
+    n: 5,
+    same_position: true,
+    exclude_big5: false,
+  });
+  const similarPayload = {
+    player_id: payload.player_id || playerId,
+    available: true,
+    reason: null,
+    position_group: payload.position_group || null,
+    feature_count_used: payload.feature_count_used,
+    feature_columns_used: Array.isArray(payload.feature_columns_used) ? payload.feature_columns_used : [],
+    items: Array.isArray(payload.comparisons) ? payload.comparisons : [],
+  };
+  state.similarCache.set(key, similarPayload);
+  return similarPayload;
+}
+
+async function fetchPlayerTrajectoryForRow(row) {
+  const playerId = String(row?.player_id || "").trim();
+  if (!playerId) {
+    throw new Error("Selected row has no player_id.");
+  }
+  const season = String(row?.season || state.season || "").trim();
+  const key = `${reportCacheKey(row)}|trajectory`;
+  if (state.trajectoryCache.has(key)) {
+    return state.trajectoryCache.get(key);
+  }
+  const payload = await getJson(`/market-value/player/${encodeURIComponent(playerId)}/trajectory`, {
+    split: state.split,
+    season: season || null,
+  });
+  state.trajectoryCache.set(key, payload || null);
+  return payload || null;
 }
 
 async function fetchPlayerReportForRow(row) {
@@ -3415,19 +7244,100 @@ async function fetchPlayerHistoryForRow(row) {
   return payload.breakdown || null;
 }
 
+function embeddedSimilarPayloadFromProfile(profile = null) {
+  if (!profile?.similar_players || typeof profile.similar_players !== "object") {
+    return null;
+  }
+  return profile.similar_players;
+}
+
+function cachedTrajectoryForRow(row) {
+  const key = `${reportCacheKey(row)}|trajectory`;
+  if (!state.trajectoryCache.has(key)) {
+    return { available: false, payload: null };
+  }
+  return { available: true, payload: state.trajectoryCache.get(key) || null };
+}
+
+async function ensureSelectedSimilarLoaded() {
+  if (!state.selectedRow) return;
+  if (state.selectedSimilar || embeddedSimilarPayloadFromProfile(state.selectedProfile)) return;
+  const requestId = state.detailRequestId;
+  const row = state.selectedRow;
+  renderSimilarPlayers(null, { loading: true });
+  try {
+    const payload = await fetchPlayerSimilarForRow(row);
+    if (requestId !== state.detailRequestId || !state.selectedRow || rowKey(state.selectedRow) !== rowKey(row)) return;
+    state.selectedSimilar = payload || null;
+    renderSimilarPlayers(payload);
+    if (state.profileModalOpen) {
+      renderProfileModal(state.selectedRow, { profile: state.selectedProfile, trajectory: state.selectedTrajectory });
+    }
+  } catch (err) {
+    if (requestId !== state.detailRequestId || !state.selectedRow || rowKey(state.selectedRow) !== rowKey(row)) return;
+    const message = err instanceof Error ? err.message : String(err);
+    renderSimilarPlayers(null, { error: message });
+  }
+}
+
+async function ensureSelectedTrajectoryLoaded() {
+  if (!state.selectedRow) return;
+  const cached = cachedTrajectoryForRow(state.selectedRow);
+  if (cached.available) {
+    state.selectedTrajectory = cached.payload;
+    renderTrajectoryPanel(cached.payload);
+    return;
+  }
+  const requestId = state.detailRequestId;
+  const row = state.selectedRow;
+  renderTrajectoryPanel(null, { loading: true });
+  try {
+    const trajectory = await fetchPlayerTrajectoryForRow(row);
+    if (requestId !== state.detailRequestId || !state.selectedRow || rowKey(state.selectedRow) !== rowKey(row)) return;
+    state.selectedTrajectory = trajectory || null;
+    renderTrajectoryPanel(trajectory);
+    if (state.profileModalOpen) {
+      renderProfileModal(state.selectedRow, { profile: state.selectedProfile, trajectory: trajectory || null });
+    }
+  } catch (err) {
+    if (requestId !== state.detailRequestId || !state.selectedRow || rowKey(state.selectedRow) !== rowKey(row)) return;
+    const message = err instanceof Error ? err.message : String(err);
+    renderTrajectoryPanel(null, { error: message });
+  }
+}
+
 async function loadDetailWithReport(row) {
   if (!row) return clearDetail();
   const requestId = ++state.detailRequestId;
+  resetDecisionDraft();
   setDetailTab("overview");
-  renderDetail(row, { reportLoading: true });
+  renderDetail(row, { reportLoading: true, trajectoryDeferred: true });
+  if (isTeamAuthenticated()) {
+    void loadTeamCollaborationForSelectedRow();
+  }
   try {
     const profile = await fetchPlayerProfileForRow(row);
     if (requestId !== state.detailRequestId) return;
-    renderDetail(row, { profile });
+    if (!profile) {
+      const msg = "Player brief unavailable.";
+      renderDetail(row, { reportError: msg });
+      return;
+    }
+    const similarPayload = embeddedSimilarPayloadFromProfile(profile);
+    const cachedTrajectory = cachedTrajectoryForRow(row);
+    renderDetail(row, {
+      profile,
+      similarPayload,
+      trajectory: cachedTrajectory.available ? cachedTrajectory.payload : null,
+      trajectoryDeferred: !cachedTrajectory.available,
+    });
+    if (isTeamAuthenticated()) {
+      void loadTeamCollaborationForSelectedRow();
+    }
   } catch (err) {
     if (requestId !== state.detailRequestId) return;
     const msg = err instanceof Error ? err.message : String(err);
-    renderDetail(row, { reportError: msg });
+    renderDetail(row, { reportError: msg, trajectoryDeferred: true });
   }
 }
 
@@ -3484,11 +7394,14 @@ function buildPlayerMemoPayload(row, report = null) {
     valuation_guardrails: report?.valuation_guardrails || null,
     cohort: report?.cohort || null,
     history_strength: historyBreakdown,
+    trajectory: state.selectedTrajectory || null,
     player_type: report?.player_type || null,
     formation_fit: report?.formation_fit || null,
     radar_profile: report?.radar_profile || null,
     stat_groups: Array.isArray(report?.stat_groups) ? report.stat_groups : [],
-    similar_players: report?.similar_players || null,
+    similar_players: state.selectedSimilar || report?.similar_players || null,
+    proxy_estimates: report?.proxy_estimates || null,
+    latest_decision: report?.latest_decision || state.selectedLatestDecision || null,
   };
 }
 
@@ -3544,6 +7457,44 @@ async function ensureSelectedReport() {
     return state.selectedProfile;
   } catch {
     return null;
+  }
+}
+
+async function openSimilarPlayerReference(playerId, season = "") {
+  const row = {
+    player_id: String(playerId || "").trim(),
+    season: String(season || "").trim(),
+  };
+  if (!row.player_id) return;
+  setView("workbench");
+  try {
+    const profile = await fetchPlayerProfileForRow(row);
+    const nextRow = profile?.player && typeof profile.player === "object" ? profile.player : row;
+    await loadDetailWithReport(nextRow);
+  } catch {
+    await loadDetailWithReport(row);
+  }
+}
+
+async function downloadPlayerMemoPdf(row, button) {
+  const playerId = String(row?.player_id || "").trim();
+  if (!playerId) return;
+  const season = String(row?.season || state.season || "").trim();
+  setButtonLoading(button, true, "Generating...");
+  try {
+    const payload = await getBlob(`/market-value/player/${encodeURIComponent(playerId)}/memo.pdf`, {
+      split: state.split,
+      season: season || null,
+      include_trajectory: true,
+      include_similar: true,
+    });
+    const fallbackName = `scoutml_player_memo_${sanitizeFileToken(playerId)}_${sanitizeFileToken(state.split, "split")}.pdf`;
+    downloadBlob(payload.blob, payload.filename || fallbackName);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    setStatus("error", message || "Failed to generate player memo PDF.");
+  } finally {
+    setButtonLoading(button, false, "Generating...");
   }
 }
 
@@ -3729,6 +7680,7 @@ async function runFunnel() {
       max_market_value_eur: maxBudget,
       max_contract_years_left: maxContractYearsLeft,
       role_keys: roleNeed || null,
+      ...teamPreferenceRequestParams(),
     });
     const rows = (payload.items || []).map((row) => withComputedConservativeGap(row));
     state.funnelDiagnostics = payload.diagnostics || null;
@@ -3772,19 +7724,39 @@ async function runFunnel() {
   }
 }
 
+function clearBackendState() {
+  state.connected = false;
+  state.health = null;
+  state.metrics = null;
+  state.modelManifest = null;
+  state.benchmark = null;
+  state.activeArtifacts = null;
+  state.operatorHealth = null;
+  state.coverageRows = [];
+  state.systemFitTemplates = [];
+  state.systemFitSlots = [];
+  state.systemFitLanePosture = null;
+  state.systemFitFiltersApplied = null;
+}
+
 async function loadHealthAndMetrics() {
   state.reportCache = new Map();
   state.profileCache = new Map();
   state.selectedProfile = null;
   state.selectedReport = null;
   state.selectedHistory = null;
+  state.selectedSimilar = null;
+  state.selectedTrajectory = null;
+  state.metrics = null;
+  state.modelManifest = null;
+  state.benchmark = null;
+  state.activeArtifacts = null;
+  state.operatorHealth = null;
+  state.systemFitTemplates = [];
+  state.connected = false;
   state.health = await getJson("/market-value/health");
   state.connected = true;
   if (state.health?.status !== "ok") {
-    state.metrics = null;
-    state.modelManifest = null;
-    state.benchmark = null;
-    state.activeArtifacts = null;
     setStatus("error", "Artifacts missing");
     renderTrustCard();
     renderMetrics();
@@ -3792,22 +7764,6 @@ async function loadHealthAndMetrics() {
     renderBenchmarkCards();
     renderOverviewReadiness();
     return false;
-  }
-  state.metrics = (await getJson("/market-value/metrics")).payload || null;
-  try {
-    state.modelManifest = (await getJson("/market-value/model-manifest")).payload || null;
-  } catch {
-    state.modelManifest = null;
-  }
-  try {
-    state.benchmark = (await getJson("/market-value/benchmarks")).payload || null;
-  } catch {
-    state.benchmark = null;
-  }
-  try {
-    state.activeArtifacts = (await getJson("/market-value/active-artifacts")).payload || null;
-  } catch {
-    state.activeArtifacts = null;
   }
 
   const artifacts = state.health?.artifacts || {};
@@ -3822,9 +7778,100 @@ async function loadHealthAndMetrics() {
   return true;
 }
 
+async function loadDeferredWorkbenchMetadata() {
+  if (!backendReady()) return;
+  const tasks = [
+    async () => {
+      try {
+        state.metrics = (await getJson("/market-value/metrics")).payload || null;
+      } catch {
+        state.metrics = null;
+      }
+      renderMetrics();
+      renderSegmentTable();
+      renderOverviewReadiness();
+    },
+    async () => {
+      try {
+        state.modelManifest = (await getJson("/market-value/model-manifest")).payload || null;
+      } catch {
+        state.modelManifest = null;
+      }
+      renderTrustCard();
+      renderOverviewReadiness();
+    },
+    async () => {
+      try {
+        state.benchmark = (await getJson("/market-value/benchmarks")).payload || null;
+      } catch {
+        state.benchmark = null;
+      }
+      renderBenchmarkCards();
+      renderCoverageTable();
+      renderOverviewReadiness();
+    },
+    async () => {
+      try {
+        state.activeArtifacts = (await getJson("/market-value/active-artifacts")).payload || null;
+      } catch {
+        state.activeArtifacts = null;
+      }
+      renderTrustCard();
+    },
+    async () => {
+      try {
+        state.operatorHealth = (await getJson("/market-value/operator-health")).payload || null;
+      } catch {
+        state.operatorHealth = null;
+      }
+      renderOverviewReadiness();
+    },
+  ];
+  await Promise.allSettled(tasks.map((task) => task()));
+}
+
+async function connectWorkbench() {
+  readWorkbenchControlsToState();
+  localStorage.setItem("scoutml_api_base", state.apiBase);
+  state.initializing = true;
+  renderTopPicks();
+  renderBoardHighlights();
+  try {
+    const ready = await loadHealthAndMetrics();
+    if (!ready) {
+      return false;
+    }
+    await refreshTeamSession();
+    await refreshCoverageAndOptions();
+    await runQuery();
+    void refreshWatchlist();
+    void loadDeferredWorkbenchMetadata();
+    return true;
+  } catch (err) {
+    clearBackendState();
+    setStatus("error", err instanceof Error ? err.message : String(err));
+    renderTrustCard();
+    renderMetrics();
+    renderSegmentTable();
+    renderBenchmarkCards();
+    renderOverviewReadiness();
+    return false;
+  } finally {
+    state.initializing = false;
+    renderTopPicks();
+    renderBoardHighlights();
+  }
+}
+
 function resetWorkbenchControls() {
   state.mode = "shortlist";
   state.split = "test";
+  state.systemFitTemplate = DEFAULT_SYSTEM_FIT_TEMPLATE;
+  state.systemFitActiveLane = DEFAULT_SYSTEM_FIT_LANE;
+  state.systemFitSelectedSlot = "";
+  state.systemFitSlots = [];
+  state.systemFitLanePosture = null;
+  state.systemFitFiltersApplied = null;
   state.season = "";
   state.league = "";
   state.position = "";
@@ -3854,22 +7901,24 @@ function bindEvents() {
   el.tabButtons.forEach((btn) => {
     btn.addEventListener("click", () => setView(btn.dataset.view || "overview"));
   });
+  if (el.heroExploreBtn) {
+    el.heroExploreBtn.addEventListener("click", async () => {
+      setView("workbench");
+      scrollToBoard();
+      if (!state.rows.length && backendReady() && !state.loading) {
+        state.offset = 0;
+        await runQuery();
+      }
+    });
+  }
   el.detailTabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => setDetailTab(btn.dataset.detailTab || "overview"));
+    btn.addEventListener("click", async () => {
+      await activateDetailTab(btn.dataset.detailTab || "overview");
+    });
   });
 
   el.connectBtn.addEventListener("click", async () => {
-    readWorkbenchControlsToState();
-    localStorage.setItem("scoutml_api_base", state.apiBase);
-    try {
-      const ready = await loadHealthAndMetrics();
-      if (!ready) return;
-      await refreshCoverageAndOptions();
-      await runQuery();
-      await refreshWatchlist();
-    } catch (err) {
-      setStatus("error", err instanceof Error ? err.message : String(err));
-    }
+    await connectWorkbench();
   });
 
   el.refresh.addEventListener("click", async () => {
@@ -3910,8 +7959,28 @@ function bindEvents() {
     renderTrustCard();
   });
 
+  if (el.playstyle) {
+    el.playstyle.addEventListener("change", async () => {
+      state.playstyle = el.playstyle.value;
+      localStorage.setItem("scoutml_playstyle_lens", state.playstyle);
+      state.offset = 0;
+      await runQuery();
+    });
+  }
+
+  if (el.roleLens) {
+    el.roleLens.addEventListener("change", async () => {
+      state.roleLens = el.roleLens.value;
+      localStorage.setItem("scoutml_role_lens", state.roleLens);
+      state.offset = 0;
+      await runQuery();
+    });
+  }
+
   [
     el.mode,
+    el.systemFitTemplate,
+    el.systemFitActiveLane,
     el.season,
     el.league,
     el.position,
@@ -3936,6 +8005,22 @@ function bindEvents() {
     });
   });
 
+  if (el.systemFitSlotBar) {
+    el.systemFitSlotBar.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-slot-key]");
+      if (!button) return;
+      const nextSlot = String(button.dataset.slotKey || "").trim();
+      if (!nextSlot || nextSlot === state.systemFitSelectedSlot) return;
+      state.systemFitSelectedSlot = nextSlot;
+      renderModeAffordances();
+      applySystemFitSlotRows();
+      renderRows();
+      renderTopPicks();
+      renderPager();
+      clearDetail();
+    });
+  }
+
   el.exportBtn.addEventListener("click", () => {
     const diagnostics = state.queryDiagnostics || {};
     const rows = state.rows.map((row, idx) =>
@@ -3944,7 +8029,9 @@ function bindEvents() {
         split: state.split,
         rank: state.offset + idx + 1,
         rankingDriver: diagnostics.score_column || state.sortBy,
-        rankingBasis: diagnostics.ranking_basis || (state.mode === "shortlist" ? "shortlist" : "manual_sort"),
+        rankingBasis:
+          diagnostics.ranking_basis ||
+          (isSystemFitMode() ? "system_fit_slot_rank" : state.mode === "shortlist" ? "shortlist" : "manual_sort"),
       })
     );
     downloadCsv(rows, `scoutml_recruitment_board_${state.mode}_${state.split}.csv`);
@@ -3964,12 +8051,121 @@ function bindEvents() {
           minMinutes: state.minMinutes,
           minConfidence: state.minConfidence,
           minGapEur: state.minGapEur,
+          systemTemplate: isSystemFitMode() ? state.systemFitTemplate : null,
+          systemSlot: isSystemFitMode() ? state.systemFitSelectedSlot : null,
+          systemLane: isSystemFitMode() ? state.systemFitActiveLane : null,
         },
         diagnostics,
         rankingDriver: diagnostics.score_column || state.sortBy,
-        rankingBasis: diagnostics.ranking_basis || (state.mode === "shortlist" ? "shortlist" : "manual_sort"),
+        rankingBasis:
+          diagnostics.ranking_basis ||
+          (isSystemFitMode() ? "system_fit_slot_rank" : state.mode === "shortlist" ? "shortlist" : "manual_sort"),
       });
       downloadJson(pack, `scoutml_window_pack_${state.mode}_${state.split}.json`);
+    });
+  }
+
+  if (Array.isArray(el.detailDecisionActionButtons)) {
+    el.detailDecisionActionButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        setDecisionDraftAction(button.dataset.scoutAction || "");
+      });
+    });
+  }
+  if (el.detailDecisionReasons) {
+    el.detailDecisionReasons.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-decision-reason]");
+      if (!button) return;
+      toggleDecisionReason(button.dataset.decisionReason || "");
+    });
+  }
+  if (el.detailDecisionNoteInput) {
+    el.detailDecisionNoteInput.addEventListener("input", () => {
+      state.decisionDraftNote = el.detailDecisionNoteInput.value || "";
+    });
+  }
+  if (el.detailDecisionSaveBtn) {
+    el.detailDecisionSaveBtn.addEventListener("click", async () => {
+      await saveScoutDecision();
+    });
+  }
+  if (el.detailDecisionClearBtn) {
+    el.detailDecisionClearBtn.addEventListener("click", () => {
+      resetDecisionDraft();
+      renderScoutDecisionComposer("Decision draft cleared.");
+    });
+  }
+  if (el.teamLoginBtn) {
+    el.teamLoginBtn.addEventListener("click", handleTeamLogin);
+  }
+  if (el.teamBootstrapBtn) {
+    el.teamBootstrapBtn.addEventListener("click", handleTeamBootstrap);
+  }
+  if (el.teamAcceptInviteBtn) {
+    el.teamAcceptInviteBtn.addEventListener("click", handleTeamAcceptInvite);
+  }
+  if (el.teamLogoutBtn) {
+    el.teamLogoutBtn.addEventListener("click", handleTeamLogout);
+  }
+  if (el.teamCreateWorkspaceBtn) {
+    el.teamCreateWorkspaceBtn.addEventListener("click", handleTeamCreateWorkspace);
+  }
+  if (el.teamCreateInviteBtn) {
+    el.teamCreateInviteBtn.addEventListener("click", handleTeamCreateInvite);
+  }
+  if (el.teamWorkspaceSelect) {
+    el.teamWorkspaceSelect.addEventListener("change", async () => {
+      await handleWorkspaceSwitch();
+    });
+  }
+  if (el.teamPrefApply) {
+    el.teamPrefApply.addEventListener("change", async () => {
+      state.teamApplyPreferences = Boolean(el.teamPrefApply.checked);
+      renderTeamPreferenceControls();
+      if (backendReady()) {
+        state.offset = 0;
+        await runQuery();
+      }
+    });
+  }
+  if (el.teamPrefSaveBtn) {
+    el.teamPrefSaveBtn.addEventListener("click", async () => {
+      await saveTeamPreferences();
+    });
+  }
+  if (el.teamAssignmentSaveBtn) {
+    el.teamAssignmentSaveBtn.addEventListener("click", async () => {
+      await saveTeamAssignment();
+    });
+  }
+  if (el.teamCommentSaveBtn) {
+    el.teamCommentSaveBtn.addEventListener("click", async () => {
+      await saveTeamComment();
+    });
+  }
+  if (el.teamCompareAddBtn) {
+    el.teamCompareAddBtn.addEventListener("click", addSelectedToCompareTray);
+  }
+  if (el.teamCompareCreateBtn) {
+    el.teamCompareCreateBtn.addEventListener("click", async () => {
+      await createTeamCompareListFromInput();
+    });
+  }
+  if (el.teamCompareRefreshBtn) {
+    el.teamCompareRefreshBtn.addEventListener("click", async () => {
+      await Promise.allSettled([refreshTeamCompareLists(), refreshTeamActivity()]);
+    });
+  }
+  if (el.teamCompareSaveBtn) {
+    el.teamCompareSaveBtn.addEventListener("click", async () => {
+      await saveCompareTrayToList();
+    });
+  }
+  if (el.teamCompareTray) {
+    el.teamCompareTray.addEventListener("click", (event) => {
+      const button = event.target.closest(".team-compare-remove");
+      if (!button) return;
+      removePlayerFromCompareTray(button.dataset.playerId);
     });
   }
 
@@ -3980,6 +8176,18 @@ function bindEvents() {
     if (!Number.isFinite(idx)) return;
     await loadDetailWithReport(state.rows[idx]);
   });
+  if (el.topPicksGrid) {
+    el.topPicksGrid.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-index]");
+      if (!button) return;
+      const idx = Number(button.dataset.index);
+      if (!Number.isFinite(idx)) return;
+      const row = state.topPicks[idx];
+      if (!row) return;
+      setView("workbench");
+      await loadDetailWithReport(row);
+    });
+  }
 
   el.funnelBody.addEventListener("click", async (event) => {
     const tr = event.target.closest("tr");
@@ -3997,6 +8205,29 @@ function bindEvents() {
       if (!state.selectedRow) return;
       await ensureSelectedReport();
       openProfileModal();
+    });
+  }
+
+  if (el.detailSimilar) {
+    el.detailSimilar.addEventListener("click", async (event) => {
+      const trigger = event.target.closest("[data-similar-player-id]");
+      if (!trigger) return;
+      await openSimilarPlayerReference(trigger.dataset.similarPlayerId, trigger.dataset.similarPlayerSeason);
+    });
+  }
+
+  if (el.profileModalBody) {
+    el.profileModalBody.addEventListener("click", async (event) => {
+      const trigger = event.target.closest("[data-similar-player-id]");
+      if (!trigger) return;
+      await openSimilarPlayerReference(trigger.dataset.similarPlayerId, trigger.dataset.similarPlayerSeason);
+    });
+  }
+
+  if (el.detailExportPdf) {
+    el.detailExportPdf.addEventListener("click", async () => {
+      if (!state.selectedRow) return;
+      await downloadPlayerMemoPdf(state.selectedRow, el.detailExportPdf);
     });
   }
 
@@ -4018,6 +8249,12 @@ function bindEvents() {
     downloadCsv([row], `scoutml_player_memo_${playerToken}_${splitToken}.csv`);
   });
 
+  if (el.profileModalExportPdf) {
+    el.profileModalExportPdf.addEventListener("click", async () => {
+      if (!state.selectedRow) return;
+      await downloadPlayerMemoPdf(state.selectedRow, el.profileModalExportPdf);
+    });
+  }
   if (el.profileModalExportJson) {
     el.profileModalExportJson.addEventListener("click", async () => {
       if (!state.selectedRow) return;
@@ -4094,9 +8331,20 @@ function bindEvents() {
   }
   if (el.watchlistBody) {
     el.watchlistBody.addEventListener("click", async (event) => {
-      const btn = event.target.closest(".watchlist-delete");
-      if (!btn) return;
-      await deleteWatchlistItem(btn.dataset.watchId);
+      const decisionBtn = event.target.closest(".watchlist-open-decision");
+      if (decisionBtn) {
+        const playerId = String(decisionBtn.dataset.playerId || "").trim();
+        const season = String(decisionBtn.dataset.season || "").trim();
+        const row = state.watchlistRows.find(
+          (item) => String(item.player_id || "").trim() === playerId && String(item.season || "").trim() === season
+        );
+        if (!row) return;
+        await openWatchlistDecision(row);
+        return;
+      }
+      const deleteBtn = event.target.closest(".watchlist-delete");
+      if (!deleteBtn) return;
+      await deleteWatchlistItem(deleteBtn.dataset.watchId);
     });
   }
 
@@ -4109,22 +8357,27 @@ function bindEvents() {
 
 async function boot() {
   syncWorkbenchControlsFromState();
+  renderTeamSessionState();
   renderModeAffordances();
   renderDetailTab();
+  renderTopPicks();
+  renderBoardHighlights();
   bindEvents();
 
   try {
-    const ready = await loadHealthAndMetrics();
-    if (!ready) return;
-    await refreshCoverageAndOptions();
-    await runQuery();
-    await refreshWatchlist();
+    await connectWorkbench();
   } catch {
-    el.tbody.innerHTML = `<tr><td colspan=\"10\">Connect API to start the recruitment board. Expected backend: ${state.apiBase}</td></tr>`;
+    clearBackendState();
+    el.tbody.innerHTML = `<tr><td colspan="${RESULTS_TABLE_COLSPAN}">Connect API to start the recruitment board. Expected backend: ${state.apiBase}</td></tr>`;
     el.funnelMeta.textContent = "Connect API before building the recruitment funnel.";
     if (el.watchlistMeta) {
       el.watchlistMeta.textContent = "Connect API before using the recruitment watchlist.";
     }
+    renderTrustCard();
+    renderMetrics();
+    renderSegmentTable();
+    renderBenchmarkCards();
+    renderOverviewReadiness();
   }
 }
 

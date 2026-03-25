@@ -526,6 +526,7 @@ def run_provider_promotion_pipeline(
     band_blend_alpha: float,
     with_backtest: bool,
     backtest_test_seasons: Sequence[str],
+    backtest_exclude_latest_season: bool,
     review_confidence_threshold: float,
     skip_injuries: bool,
     skip_contracts: bool,
@@ -641,6 +642,7 @@ def run_provider_promotion_pipeline(
         backtest_min_test_samples=PRODUCTION_PIPELINE_DEFAULTS.backtest_min_test_samples,
         backtest_min_test_under5m_samples=PRODUCTION_PIPELINE_DEFAULTS.backtest_min_test_under5m_samples,
         backtest_min_test_over20m_samples=PRODUCTION_PIPELINE_DEFAULTS.backtest_min_test_over20m_samples,
+        backtest_exclude_latest_season=backtest_exclude_latest_season,
         backtest_skip_incomplete_test_seasons=PRODUCTION_PIPELINE_DEFAULTS.backtest_skip_incomplete_test_seasons,
         backtest_drop_incomplete_league_seasons=PRODUCTION_PIPELINE_DEFAULTS.drop_incomplete_league_seasons,
         backtest_min_league_season_rows=PRODUCTION_PIPELINE_DEFAULTS.min_league_season_rows,
@@ -751,6 +753,7 @@ def run_provider_promotion_pipeline(
         },
         "flags": {
             "with_backtest": bool(with_backtest),
+            "backtest_exclude_latest_season": bool(backtest_exclude_latest_season),
             "skip_injuries": bool(skip_injuries),
             "skip_contracts": bool(skip_contracts),
             "skip_transfers": bool(skip_transfers),
@@ -835,6 +838,11 @@ def main() -> None:
     parser.add_argument("--band-blend-alpha", type=float, default=defaults.band_blend_alpha)
     parser.add_argument("--with-backtest", action=argparse.BooleanOptionalAction, default=defaults.with_backtest)
     parser.add_argument("--backtest-test-seasons", default=defaults.backtest_test_seasons)
+    parser.add_argument(
+        "--backtest-exclude-latest-season",
+        action=argparse.BooleanOptionalAction,
+        default=defaults.backtest_exclude_latest_season,
+    )
     parser.add_argument("--review-confidence-threshold", type=float, default=0.80)
     parser.add_argument("--skip-injuries", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--skip-contracts", action=argparse.BooleanOptionalAction, default=True)
@@ -873,6 +881,7 @@ def main() -> None:
         band_blend_alpha=args.band_blend_alpha,
         with_backtest=args.with_backtest,
         backtest_test_seasons=_parse_csv_tokens(args.backtest_test_seasons),
+        backtest_exclude_latest_season=args.backtest_exclude_latest_season,
         review_confidence_threshold=args.review_confidence_threshold,
         skip_injuries=args.skip_injuries,
         skip_contracts=args.skip_contracts,

@@ -37,6 +37,17 @@ def read_csv_env(name: str, default: str) -> tuple[str, ...]:
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
+def read_int_env(name: str, default: int) -> int:
+    """Parse an integer environment variable with a validated fallback."""
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return int(default)
+    try:
+        return int(raw.strip())
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer, got {raw!r}.") from exc
+
+
 @dataclass(frozen=True)
 class ApiRuntimeConfig:
     """Environment-backed API settings used across app initialization."""
@@ -49,10 +60,17 @@ class ApiRuntimeConfig:
     )
     strict_artifacts: bool = False
     experimental_nlp_routes: bool = False
+    database_url: str = ""
+    team_mode: bool = False
+    session_cookie_name: str = "scoutml_session"
+    session_secret: str = "scoutml-dev-session-secret"
+    invite_token_ttl_hours: int = 72
+    session_secure_cookie: bool = False
 
 
 def load_api_runtime_config() -> ApiRuntimeConfig:
     """Resolve API runtime settings from environment variables."""
+    database_url = read_str_env("SCOUTING_DATABASE_URL", "")
     return ApiRuntimeConfig(
         cors_origins=read_csv_env(
             "SCOUTING_API_CORS_ORIGINS",
@@ -63,6 +81,12 @@ def load_api_runtime_config() -> ApiRuntimeConfig:
             "SCOUTING_ENABLE_EXPERIMENTAL_NLP_ROUTES",
             default=False,
         ),
+        database_url=database_url,
+        team_mode=read_bool_env("SCOUTING_TEAM_MODE", default=bool(database_url.strip())),
+        session_cookie_name=read_str_env("SCOUTING_SESSION_COOKIE_NAME", "scoutml_session"),
+        session_secret=read_str_env("SCOUTING_SESSION_SECRET", "scoutml-dev-session-secret"),
+        invite_token_ttl_hours=max(read_int_env("SCOUTING_INVITE_TOKEN_TTL_HOURS", 72), 1),
+        session_secure_cookie=read_bool_env("SCOUTING_SESSION_SECURE_COOKIE", default=False),
     )
 
 
@@ -97,6 +121,7 @@ class ProductionPipelineDefaults:
     backtest_min_test_samples: int = 300
     backtest_min_test_under5m_samples: int = 50
     backtest_min_test_over20m_samples: int = 25
+    backtest_exclude_latest_season: bool = True
     backtest_skip_incomplete_test_seasons: bool = True
     drop_incomplete_league_seasons: bool = True
     min_league_season_rows: int = 40
@@ -128,5 +153,6 @@ __all__ = [
     "load_api_runtime_config",
     "read_bool_env",
     "read_csv_env",
+    "read_int_env",
     "read_str_env",
 ]

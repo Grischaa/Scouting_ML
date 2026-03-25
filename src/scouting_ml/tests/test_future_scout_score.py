@@ -103,10 +103,20 @@ def test_build_future_scout_score_writes_enriched_predictions(tmp_path: Path) ->
     val_scored = pd.read_csv(out_val)
     assert "future_growth_probability" in val_scored.columns
     assert "future_scout_blend_score" in val_scored.columns
+    assert "future_potential_score" in val_scored.columns
+    assert "future_potential_confidence" in val_scored.columns
+    assert "talent_position_family" in val_scored.columns
+    assert "talent_impact_score" in val_scored.columns
+    assert "talent_trajectory_score" in val_scored.columns
+    assert set(val_scored["talent_position_family"]) == {"ST", "CM", "CB"}
+    assert val_scored["future_potential_score"].between(0, 100).all()
+    assert val_scored["future_potential_confidence"].between(0, 100).all()
 
     payload = json.loads(diagnostics_out.read_text(encoding="utf-8"))
     assert payload["features"]["base_rank_column"] == "undervaluation_score"
     assert payload["val_metrics"]["k_eval"] == 3
+    assert payload["training_position_family_counts"]["ST"] == 2
+    assert payload["future_talent_summary"]["future_label_coverage"]["labeled_rows"] == 6
 
 
 def test_query_scout_targets_prefers_future_scout_blend_score(tmp_path: Path, monkeypatch) -> None:

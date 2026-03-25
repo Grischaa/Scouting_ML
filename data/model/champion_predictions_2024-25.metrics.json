@@ -2,7 +2,7 @@
   "dataset": "data/model/champion_players_clean.parquet",
   "val_season": "2023/24",
   "test_season": "2024/25",
-  "trials_per_position": 40,
+  "trials_per_position": 20,
   "recency_half_life": 2.0,
   "under_5m_weight": 1.0,
   "mid_5m_to_20m_weight": 1.0,
@@ -20,104 +20,170 @@
   "min_league_season_completeness": 0.55,
   "residual_calibration_min_samples": 30,
   "mape_min_denom_eur": 1000000.0,
+  "min_feature_coverage": 0.01,
+  "min_provider_feature_coverage": 0.05,
+  "save_shap_artifacts": true,
+  "holdout_n_optuna_trials": 20,
+  "requested_league_holdouts": [
+    {
+      "requested_token": "Austrian Bundesliga",
+      "league": "Austrian Bundesliga",
+      "league_slug": "austrian_bundesliga",
+      "resolved_from": "slug"
+    },
+    {
+      "requested_token": "Belgian Pro League",
+      "league": "Belgian Pro League",
+      "league_slug": "belgian_pro_league",
+      "resolved_from": "slug"
+    },
+    {
+      "requested_token": "Czech Fortuna Liga",
+      "league": "Czech Fortuna Liga",
+      "league_slug": "czech_first_league",
+      "resolved_from": "name"
+    },
+    {
+      "requested_token": "Danish Superliga",
+      "league": "Danish Superliga",
+      "league_slug": "danish_superliga",
+      "resolved_from": "slug"
+    },
+    {
+      "requested_token": "Eredivisie",
+      "league": "Eredivisie",
+      "league_slug": "dutch_eredivisie",
+      "resolved_from": "name"
+    },
+    {
+      "requested_token": "Estonian Meistriliiga",
+      "league": "Estonian Meistriliiga",
+      "league_slug": "estonian_meistriliiga",
+      "resolved_from": "slug"
+    },
+    {
+      "requested_token": "Greek Super League",
+      "league": "Greek Super League",
+      "league_slug": "greek_super_league",
+      "resolved_from": "slug"
+    },
+    {
+      "requested_token": "Primeira Liga",
+      "league": "Primeira Liga",
+      "league_slug": "portuguese_primeira_liga",
+      "resolved_from": "name"
+    },
+    {
+      "requested_token": "Scottish Premiership",
+      "league": "Scottish Premiership",
+      "league_slug": "scottish_premiership",
+      "resolved_from": "slug"
+    },
+    {
+      "requested_token": "Turkish Super Lig",
+      "league": "Turkish Super Lig",
+      "league_slug": "turkish_super_lig",
+      "resolved_from": "slug"
+    }
+  ],
   "positions": [
     {
       "split": "val",
       "position": "GK",
-      "n_samples": 267,
-      "r2": 0.6370076191018905,
-      "mae_eur": 2614506.83262028,
-      "mape": 0.5137743985664147,
-      "wmape": 0.46143693045105333
+      "n_samples": 313,
+      "r2": 0.6395695682520096,
+      "mae_eur": 2391531.5909841545,
+      "mape": 0.536648499560126,
+      "wmape": 0.48048615955968954
     },
     {
       "split": "val",
       "position": "DF",
-      "n_samples": 1401,
-      "r2": 0.7844651343070712,
-      "mae_eur": 2583945.9995776624,
-      "mape": 0.4048591400712498,
-      "wmape": 0.36952135610363696
+      "n_samples": 1623,
+      "r2": 0.792737880587551,
+      "mae_eur": 2342708.528279186,
+      "mape": 0.45050615315575865,
+      "wmape": 0.3779997118335543
     },
     {
       "split": "val",
       "position": "MF",
-      "n_samples": 1106,
-      "r2": 0.7811247475896466,
-      "mae_eur": 3193413.3216483654,
-      "mape": 0.47628359640229456,
-      "wmape": 0.38268712341122973
+      "n_samples": 1258,
+      "r2": 0.7667963782270851,
+      "mae_eur": 3059423.294815452,
+      "mape": 0.5255668418071077,
+      "wmape": 0.4081404780901156
     },
     {
       "split": "val",
       "position": "FW",
-      "n_samples": 1003,
-      "r2": 0.7824108069059743,
-      "mae_eur": 3397854.293205232,
-      "mape": 0.4515334762468408,
-      "wmape": 0.3611645332596651
+      "n_samples": 1153,
+      "r2": 0.7850762600404753,
+      "mae_eur": 3082333.6577398516,
+      "mape": 0.4593219531967799,
+      "wmape": 0.36681949810332326
     },
     {
       "split": "test",
       "position": "GK",
-      "n_samples": 292,
-      "r2": 0.6135213603690008,
-      "mae_eur": 2615413.990822844,
-      "mape": 0.5431494216448209,
-      "wmape": 0.4916603159190828
+      "n_samples": 350,
+      "r2": 0.650357234055988,
+      "mae_eur": 2360314.6924642283,
+      "mape": 0.58538207343867,
+      "wmape": 0.508990959752858
     },
     {
       "split": "test",
       "position": "DF",
-      "n_samples": 1402,
-      "r2": 0.7271336117043594,
-      "mae_eur": 2837527.272897167,
-      "mape": 0.47060985550303963,
-      "wmape": 0.41262400347276657
+      "n_samples": 1674,
+      "r2": 0.7487089298417471,
+      "mae_eur": 2495380.0933883907,
+      "mape": 0.526618892643162,
+      "wmape": 0.417124716667066
     },
     {
       "split": "test",
       "position": "MF",
-      "n_samples": 1139,
-      "r2": 0.7487318807838087,
-      "mae_eur": 3398764.9301532637,
-      "mape": 0.5073239737592604,
-      "wmape": 0.40634556599973415
+      "n_samples": 1390,
+      "r2": 0.7180769339216764,
+      "mae_eur": 3211280.60562846,
+      "mape": 0.6353994676744043,
+      "wmape": 0.4509355301674217
     },
     {
       "split": "test",
       "position": "FW",
-      "n_samples": 1048,
-      "r2": 0.7629324256144874,
-      "mae_eur": 3662201.168248006,
-      "mape": 0.5747457700208948,
-      "wmape": 0.3925823192431369
+      "n_samples": 1245,
+      "r2": 0.7579327745317257,
+      "mae_eur": 3356151.516462713,
+      "mape": 0.609041495615405,
+      "wmape": 0.4113685959945278
     }
   ],
   "overall": {
     "val": {
-      "n_samples": 3777,
-      "mae_eur": 2932638.7264344827,
-      "mape": 0.4013547635110009,
-      "mape_raw": 0.5692446468610187,
+      "n_samples": 4347,
+      "mae_eur": 2674124.82327761,
+      "mape": 0.4024220216880423,
+      "mape_raw": 0.757700779091525,
       "mape_min_denom_eur": 1000000.0,
-      "wmape": 0.3695259221735054,
-      "r2": 0.7800704271728897,
-      "interval_coverage": 0.7995763833730474,
-      "interval_avg_width_eur": 8705937.731356673,
-      "interval_median_width_eur": 2407877.048480907
+      "wmape": 0.3782125259100782,
+      "r2": 0.7793725282625574,
+      "interval_coverage": 0.7994018863584081,
+      "interval_avg_width_eur": 7753842.312300934,
+      "interval_median_width_eur": 2149686.063696686
     },
     "test": {
-      "n_samples": 3881,
-      "mae_eur": 3168944.928711061,
-      "mape": 0.4593982370857389,
-      "mape_raw": 0.9630778925157409,
+      "n_samples": 4659,
+      "mae_eur": 2831660.8114669607,
+      "mape": 0.4815089777332152,
+      "mape_raw": 0.9039556753858423,
       "mape_min_denom_eur": 1000000.0,
-      "wmape": 0.4032659954677734,
-      "r2": 0.745037962536223,
-      "interval_coverage": 0.7776346302499356,
-      "interval_avg_width_eur": 8668636.201479537,
-      "interval_median_width_eur": 2407877.0484809065
+      "wmape": 0.4162589666030859,
+      "r2": 0.7425127979750048,
+      "interval_coverage": 0.7759175788795879,
+      "interval_avg_width_eur": 7496344.005796764,
+      "interval_median_width_eur": 2149686.063696686
     }
   },
   "segments": {
@@ -127,39 +193,39 @@
         "segment": "under_5m",
         "lower_eur": 0.0,
         "upper_eur": 5000000.0,
-        "n_samples": 2342,
-        "mae_eur": 757636.7588164093,
-        "mape": 0.41621373819408636,
-        "mape_raw": 0.6869738105309854,
+        "n_samples": 2874,
+        "mae_eur": 711912.6883002752,
+        "mape": 0.4136454827817446,
+        "mape_raw": 0.9510138747208327,
         "mape_min_denom_eur": 1000000.0,
-        "wmape": 0.4894045921083491,
-        "r2": -0.15880321609946635
+        "wmape": 0.5070529053220982,
+        "r2": -0.0963650101715181
       },
       {
         "split": "val",
         "segment": "5m_to_20m",
         "lower_eur": 5000000.0,
         "upper_eur": 20000000.0,
-        "n_samples": 972,
-        "mae_eur": 3873215.238793644,
-        "mape": 0.39923838995498023,
-        "mape_raw": 0.39923838995498023,
+        "n_samples": 1006,
+        "mae_eur": 3850016.0623543034,
+        "mape": 0.3989270471161091,
+        "mape_raw": 0.3989270471161091,
         "mape_min_denom_eur": 1000000.0,
-        "wmape": 0.3980719230354134,
-        "r2": -0.7692602576358318
+        "wmape": 0.3987559105043168,
+        "r2": -0.7648756767414826
       },
       {
         "split": "val",
         "segment": "over_20m",
         "lower_eur": 20000000.0,
         "upper_eur": Infinity,
-        "n_samples": 463,
-        "mae_eur": 11959883.30126909,
-        "mape": 0.33063639717982596,
-        "mape_raw": 0.33063639717982596,
+        "n_samples": 467,
+        "mae_eur": 12216846.642150639,
+        "mape": 0.34087966030916483,
+        "mape_raw": 0.34087966030916483,
         "mape_min_denom_eur": 1000000.0,
-        "wmape": 0.32781351932794156,
-        "r2": 0.1802447378346309
+        "wmape": 0.33586079836841987,
+        "r2": 0.14679022375269346
       }
     ],
     "test": [
@@ -168,51 +234,51 @@
         "segment": "under_5m",
         "lower_eur": 0.0,
         "upper_eur": 5000000.0,
-        "n_samples": 2486,
-        "mae_eur": 821363.4114886365,
-        "mape": 0.49141592848119314,
-        "mape_raw": 1.2777315932936781,
+        "n_samples": 3204,
+        "mae_eur": 821817.600622762,
+        "mape": 0.52038417456341,
+        "mape_raw": 1.1346723032661534,
         "mape_min_denom_eur": 1000000.0,
-        "wmape": 0.5737836247931464,
-        "r2": -0.3254056173097526
+        "wmape": 0.6244006043133238,
+        "r2": -0.5554409399904792
       },
       {
         "split": "test",
         "segment": "5m_to_20m",
         "lower_eur": 5000000.0,
         "upper_eur": 20000000.0,
-        "n_samples": 885,
-        "mae_eur": 4048652.240052011,
-        "mape": 0.4287898972434583,
-        "mape_raw": 0.4287898972434583,
+        "n_samples": 942,
+        "mae_eur": 3886486.015114884,
+        "mape": 0.4112564070087079,
+        "mape_raw": 0.4112564070087079,
         "mape_min_denom_eur": 1000000.0,
-        "wmape": 0.4201521144988309,
-        "r2": -0.8355588959988964
+        "wmape": 0.40717008577414454,
+        "r2": -0.6779177404169312
       },
       {
         "split": "test",
         "segment": "over_20m",
         "lower_eur": 20000000.0,
         "upper_eur": Infinity,
-        "n_samples": 510,
-        "mae_eur": 13085703.127295779,
-        "mape": 0.3564421585589138,
-        "mape_raw": 0.3564421585589138,
+        "n_samples": 513,
+        "mae_eur": 13447435.286532199,
+        "mape": 0.36771129932881297,
+        "mape_raw": 0.36771129932881297,
         "mape_min_denom_eur": 1000000.0,
-        "wmape": 0.3624848511716282,
-        "r2": 0.058385668374796085
+        "wmape": 0.37319633767871346,
+        "r2": 0.005122118827668776
       }
     ]
   },
   "quality_report": {
-    "n_rows": 17346,
-    "n_columns": 234,
+    "n_rows": 20310,
+    "n_columns": 340,
     "missing_rates": {
       "market_value_eur": 0.0,
       "log_market_value": 0.0,
       "minutes": 0.0,
       "sofa_minutesPlayed": 0.0,
-      "age": 0.0004035512510088781,
+      "age": 0.00034465780403742,
       "season": 0.0,
       "league": 0.0,
       "position_group": 0.0
@@ -231,8 +297,18 @@
     "league_season_rows": [
       {
         "league": "Austrian Bundesliga",
+        "season": "2023/24",
+        "n_rows": 227
+      },
+      {
+        "league": "Austrian Bundesliga",
+        "season": "2024/25",
+        "n_rows": 230
+      },
+      {
+        "league": "Austrian Bundesliga",
         "season": "2025/26",
-        "n_rows": 130
+        "n_rows": 192
       },
       {
         "league": "Belgian Pro League",
@@ -248,6 +324,11 @@
         "league": "Belgian Pro League",
         "season": "2024/25",
         "n_rows": 321
+      },
+      {
+        "league": "Belgian Pro League",
+        "season": "2025/26",
+        "n_rows": 264
       },
       {
         "league": "Bundesliga",
@@ -278,6 +359,21 @@
         "league": "Bundesliga",
         "season": "2024/25",
         "n_rows": 339
+      },
+      {
+        "league": "Czech Fortuna Liga",
+        "season": "2024/25",
+        "n_rows": 320
+      },
+      {
+        "league": "Danish Superliga",
+        "season": "2023/24",
+        "n_rows": 207
+      },
+      {
+        "league": "Danish Superliga",
+        "season": "2024/25",
+        "n_rows": 221
       },
       {
         "league": "English Premier League",
@@ -325,9 +421,19 @@
         "n_rows": 343
       },
       {
+        "league": "Eredivisie",
+        "season": "2025/26",
+        "n_rows": 304
+      },
+      {
+        "league": "Estonian Meistriliiga",
+        "season": "2023/24",
+        "n_rows": 136
+      },
+      {
         "league": "Estonian Meistriliiga",
         "season": "2024/25",
-        "n_rows": 171
+        "n_rows": 178
       },
       {
         "league": "Greek Super League",
@@ -343,6 +449,11 @@
         "league": "Greek Super League",
         "season": "2024/25",
         "n_rows": 291
+      },
+      {
+        "league": "Greek Super League",
+        "season": "2025/26",
+        "n_rows": 232
       },
       {
         "league": "LaLiga",
@@ -420,6 +531,11 @@
         "n_rows": 349
       },
       {
+        "league": "Primeira Liga",
+        "season": "2025/26",
+        "n_rows": 278
+      },
+      {
         "league": "Scottish Premiership",
         "season": "2022/23",
         "n_rows": 239
@@ -433,6 +549,11 @@
         "league": "Scottish Premiership",
         "season": "2024/25",
         "n_rows": 244
+      },
+      {
+        "league": "Scottish Premiership",
+        "season": "2025/26",
+        "n_rows": 192
       },
       {
         "league": "Serie A",
@@ -478,6 +599,11 @@
         "league": "Turkish Super Lig",
         "season": "2024/25",
         "n_rows": 356
+      },
+      {
+        "league": "Turkish Super Lig",
+        "season": "2025/26",
+        "n_rows": 284
       }
     ],
     "scrape_success_rates": {
@@ -492,23 +618,1406 @@
       "min_rows": 40,
       "min_completeness_ratio": 0.55,
       "dropped_groups": [],
-      "n_rows_before": 17346,
-      "n_rows_after": 17346,
+      "n_rows_before": 20310,
+      "n_rows_after": 20310,
       "n_rows_dropped": 0
     }
   },
   "residual_calibration": {
     "enabled": true,
     "min_samples": 30,
-    "global_adjustment_eur": -128676.05604109052,
-    "n_level1": 48,
-    "n_level2": 43,
+    "global_adjustment_eur": -156120.13134554354,
+    "n_level1": 57,
+    "n_level2": 53,
     "n_level3": 12,
     "n_level4": 3
   },
   "artifacts": {
     "val_predictions_csv": "data\\model\\champion_predictions_2024-25_val.csv",
     "test_predictions_csv": "data\\model\\champion_predictions_2024-25.csv",
-    "error_priors_csv": "data\\model\\champion_predictions_2024-25.error_priors.csv"
-  }
+    "error_priors_csv": "data\\model\\champion_predictions_2024-25.error_priors.csv",
+    "holdout_count": 10
+  },
+  "league_holdout": [
+    {
+      "requested_token": "Austrian Bundesliga",
+      "league": "Austrian Bundesliga",
+      "league_slug": "austrian_bundesliga",
+      "resolved_from": "slug",
+      "status": "ok",
+      "n_samples": 230,
+      "overall": {
+        "mae_eur": 1196519.9391006024,
+        "mape": 0.550585139904187,
+        "mape_raw": 1.0949653679910423,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.6529440322513519,
+        "r2": 0.3450712356249771,
+        "interval_coverage": 0.8695652173913043,
+        "interval_avg_width_eur": 3192675.699388665,
+        "interval_median_width_eur": 2398896.065197758
+      },
+      "segments": [
+        {
+          "split": "holdout",
+          "segment": "under_5m",
+          "lower_eur": 0.0,
+          "upper_eur": 5000000.0,
+          "n_samples": 208,
+          "mae_eur": 703991.440579438,
+          "mape": 0.5558773105014433,
+          "mape_raw": 1.1578362165590237,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.7126425095049184,
+          "r2": 0.23758031535841373
+        },
+        {
+          "split": "holdout",
+          "segment": "5m_to_20m",
+          "lower_eur": 5000000.0,
+          "upper_eur": 20000000.0,
+          "n_samples": 20,
+          "mae_eur": 4598101.360767968,
+          "mape": 0.4808420101151025,
+          "mape_raw": 0.4808420101151025,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.5539881157551768,
+          "r2": -1.5232046404576969
+        },
+        {
+          "split": "holdout",
+          "segment": "over_20m",
+          "lower_eur": 20000000.0,
+          "upper_eur": Infinity,
+          "n_samples": 2,
+          "mae_eur": 18403669.56862805,
+          "mape": 0.6976306956803902,
+          "mape_raw": 0.6976306956803902,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.736146782745122,
+          "r2": -15.305171563634364
+        }
+      ],
+      "domain_shift": {
+        "n_features": 10,
+        "mean_abs_shift_z": 0.22985202578071182,
+        "features": [
+          {
+            "feature": "age",
+            "ref_mean": 26.485888462406862,
+            "holdout_mean": 25.752173913043478,
+            "ref_std": 4.322228005293409,
+            "abs_shift_z": 0.1697537817220211
+          },
+          {
+            "feature": "minutes",
+            "ref_mean": 1640.3368706254234,
+            "holdout_mean": 1492.408695652174,
+            "ref_std": 770.3910460986643,
+            "abs_shift_z": 0.19201699672182362
+          },
+          {
+            "feature": "sofa_goals_per90",
+            "ref_mean": 0.127704928730903,
+            "holdout_mean": 0.12988473319467345,
+            "ref_std": 0.1679448891168719,
+            "abs_shift_z": 0.01297928430708917
+          },
+          {
+            "feature": "sofa_assists_per90",
+            "ref_mean": 0.08693612321483235,
+            "holdout_mean": 0.08347359997616187,
+            "ref_std": 0.10340810529650303,
+            "abs_shift_z": 0.03348406035235203
+          },
+          {
+            "feature": "sofa_expectedGoals_per90",
+            "ref_mean": 0.14382096421842316,
+            "holdout_mean": NaN,
+            "ref_std": 0.15298498357614473,
+            "abs_shift_z": NaN
+          },
+          {
+            "feature": "sofa_tackles_per90",
+            "ref_mean": 1.5031446819691905,
+            "holdout_mean": 1.6414664508326446,
+            "ref_std": 0.8558026011395699,
+            "abs_shift_z": 0.16162812391463593
+          },
+          {
+            "feature": "sofa_interceptions_per90",
+            "ref_mean": 0.756554518159206,
+            "holdout_mean": 0.8773608009333361,
+            "ref_std": 0.5210236855209531,
+            "abs_shift_z": 0.2318633224002862
+          },
+          {
+            "feature": "clubctx_club_strength_proxy",
+            "ref_mean": 0.3957317787411607,
+            "holdout_mean": 0.38901803870426543,
+            "ref_std": 0.05746486244370333,
+            "abs_shift_z": 0.11683209097511625
+          },
+          {
+            "feature": "leaguectx_league_strength_index",
+            "ref_mean": 0.3944859611096795,
+            "holdout_mean": 0.3891485935628521,
+            "ref_std": 0.049413239460983006,
+            "abs_shift_z": 0.10801492889454893
+          },
+          {
+            "feature": "uefa_coeff_points",
+            "ref_mean": 16.45475152105135,
+            "holdout_mean": 9.650000000000004,
+            "ref_std": 6.529872347579417,
+            "abs_shift_z": 1.042095642738533
+          }
+        ]
+      },
+      "predictions_csv": "data\\model\\champion_predictions_2024-25.holdout_austrian_bundesliga.csv",
+      "metrics_json": "data\\model\\champion_predictions_2024-25.holdout_austrian_bundesliga.metrics.json"
+    },
+    {
+      "requested_token": "Belgian Pro League",
+      "league": "Belgian Pro League",
+      "league_slug": "belgian_pro_league",
+      "resolved_from": "slug",
+      "status": "ok",
+      "n_samples": 321,
+      "overall": {
+        "mae_eur": 1989152.7779651126,
+        "mape": 0.7681818882014527,
+        "mape_raw": 0.9038406529705709,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.599125537627775,
+        "r2": 0.46294213949579843,
+        "interval_coverage": 0.6386292834890965,
+        "interval_avg_width_eur": 4448483.419991242,
+        "interval_median_width_eur": 2374326.865762287
+      },
+      "segments": [
+        {
+          "split": "holdout",
+          "segment": "under_5m",
+          "lower_eur": 0.0,
+          "upper_eur": 5000000.0,
+          "n_samples": 263,
+          "mae_eur": 1559740.750048606,
+          "mape": 0.8438527399846807,
+          "mape_raw": 1.0094286467941367,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.8695534017229112,
+          "r2": -3.4079624480148656
+        },
+        {
+          "split": "holdout",
+          "segment": "5m_to_20m",
+          "lower_eur": 5000000.0,
+          "upper_eur": 20000000.0,
+          "n_samples": 53,
+          "mae_eur": 3597102.82188652,
+          "mape": 0.4353503950527741,
+          "mape_raw": 0.4353503950527741,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.40649562805967066,
+          "r2": -1.0764963782755093
+        },
+        {
+          "split": "holdout",
+          "segment": "over_20m",
+          "lower_eur": 20000000.0,
+          "upper_eur": Infinity,
+          "n_samples": 5,
+          "mae_eur": 7531954.98080645,
+          "mape": 0.3159089117796537,
+          "mape_raw": 0.3159089117796537,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.301278199232258,
+          "r2": -2.7043345281728444
+        }
+      ],
+      "domain_shift": {
+        "n_features": 10,
+        "mean_abs_shift_z": 0.2737778991323116,
+        "features": [
+          {
+            "feature": "age",
+            "ref_mean": 26.54172429691102,
+            "holdout_mean": 25.205607476635514,
+            "ref_std": 4.332847123123382,
+            "abs_shift_z": 0.3083692505892873
+          },
+          {
+            "feature": "minutes",
+            "ref_mean": 1621.9900875979715,
+            "holdout_mean": 1782.2834890965732,
+            "ref_std": 759.5494858080219,
+            "abs_shift_z": 0.2110374695706348
+          },
+          {
+            "feature": "sofa_goals_per90",
+            "ref_mean": 0.1280152145739077,
+            "holdout_mean": 0.12507357371443245,
+            "ref_std": 0.1680395086444687,
+            "abs_shift_z": 0.01750565020812482
+          },
+          {
+            "feature": "sofa_assists_per90",
+            "ref_mean": 0.08705103357898825,
+            "holdout_mean": 0.08290228675189625,
+            "ref_std": 0.10434795724316827,
+            "abs_shift_z": 0.03975877378628437
+          },
+          {
+            "feature": "sofa_expectedGoals_per90",
+            "ref_mean": 0.14238341947519423,
+            "holdout_mean": 0.15652169622594067,
+            "ref_std": 0.15146230865004642,
+            "abs_shift_z": 0.09334518189216912
+          },
+          {
+            "feature": "sofa_tackles_per90",
+            "ref_mean": 1.4966604343818883,
+            "holdout_mean": 1.6862863542488509,
+            "ref_std": 0.8473924980612907,
+            "abs_shift_z": 0.22377578312387558
+          },
+          {
+            "feature": "sofa_interceptions_per90",
+            "ref_mean": 0.7584471154770484,
+            "holdout_mean": 0.818586419080781,
+            "ref_std": 0.522315322284719,
+            "abs_shift_z": 0.11513984185007338
+          },
+          {
+            "feature": "clubctx_club_strength_proxy",
+            "ref_mean": 0.3924975072347003,
+            "holdout_mean": 0.43462931639393176,
+            "ref_std": 0.056898627250702064,
+            "abs_shift_z": 0.7404714523883636
+          },
+          {
+            "feature": "leaguectx_league_strength_index",
+            "ref_mean": 0.3911523048603601,
+            "holdout_mean": 0.4357127719314148,
+            "ref_std": 0.0485540569713956,
+            "abs_shift_z": 0.9177496145647794
+          },
+          {
+            "feature": "uefa_coeff_points",
+            "ref_mean": 16.129523145843702,
+            "holdout_mean": 15.650000000000004,
+            "ref_std": 6.78961468567049,
+            "abs_shift_z": 0.07062597334952364
+          }
+        ]
+      },
+      "predictions_csv": "data\\model\\champion_predictions_2024-25.holdout_belgian_pro_league.csv",
+      "metrics_json": "data\\model\\champion_predictions_2024-25.holdout_belgian_pro_league.metrics.json"
+    },
+    {
+      "requested_token": "Czech Fortuna Liga",
+      "league": "Czech Fortuna Liga",
+      "league_slug": "czech_first_league",
+      "resolved_from": "name",
+      "status": "ok",
+      "n_samples": 320,
+      "overall": {
+        "mae_eur": 2136643.023475856,
+        "mape": 1.598650435059414,
+        "mape_raw": 3.6025227266751285,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 1.9617696507059004,
+        "r2": -1.2731035074055188,
+        "interval_coverage": 0.48125,
+        "interval_avg_width_eur": 2663191.8148954595,
+        "interval_median_width_eur": 2300077.811827042
+      },
+      "segments": [
+        {
+          "split": "holdout",
+          "segment": "under_5m",
+          "lower_eur": 0.0,
+          "upper_eur": 5000000.0,
+          "n_samples": 304,
+          "mae_eur": 2002092.2383114602,
+          "mape": 1.6512564820262787,
+          "mape_raw": 3.76059573635861,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 2.8910392611171303,
+          "r2": -10.418835483497535
+        },
+        {
+          "split": "holdout",
+          "segment": "5m_to_20m",
+          "lower_eur": 5000000.0,
+          "upper_eur": 20000000.0,
+          "n_samples": 16,
+          "mae_eur": 4693107.941599375,
+          "mape": 0.5991355426889812,
+          "mape_raw": 0.5991355426889812,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.5441284569970289,
+          "r2": -1.662615038727723
+        },
+        {
+          "split": "holdout",
+          "segment": "over_20m",
+          "lower_eur": 20000000.0,
+          "upper_eur": Infinity,
+          "n_samples": 0,
+          "r2": NaN,
+          "mae_eur": NaN,
+          "mape": NaN,
+          "mape_raw": NaN,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": NaN
+        }
+      ],
+      "domain_shift": {
+        "n_features": 10,
+        "mean_abs_shift_z": 0.17949790522402145,
+        "features": [
+          {
+            "feature": "age",
+            "ref_mean": 26.471767688407468,
+            "holdout_mean": 26.15,
+            "ref_std": 4.323834987063033,
+            "abs_shift_z": 0.07441719893802655
+          },
+          {
+            "feature": "minutes",
+            "ref_mean": 1640.958285319198,
+            "holdout_mean": 1525.5875,
+            "ref_std": 771.4149022826341,
+            "abs_shift_z": 0.14955737175651282
+          },
+          {
+            "feature": "sofa_goals_per90",
+            "ref_mean": 0.128200099691792,
+            "holdout_mean": 0.12255745444143407,
+            "ref_std": 0.1682190289330065,
+            "abs_shift_z": 0.03354344205972752
+          },
+          {
+            "feature": "sofa_assists_per90",
+            "ref_mean": 0.08727962232195542,
+            "holdout_mean": 0.07978980143139107,
+            "ref_std": 0.10409325582596055,
+            "abs_shift_z": 0.07195298899178455
+          },
+          {
+            "feature": "sofa_expectedGoals_per90",
+            "ref_mean": 0.14382096421842314,
+            "holdout_mean": NaN,
+            "ref_std": 0.15298498357614473,
+            "abs_shift_z": NaN
+          },
+          {
+            "feature": "sofa_tackles_per90",
+            "ref_mean": 1.5239357921296743,
+            "holdout_mean": 1.3322140490342544,
+            "ref_std": 0.8639913014917544,
+            "abs_shift_z": 0.22190239967045503
+          },
+          {
+            "feature": "sofa_interceptions_per90",
+            "ref_mean": 0.7644496864394354,
+            "holdout_mean": 0.740722173859254,
+            "ref_std": 0.5289903985096802,
+            "abs_shift_z": 0.04485433506360185
+          },
+          {
+            "feature": "clubctx_club_strength_proxy",
+            "ref_mean": 0.3970137550707462,
+            "holdout_mean": 0.37352348029566884,
+            "ref_std": 0.05770679667762191,
+            "abs_shift_z": 0.4070625321018148
+          },
+          {
+            "feature": "leaguectx_league_strength_index",
+            "ref_mean": 0.3956971235674825,
+            "holdout_mean": 0.3742271222341255,
+            "ref_std": 0.04961948231806518,
+            "abs_shift_z": 0.4326929732102484
+          },
+          {
+            "feature": "uefa_coeff_points",
+            "ref_mean": 16.094047937312745,
+            "holdout_mean": NaN,
+            "ref_std": 6.5347865477408,
+            "abs_shift_z": NaN
+          }
+        ]
+      },
+      "predictions_csv": "data\\model\\champion_predictions_2024-25.holdout_czech_first_league.csv",
+      "metrics_json": "data\\model\\champion_predictions_2024-25.holdout_czech_first_league.metrics.json"
+    },
+    {
+      "requested_token": "Danish Superliga",
+      "league": "Danish Superliga",
+      "league_slug": "danish_superliga",
+      "resolved_from": "slug",
+      "status": "ok",
+      "n_samples": 221,
+      "overall": {
+        "mae_eur": 1331163.5181696012,
+        "mape": 0.7628813208403072,
+        "mape_raw": 1.3599499562921695,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.6923679395516166,
+        "r2": 0.3026292156607914,
+        "interval_coverage": 0.6832579185520362,
+        "interval_avg_width_eur": 3136479.5949891335,
+        "interval_median_width_eur": 2313955.313235013
+      },
+      "segments": [
+        {
+          "split": "holdout",
+          "segment": "under_5m",
+          "lower_eur": 0.0,
+          "upper_eur": 5000000.0,
+          "n_samples": 199,
+          "mae_eur": 1060372.2384664612,
+          "mape": 0.8071408346192875,
+          "mape_raw": 1.4702170579100486,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.874126244634738,
+          "r2": -1.1937197322760191
+        },
+        {
+          "split": "holdout",
+          "segment": "5m_to_20m",
+          "lower_eur": 5000000.0,
+          "upper_eur": 20000000.0,
+          "n_samples": 21,
+          "mae_eur": 2985140.1877910094,
+          "mape": 0.33915234420283397,
+          "mape_raw": 0.33915234420283397,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.3930278617154307,
+          "r2": -0.5749526337290163
+        },
+        {
+          "split": "holdout",
+          "segment": "over_20m",
+          "lower_eur": 20000000.0,
+          "upper_eur": Infinity,
+          "n_samples": 1,
+          "mae_eur": 20485118.117044955,
+          "mape": 0.8535465882102065,
+          "mape_raw": 0.8535465882102065,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.8535465882102065,
+          "r2": NaN
+        }
+      ],
+      "domain_shift": {
+        "n_features": 10,
+        "mean_abs_shift_z": 0.32626484504524866,
+        "features": [
+          {
+            "feature": "age",
+            "ref_mean": 26.515547543938712,
+            "holdout_mean": 25.126696832579185,
+            "ref_std": 4.314606312940973,
+            "abs_shift_z": 0.32189511872587107
+          },
+          {
+            "feature": "minutes",
+            "ref_mean": 1637.9966200991437,
+            "holdout_mean": 1533.3800904977375,
+            "ref_std": 770.9483874005134,
+            "abs_shift_z": 0.13569848683924565
+          },
+          {
+            "feature": "sofa_goals_per90",
+            "ref_mean": 0.12721001284986894,
+            "holdout_mean": 0.1399121310236469,
+            "ref_std": 0.16779094008735707,
+            "abs_shift_z": 0.07570205022491004
+          },
+          {
+            "feature": "sofa_assists_per90",
+            "ref_mean": 0.08578037851885931,
+            "holdout_mean": 0.10654161921408174,
+            "ref_std": 0.1025295951077661,
+            "abs_shift_z": 0.2024902241484603
+          },
+          {
+            "feature": "sofa_expectedGoals_per90",
+            "ref_mean": 0.14382096421842316,
+            "holdout_mean": NaN,
+            "ref_std": 0.15298498357614476,
+            "abs_shift_z": NaN
+          },
+          {
+            "feature": "sofa_tackles_per90",
+            "ref_mean": 1.5133421604967296,
+            "holdout_mean": 1.4505326833776795,
+            "ref_std": 0.854401896580319,
+            "abs_shift_z": 0.07351280161062435
+          },
+          {
+            "feature": "sofa_interceptions_per90",
+            "ref_mean": 0.761095800723235,
+            "holdout_mean": 0.7947426689071099,
+            "ref_std": 0.5287414484141745,
+            "abs_shift_z": 0.06363576807679837
+          },
+          {
+            "feature": "clubctx_club_strength_proxy",
+            "ref_mean": 0.3962531963894805,
+            "holdout_mean": 0.37827380710437836,
+            "ref_std": 0.05740425185770564,
+            "abs_shift_z": 0.3132065779669013
+          },
+          {
+            "feature": "leaguectx_league_strength_index",
+            "ref_mean": 0.3950658432354068,
+            "holdout_mean": 0.3772863619705485,
+            "ref_std": 0.04922520983625086,
+            "abs_shift_z": 0.36118650025062904
+          },
+          {
+            "feature": "uefa_coeff_points",
+            "ref_mean": 16.546891209324915,
+            "holdout_mean": 7.656000000000001,
+            "ref_std": 6.400671184505557,
+            "abs_shift_z": 1.3890560775637977
+          }
+        ]
+      },
+      "predictions_csv": "data\\model\\champion_predictions_2024-25.holdout_danish_superliga.csv",
+      "metrics_json": "data\\model\\champion_predictions_2024-25.holdout_danish_superliga.metrics.json"
+    },
+    {
+      "requested_token": "Eredivisie",
+      "league": "Eredivisie",
+      "league_slug": "dutch_eredivisie",
+      "resolved_from": "name",
+      "status": "ok",
+      "n_samples": 343,
+      "overall": {
+        "mae_eur": 2371312.810997954,
+        "mape": 1.1441019464259854,
+        "mape_raw": 1.6314581296579564,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.636058881073156,
+        "r2": 0.6993757815229473,
+        "interval_coverage": 0.5364431486880467,
+        "interval_avg_width_eur": 5491435.814371927,
+        "interval_median_width_eur": 2635022.4879602827
+      },
+      "segments": [
+        {
+          "split": "holdout",
+          "segment": "under_5m",
+          "lower_eur": 0.0,
+          "upper_eur": 5000000.0,
+          "n_samples": 274,
+          "mae_eur": 1954943.443717536,
+          "mape": 1.339332946771707,
+          "mape_raw": 1.9494175119124593,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 1.3976634144255835,
+          "r2": -4.295121008444796
+        },
+        {
+          "split": "holdout",
+          "segment": "5m_to_20m",
+          "lower_eur": 5000000.0,
+          "upper_eur": 20000000.0,
+          "n_samples": 53,
+          "mae_eur": 3238467.4775981703,
+          "mape": 0.408522163307946,
+          "mape_raw": 0.408522163307946,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.3727226412870858,
+          "r2": -0.4281026412805322
+        },
+        {
+          "split": "holdout",
+          "segment": "over_20m",
+          "lower_eur": 20000000.0,
+          "upper_eur": Infinity,
+          "n_samples": 16,
+          "mae_eur": 6629188.3925619,
+          "mape": 0.23737909708400726,
+          "mape_raw": 0.23737909708400726,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.24383221673790897,
+          "r2": -2.1401179863269704
+        }
+      ],
+      "domain_shift": {
+        "n_features": 10,
+        "mean_abs_shift_z": 0.2729658898633407,
+        "features": [
+          {
+            "feature": "age",
+            "ref_mean": 26.526645041705283,
+            "holdout_mean": 25.481049562682216,
+            "ref_std": 4.335574256061945,
+            "abs_shift_z": 0.24116654848227512
+          },
+          {
+            "feature": "minutes",
+            "ref_mean": 1634.8239110287302,
+            "holdout_mean": 1610.5131195335277,
+            "ref_std": 771.089389364094,
+            "abs_shift_z": 0.0315278511551705
+          },
+          {
+            "feature": "sofa_goals_per90",
+            "ref_mean": 0.12627087624754937,
+            "holdout_mean": 0.14721141719977035,
+            "ref_std": 0.1662428474652388,
+            "abs_shift_z": 0.12596356036670764
+          },
+          {
+            "feature": "sofa_assists_per90",
+            "ref_mean": 0.08585397831028911,
+            "holdout_mean": 0.09823104176618609,
+            "ref_std": 0.103287281329704,
+            "abs_shift_z": 0.11983143806823685
+          },
+          {
+            "feature": "sofa_expectedGoals_per90",
+            "ref_mean": 0.1429069300319354,
+            "holdout_mean": 0.15119852586650295,
+            "ref_std": 0.15315992839202877,
+            "abs_shift_z": 0.05413684846694603
+          },
+          {
+            "feature": "sofa_tackles_per90",
+            "ref_mean": 1.5050932487514677,
+            "holdout_mean": 1.5723891061485795,
+            "ref_std": 0.8530788211810646,
+            "abs_shift_z": 0.07888586110242728
+          },
+          {
+            "feature": "sofa_interceptions_per90",
+            "ref_mean": 0.7607438256865993,
+            "holdout_mean": 0.7870212542807697,
+            "ref_std": 0.5266363951518204,
+            "abs_shift_z": 0.04989671970277547
+          },
+          {
+            "feature": "clubctx_club_strength_proxy",
+            "ref_mean": 0.3918249197002587,
+            "holdout_mean": 0.4403902143447975,
+            "ref_std": 0.055984450851647063,
+            "abs_shift_z": 0.8674782713012904
+          },
+          {
+            "feature": "leaguectx_league_strength_index",
+            "ref_mean": 0.39057869406531565,
+            "holdout_mean": 0.4400724626481757,
+            "ref_std": 0.048235540146746816,
+            "abs_shift_z": 1.0260850906258188
+          },
+          {
+            "feature": "uefa_coeff_points",
+            "ref_mean": 16.1664974974975,
+            "holdout_mean": 15.25,
+            "ref_std": 6.804661735671721,
+            "abs_shift_z": 0.1346867093617589
+          }
+        ]
+      },
+      "predictions_csv": "data\\model\\champion_predictions_2024-25.holdout_dutch_eredivisie.csv",
+      "metrics_json": "data\\model\\champion_predictions_2024-25.holdout_dutch_eredivisie.metrics.json"
+    },
+    {
+      "requested_token": "Estonian Meistriliiga",
+      "league": "Estonian Meistriliiga",
+      "league_slug": "estonian_meistriliiga",
+      "resolved_from": "slug",
+      "status": "ok",
+      "n_samples": 178,
+      "overall": {
+        "mae_eur": 1888670.0675171046,
+        "mape": 1.8886700675171044,
+        "mape_raw": 17.53835006759706,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 14.205927404100764,
+        "r2": -796.7697986783444,
+        "interval_coverage": 0.33707865168539325,
+        "interval_avg_width_eur": 2071921.5588568174,
+        "interval_median_width_eur": 2091229.930195557
+      },
+      "segments": [
+        {
+          "split": "holdout",
+          "segment": "under_5m",
+          "lower_eur": 0.0,
+          "upper_eur": 5000000.0,
+          "n_samples": 178,
+          "mae_eur": 1888670.0675171046,
+          "mape": 1.8886700675171044,
+          "mape_raw": 17.53835006759706,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 14.205927404100764,
+          "r2": -796.7697986783444
+        },
+        {
+          "split": "holdout",
+          "segment": "5m_to_20m",
+          "lower_eur": 5000000.0,
+          "upper_eur": 20000000.0,
+          "n_samples": 0,
+          "r2": NaN,
+          "mae_eur": NaN,
+          "mape": NaN,
+          "mape_raw": NaN,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": NaN
+        },
+        {
+          "split": "holdout",
+          "segment": "over_20m",
+          "lower_eur": 20000000.0,
+          "upper_eur": Infinity,
+          "n_samples": 0,
+          "r2": NaN,
+          "mae_eur": NaN,
+          "mape": NaN,
+          "mape_raw": NaN,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": NaN
+        }
+      ],
+      "domain_shift": {
+        "n_features": 10,
+        "mean_abs_shift_z": 2.2965244735523607,
+        "features": [
+          {
+            "feature": "age",
+            "ref_mean": 26.534925239901806,
+            "holdout_mean": 24.303370786516854,
+            "ref_std": 4.285325463759688,
+            "abs_shift_z": 0.5207432836214778
+          },
+          {
+            "feature": "minutes",
+            "ref_mean": 1626.2381164918545,
+            "holdout_mean": 1804.1179775280898,
+            "ref_std": 764.3826443563704,
+            "abs_shift_z": 0.23271049172762767
+          },
+          {
+            "feature": "sofa_goals_per90",
+            "ref_mean": 0.12759353344040889,
+            "holdout_mean": 0.1333258125700678,
+            "ref_std": 0.16817869078408093,
+            "abs_shift_z": 0.03408445566399601
+          },
+          {
+            "feature": "sofa_assists_per90",
+            "ref_mean": 0.08748482408536377,
+            "holdout_mean": 0.06864899430614954,
+            "ref_std": 0.10408726508791599,
+            "abs_shift_z": 0.18096190502560316
+          },
+          {
+            "feature": "sofa_expectedGoals_per90",
+            "ref_mean": 0.14382096421842316,
+            "holdout_mean": NaN,
+            "ref_std": 0.15298498357614473,
+            "abs_shift_z": NaN
+          },
+          {
+            "feature": "sofa_tackles_per90",
+            "ref_mean": 1.5102444380144024,
+            "holdout_mean": NaN,
+            "ref_std": 0.8569074262798427,
+            "abs_shift_z": NaN
+          },
+          {
+            "feature": "sofa_interceptions_per90",
+            "ref_mean": 0.7627552423364098,
+            "holdout_mean": NaN,
+            "ref_std": 0.5278228150378926,
+            "abs_shift_z": NaN
+          },
+          {
+            "feature": "clubctx_club_strength_proxy",
+            "ref_mean": 0.4027823150762952,
+            "holdout_mean": 0.20956541061631112,
+            "ref_std": 0.042996601293487716,
+            "abs_shift_z": 4.493771569085596
+          },
+          {
+            "feature": "leaguectx_league_strength_index",
+            "ref_mean": 0.40233398216007715,
+            "holdout_mean": 0.19002204615124046,
+            "ref_std": 0.02630899059287006,
+            "abs_shift_z": 8.069938497236564
+          },
+          {
+            "feature": "uefa_coeff_points",
+            "ref_mean": 16.713007450132178,
+            "holdout_mean": 1.625,
+            "ref_std": 5.932077111754386,
+            "abs_shift_z": 2.543461112505661
+          }
+        ]
+      },
+      "predictions_csv": "data\\model\\champion_predictions_2024-25.holdout_estonian_meistriliiga.csv",
+      "metrics_json": "data\\model\\champion_predictions_2024-25.holdout_estonian_meistriliiga.metrics.json"
+    },
+    {
+      "requested_token": "Greek Super League",
+      "league": "Greek Super League",
+      "league_slug": "greek_super_league",
+      "resolved_from": "slug",
+      "status": "ok",
+      "n_samples": 291,
+      "overall": {
+        "mae_eur": 1026535.1529240207,
+        "mape": 0.5550133871830687,
+        "mape_raw": 1.274789592994479,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.671096275205594,
+        "r2": 0.5070428232855646,
+        "interval_coverage": 0.852233676975945,
+        "interval_avg_width_eur": 2922697.0666667433,
+        "interval_median_width_eur": 2327284.7243233677
+      },
+      "segments": [
+        {
+          "split": "holdout",
+          "segment": "under_5m",
+          "lower_eur": 0.0,
+          "upper_eur": 5000000.0,
+          "n_samples": 263,
+          "mae_eur": 653854.4255988225,
+          "mape": 0.5600165703504731,
+          "mape_raw": 1.3564229425600565,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.8282418491631081,
+          "r2": 0.07725229132512257
+        },
+        {
+          "split": "holdout",
+          "segment": "5m_to_20m",
+          "lower_eur": 5000000.0,
+          "upper_eur": 20000000.0,
+          "n_samples": 28,
+          "mae_eur": 4527071.984585702,
+          "mape": 0.5080192024320909,
+          "mape_raw": 0.5080192024320909,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.5337179602879986,
+          "r2": -1.7867215471304605
+        },
+        {
+          "split": "holdout",
+          "segment": "over_20m",
+          "lower_eur": 20000000.0,
+          "upper_eur": Infinity,
+          "n_samples": 0,
+          "r2": NaN,
+          "mae_eur": NaN,
+          "mape": NaN,
+          "mape_raw": NaN,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": NaN
+        }
+      ],
+      "domain_shift": {
+        "n_features": 10,
+        "mean_abs_shift_z": 0.40105753954298173,
+        "features": [
+          {
+            "feature": "age",
+            "ref_mean": 26.319826007326007,
+            "holdout_mean": 28.398625429553263,
+            "ref_std": 4.309531749943426,
+            "abs_shift_z": 0.48237245780926097
+          },
+          {
+            "feature": "minutes",
+            "ref_mean": 1647.3770604395604,
+            "holdout_mean": 1417.7422680412371,
+            "ref_std": 773.4888467863781,
+            "abs_shift_z": 0.2968818404459085
+          },
+          {
+            "feature": "sofa_goals_per90",
+            "ref_mean": 0.1290886388374068,
+            "holdout_mean": 0.10865788158814953,
+            "ref_std": 0.16926690347877504,
+            "abs_shift_z": 0.12070142969100361
+          },
+          {
+            "feature": "sofa_assists_per90",
+            "ref_mean": 0.08750331004859743,
+            "holdout_mean": 0.07568577120527858,
+            "ref_std": 0.10433984276705072,
+            "abs_shift_z": 0.11326007908314278
+          },
+          {
+            "feature": "sofa_expectedGoals_per90",
+            "ref_mean": 0.14382096421842316,
+            "holdout_mean": NaN,
+            "ref_std": 0.15298498357614473,
+            "abs_shift_z": NaN
+          },
+          {
+            "feature": "sofa_tackles_per90",
+            "ref_mean": 1.5161131120150662,
+            "holdout_mean": 1.4257435993106824,
+            "ref_std": 0.8546382670940492,
+            "abs_shift_z": 0.10574007294531662
+          },
+          {
+            "feature": "sofa_interceptions_per90",
+            "ref_mean": 0.7644610500407212,
+            "holdout_mean": 0.7381939561471845,
+            "ref_std": 0.5313013700324333,
+            "abs_shift_z": 0.04943916085127576
+          },
+          {
+            "feature": "clubctx_club_strength_proxy",
+            "ref_mean": 0.39853496194998783,
+            "holdout_mean": 0.3483487393437628,
+            "ref_std": 0.05667136236458505,
+            "abs_shift_z": 0.8855658398215478
+          },
+          {
+            "feature": "leaguectx_league_strength_index",
+            "ref_mean": 0.3972679618505422,
+            "holdout_mean": 0.34850873165312113,
+            "ref_std": 0.04825630531070615,
+            "abs_shift_z": 1.0104219517734885
+          },
+          {
+            "feature": "uefa_coeff_points",
+            "ref_mean": 16.33897159090909,
+            "holdout_mean": 12.687,
+            "ref_std": 6.6992055797302745,
+            "abs_shift_z": 0.5451350234658908
+          }
+        ]
+      },
+      "predictions_csv": "data\\model\\champion_predictions_2024-25.holdout_greek_super_league.csv",
+      "metrics_json": "data\\model\\champion_predictions_2024-25.holdout_greek_super_league.metrics.json"
+    },
+    {
+      "requested_token": "Primeira Liga",
+      "league": "Primeira Liga",
+      "league_slug": "portuguese_primeira_liga",
+      "resolved_from": "name",
+      "status": "ok",
+      "n_samples": 349,
+      "overall": {
+        "mae_eur": 2607480.925286615,
+        "mape": 0.39789906024823757,
+        "mape_raw": 0.6877862814832015,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.5461102667056912,
+        "r2": 0.48740692795312546,
+        "interval_coverage": 0.8424068767908309,
+        "interval_avg_width_eur": 5329956.906186105,
+        "interval_median_width_eur": 2319070.167771194
+      },
+      "segments": [
+        {
+          "split": "holdout",
+          "segment": "under_5m",
+          "lower_eur": 0.0,
+          "upper_eur": 5000000.0,
+          "n_samples": 278,
+          "mae_eur": 591180.6901049932,
+          "mape": 0.36499539028443223,
+          "mape_raw": 0.7289185565110595,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.44078914268254826,
+          "r2": 0.44252413132881685
+        },
+        {
+          "split": "holdout",
+          "segment": "5m_to_20m",
+          "lower_eur": 5000000.0,
+          "upper_eur": 20000000.0,
+          "n_samples": 46,
+          "mae_eur": 4358315.502081723,
+          "mape": 0.48430957035842703,
+          "mape_raw": 0.48430957035842703,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.4883861463964903,
+          "r2": -0.7582742610561459
+        },
+        {
+          "split": "holdout",
+          "segment": "over_20m",
+          "lower_eur": 20000000.0,
+          "upper_eur": Infinity,
+          "n_samples": 25,
+          "mae_eur": 21807203.919203248,
+          "mape": 0.6047925316430052,
+          "mape_raw": 0.6047925316430052,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.6174180045074532,
+          "r2": -3.214513522745019
+        }
+      ],
+      "domain_shift": {
+        "n_features": 10,
+        "mean_abs_shift_z": 0.06820500313391285,
+        "features": [
+          {
+            "feature": "age",
+            "ref_mean": 26.465893271461717,
+            "holdout_mean": 26.249283667621775,
+            "ref_std": 4.333254120935932,
+            "abs_shift_z": 0.04998774542056088
+          },
+          {
+            "feature": "minutes",
+            "ref_mean": 1640.1958236658932,
+            "holdout_mean": 1544.590257879656,
+            "ref_std": 770.7848629022769,
+            "abs_shift_z": 0.12403664159445012
+          },
+          {
+            "feature": "sofa_goals_per90",
+            "ref_mean": 0.12848666930728359,
+            "holdout_mean": 0.11948731595860212,
+            "ref_std": 0.16809982682769628,
+            "abs_shift_z": 0.053535768111801045
+          },
+          {
+            "feature": "sofa_assists_per90",
+            "ref_mean": 0.08731031823008055,
+            "holdout_mean": 0.08003308349960607,
+            "ref_std": 0.10308770917650631,
+            "abs_shift_z": 0.07059265152564824
+          },
+          {
+            "feature": "sofa_expectedGoals_per90",
+            "ref_mean": 0.14477180152975597,
+            "holdout_mean": 0.1360103006262761,
+            "ref_std": 0.15352724731119688,
+            "abs_shift_z": 0.057068051807901435
+          },
+          {
+            "feature": "sofa_tackles_per90",
+            "ref_mean": 1.5138832564175788,
+            "holdout_mean": 1.4671624963469903,
+            "ref_std": 0.8603220946402729,
+            "abs_shift_z": 0.05430612599822157
+          },
+          {
+            "feature": "sofa_interceptions_per90",
+            "ref_mean": 0.764182797394974,
+            "holdout_mean": 0.7458536449095114,
+            "ref_std": 0.5291437016195649,
+            "abs_shift_z": 0.03463927176939264
+          },
+          {
+            "feature": "clubctx_club_strength_proxy",
+            "ref_mean": 0.3958659854091758,
+            "holdout_mean": 0.3896498562551124,
+            "ref_std": 0.05786919212923032,
+            "abs_shift_z": 0.10741689879101592
+          },
+          {
+            "feature": "leaguectx_league_strength_index",
+            "ref_mean": 0.39461858249275894,
+            "holdout_mean": 0.38933068117603364,
+            "ref_std": 0.050084421455563355,
+            "abs_shift_z": 0.10557976239012577
+          },
+          {
+            "feature": "uefa_coeff_points",
+            "ref_mean": 16.08040701754386,
+            "holdout_mean": 16.25,
+            "ref_std": 6.814489736860622,
+            "abs_shift_z": 0.02488711393001101
+          }
+        ]
+      },
+      "predictions_csv": "data\\model\\champion_predictions_2024-25.holdout_portuguese_primeira_liga.csv",
+      "metrics_json": "data\\model\\champion_predictions_2024-25.holdout_portuguese_primeira_liga.metrics.json"
+    },
+    {
+      "requested_token": "Scottish Premiership",
+      "league": "Scottish Premiership",
+      "league_slug": "scottish_premiership",
+      "resolved_from": "slug",
+      "status": "ok",
+      "n_samples": 244,
+      "overall": {
+        "mae_eur": 1230992.2545949859,
+        "mape": 0.898348481396263,
+        "mape_raw": 2.731231292548316,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.9970691965714835,
+        "r2": 0.4139681292853922,
+        "interval_coverage": 0.8278688524590164,
+        "interval_avg_width_eur": 3119927.44866345,
+        "interval_median_width_eur": 2508586.5047329855
+      },
+      "segments": [
+        {
+          "split": "holdout",
+          "segment": "under_5m",
+          "lower_eur": 0.0,
+          "upper_eur": 5000000.0,
+          "n_samples": 227,
+          "mae_eur": 1142046.45343786,
+          "mape": 0.9409731567903407,
+          "mape_raw": 2.911120319438362,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 1.7028115532884112,
+          "r2": -3.879890813330685
+        },
+        {
+          "split": "holdout",
+          "segment": "5m_to_20m",
+          "lower_eur": 5000000.0,
+          "upper_eur": 20000000.0,
+          "n_samples": 17,
+          "mae_eur": 2418680.305340138,
+          "mape": 0.3291836981929906,
+          "mape_raw": 0.3291836981929906,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.27595681336095534,
+          "r2": 0.073213935772658
+        },
+        {
+          "split": "holdout",
+          "segment": "over_20m",
+          "lower_eur": 20000000.0,
+          "upper_eur": Infinity,
+          "n_samples": 0,
+          "r2": NaN,
+          "mae_eur": NaN,
+          "mape": NaN,
+          "mape_raw": NaN,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": NaN
+        }
+      ],
+      "domain_shift": {
+        "n_features": 10,
+        "mean_abs_shift_z": 0.21454493833357213,
+        "features": [
+          {
+            "feature": "age",
+            "ref_mean": 26.45232163080408,
+            "holdout_mean": 26.401639344262296,
+            "ref_std": 4.338626254473251,
+            "abs_shift_z": 0.011681643812837645
+          },
+          {
+            "feature": "minutes",
+            "ref_mean": 1633.0011325028313,
+            "holdout_mean": 1633.6311475409836,
+            "ref_std": 769.080653100109,
+            "abs_shift_z": 0.0008191794132550408
+          },
+          {
+            "feature": "sofa_goals_per90",
+            "ref_mean": 0.1272224129791814,
+            "holdout_mean": 0.13849042901991143,
+            "ref_std": 0.16733504764976095,
+            "abs_shift_z": 0.0673380514063882
+          },
+          {
+            "feature": "sofa_assists_per90",
+            "ref_mean": 0.08651983761601496,
+            "holdout_mean": 0.09120465015698237,
+            "ref_std": 0.10338786359185073,
+            "abs_shift_z": 0.045312983344562255
+          },
+          {
+            "feature": "sofa_expectedGoals_per90",
+            "ref_mean": 0.14382096421842316,
+            "holdout_mean": NaN,
+            "ref_std": 0.15298498357614473,
+            "abs_shift_z": NaN
+          },
+          {
+            "feature": "sofa_tackles_per90",
+            "ref_mean": 1.5146516166539334,
+            "holdout_mean": 1.4337148646713944,
+            "ref_std": 0.8615355212336124,
+            "abs_shift_z": 0.09394476488519893
+          },
+          {
+            "feature": "sofa_interceptions_per90",
+            "ref_mean": 0.7673763887377559,
+            "holdout_mean": 0.6825101714245078,
+            "ref_std": 0.5303211285262871,
+            "abs_shift_z": 0.16002797691482418
+          },
+          {
+            "feature": "clubctx_club_strength_proxy",
+            "ref_mean": 0.394857344255888,
+            "holdout_mean": 0.4052255002329368,
+            "ref_std": 0.05780796171637039,
+            "abs_shift_z": 0.1793551557468719
+          },
+          {
+            "feature": "leaguectx_league_strength_index",
+            "ref_mean": 0.39355654919791955,
+            "holdout_mean": 0.4062718588746381,
+            "ref_std": 0.049420181273247585,
+            "abs_shift_z": 0.2572898226822511
+          },
+          {
+            "feature": "uefa_coeff_points",
+            "ref_mean": 16.501849572649572,
+            "holdout_mean": 9.25,
+            "ref_std": 6.5031143663239686,
+            "abs_shift_z": 1.11513486679596
+          }
+        ]
+      },
+      "predictions_csv": "data\\model\\champion_predictions_2024-25.holdout_scottish_premiership.csv",
+      "metrics_json": "data\\model\\champion_predictions_2024-25.holdout_scottish_premiership.metrics.json"
+    },
+    {
+      "requested_token": "Turkish Super Lig",
+      "league": "Turkish Super Lig",
+      "league_slug": "turkish_super_lig",
+      "resolved_from": "slug",
+      "status": "ok",
+      "n_samples": 356,
+      "overall": {
+        "mae_eur": 1512489.4408543124,
+        "mape": 0.5830514361550115,
+        "mape_raw": 1.3548873158653587,
+        "mape_min_denom_eur": 1000000.0,
+        "wmape": 0.5695884917294425,
+        "r2": 0.44550415086497164,
+        "interval_coverage": 0.8089887640449438,
+        "interval_avg_width_eur": 3905256.938803106,
+        "interval_median_width_eur": 2465323.9207924223
+      },
+      "segments": [
+        {
+          "split": "holdout",
+          "segment": "under_5m",
+          "lower_eur": 0.0,
+          "upper_eur": 5000000.0,
+          "n_samples": 303,
+          "mae_eur": 828292.9097168916,
+          "mape": 0.6114175550742845,
+          "mape_raw": 1.5182610309055835,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.6965177316151201,
+          "r2": -0.25963455262974944
+        },
+        {
+          "split": "holdout",
+          "segment": "5m_to_20m",
+          "lower_eur": 5000000.0,
+          "upper_eur": 20000000.0,
+          "n_samples": 48,
+          "mae_eur": 3764508.697710412,
+          "mape": 0.39935099567778504,
+          "mape_raw": 0.39935099567778504,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.42218789133200885,
+          "r2": -0.8322957215196962
+        },
+        {
+          "split": "holdout",
+          "segment": "over_20m",
+          "lower_eur": 20000000.0,
+          "upper_eur": Infinity,
+          "n_samples": 5,
+          "mae_eur": 21355414.36196343,
+          "mape": 0.6275888582284397,
+          "mape_raw": 0.6275888582284397,
+          "mape_min_denom_eur": 1000000.0,
+          "wmape": 0.6801087376421474,
+          "r2": -1.042545725272579
+        }
+      ],
+      "domain_shift": {
+        "n_features": 10,
+        "mean_abs_shift_z": 0.2559861086521175,
+        "features": [
+          {
+            "feature": "age",
+            "ref_mean": 26.29607250755287,
+            "holdout_mean": 28.3061797752809,
+            "ref_std": 4.319923560538195,
+            "abs_shift_z": 0.465310841629244
+          },
+          {
+            "feature": "minutes",
+            "ref_mean": 1629.7115965605392,
+            "holdout_mean": 1673.193820224719,
+            "ref_std": 767.7939697497227,
+            "abs_shift_z": 0.05663267149435118
+          },
+          {
+            "feature": "sofa_goals_per90",
+            "ref_mean": 0.1271394560497528,
+            "holdout_mean": 0.13594814214005088,
+            "ref_std": 0.1674329944608816,
+            "abs_shift_z": 0.052610216514739044
+          },
+          {
+            "feature": "sofa_assists_per90",
+            "ref_mean": 0.08669881342031456,
+            "holdout_mean": 0.0875674819252699,
+            "ref_std": 0.10408904707583407,
+            "abs_shift_z": 0.008345436233290484
+          },
+          {
+            "feature": "sofa_expectedGoals_per90",
+            "ref_mean": 0.14379557501531767,
+            "holdout_mean": 0.14402030793129073,
+            "ref_std": 0.15342738578684628,
+            "abs_shift_z": 0.001464750994879557
+          },
+          {
+            "feature": "sofa_tackles_per90",
+            "ref_mean": 1.511971833367018,
+            "holdout_mean": 1.4902289722010866,
+            "ref_std": 0.8585877236330742,
+            "abs_shift_z": 0.025323983289590343
+          },
+          {
+            "feature": "sofa_interceptions_per90",
+            "ref_mean": 0.7582283789238241,
+            "holdout_mean": 0.8152083647434762,
+            "ref_std": 0.5248426659055688,
+            "abs_shift_z": 0.10856584176771965
+          },
+          {
+            "feature": "clubctx_club_strength_proxy",
+            "ref_mean": 0.3935955203718291,
+            "holdout_mean": 0.4172153729960711,
+            "ref_std": 0.05707211476893551,
+            "abs_shift_z": 0.41385977582695654
+          },
+          {
+            "feature": "leaguectx_league_strength_index",
+            "ref_mean": 0.3924440744128008,
+            "holdout_mean": 0.41571810695490036,
+            "ref_std": 0.04973157218935616,
+            "abs_shift_z": 0.46799309809635936
+          },
+          {
+            "feature": "uefa_coeff_points",
+            "ref_mean": 16.611919156414764,
+            "holdout_mean": 10.299999999999997,
+            "ref_std": 6.576597816712272,
+            "abs_shift_z": 0.9597544706740451
+          }
+        ]
+      },
+      "predictions_csv": "data\\model\\champion_predictions_2024-25.holdout_turkish_super_lig.csv",
+      "metrics_json": "data\\model\\champion_predictions_2024-25.holdout_turkish_super_lig.metrics.json"
+    }
+  ]
 }

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from scouting_ml.core.runtime_config import PRODUCTION_PIPELINE_DEFAULTS
+from scouting_ml.reporting.operator_health import regenerate_ingestion_health_report
 from scouting_ml.scripts.run_full_pipeline import run_full_pipeline
 from scouting_ml.scripts.run_weekly_scout_ops import run_weekly_scout_ops
 
@@ -66,6 +67,7 @@ def run_production_pipeline(
     min_minutes: float,
     trials: int,
     optimize_metric: str,
+    league_holdouts: list[str],
     band_min_samples: int,
     band_blend_alpha: float,
     mape_min_denom_eur: float,
@@ -80,6 +82,7 @@ def run_production_pipeline(
     backtest_min_test_samples: int,
     backtest_min_test_under5m_samples: int,
     backtest_min_test_over20m_samples: int,
+    backtest_exclude_latest_season: bool,
     backtest_skip_incomplete_test_seasons: bool,
     drop_incomplete_league_seasons: bool,
     min_league_season_rows: int,
@@ -144,7 +147,7 @@ def run_production_pipeline(
         band_blend_alpha=band_blend_alpha,
         strict_leakage_guard=True,
         strict_quality_gate=False,
-        league_holdouts=[],
+        league_holdouts=league_holdouts,
         drop_incomplete_league_seasons=drop_incomplete_league_seasons,
         min_league_season_rows=min_league_season_rows,
         min_league_season_completeness=min_league_season_completeness,
@@ -175,6 +178,7 @@ def run_production_pipeline(
         backtest_min_test_samples=backtest_min_test_samples,
         backtest_min_test_under5m_samples=backtest_min_test_under5m_samples,
         backtest_min_test_over20m_samples=backtest_min_test_over20m_samples,
+        backtest_exclude_latest_season=backtest_exclude_latest_season,
         backtest_skip_incomplete_test_seasons=backtest_skip_incomplete_test_seasons,
         backtest_drop_incomplete_league_seasons=drop_incomplete_league_seasons,
         backtest_min_league_season_rows=min_league_season_rows,
@@ -211,6 +215,13 @@ def run_production_pipeline(
     artifacts["provider_audit_json"] = _artifact_meta(provider_audit_json)
     artifacts["provider_audit_csv"] = _artifact_meta(provider_audit_csv)
     artifacts["full_pipeline_summary"] = _require_artifact(pipeline_summary_path, "full_pipeline_summary")
+    ingestion_health_payload = regenerate_ingestion_health_report(clean_dataset_path=Path(clean_output))
+    artifacts["ingestion_health_csv"] = _require_artifact(
+        ingestion_health_payload["_meta"]["csv_path"], "ingestion health csv"
+    )
+    artifacts["ingestion_health_json"] = _require_artifact(
+        ingestion_health_payload["_meta"]["json_path"], "ingestion health json"
+    )
 
     weekly_payload: dict[str, Any] | None = None
     if run_weekly_ops:
@@ -257,6 +268,8 @@ def run_production_pipeline(
             "skip_context": bool(skip_context),
             "skip_dataset_build": bool(skip_dataset_build),
             "skip_clean": bool(skip_clean),
+            "backtest_exclude_latest_season": bool(backtest_exclude_latest_season),
+            "league_holdouts": list(league_holdouts or []),
         },
         "config": {
             "val_season": val_season,
@@ -267,6 +280,7 @@ def run_production_pipeline(
             "band_blend_alpha": float(band_blend_alpha),
             "with_backtest": bool(with_backtest),
             "backtest_test_seasons": list(backtest_test_seasons),
+            "backtest_exclude_latest_season": bool(backtest_exclude_latest_season),
             "provider_config_json": provider_config_json or "",
             "run_weekly_ops": bool(run_weekly_ops),
         },
@@ -274,9 +288,12 @@ def run_production_pipeline(
         "snapshots": {
             "full_pipeline": full_pipeline_summary,
             "weekly_ops": weekly_payload,
+            "ingestion_health": ingestion_health_payload,
         },
         "full_pipeline": full_pipeline_summary,
         "weekly_ops": weekly_payload,
+        "promotion_gate": full_pipeline_summary.get("promotion_gate"),
+        "artifact_lanes": full_pipeline_summary.get("artifact_lanes"),
         "status": "ok",
     }
 
@@ -309,6 +326,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--min-minutes", type=float, default=defaults.min_minutes)
     parser.add_argument("--trials", type=int, default=defaults.trials)
     parser.add_argument("--optimize-metric", default=defaults.optimize_metric)
+    parser.add_argument(
+        "--league-holdouts",
+        default="",
+        help="Optional comma-separated holdout leagues for valuation promotion review.",
+    )
     parser.add_argument("--band-min-samples", type=int, default=defaults.band_min_samples)
     parser.add_argument("--band-blend-alpha", type=float, default=defaults.band_blend_alpha)
     parser.add_argument("--mape-min-denom-eur", type=float, default=defaults.mape_min_denom_eur)
@@ -324,6 +346,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--backtest-min-test-samples", type=int, default=defaults.backtest_min_test_samples)
     parser.add_argument("--backtest-min-test-under5m-samples", type=int, default=defaults.backtest_min_test_under5m_samples)
     parser.add_argument("--backtest-min-test-over20m-samples", type=int, default=defaults.backtest_min_test_over20m_samples)
+    parser.add_argument(
+        "--backtest-exclude-latest-season",
+        action=argparse.BooleanOptionalAction,
+        default=defaults.backtest_exclude_latest_season,
+    )
     parser.add_argument("--backtest-skip-incomplete-test-seasons", action=argparse.BooleanOptionalAction, default=defaults.backtest_skip_incomplete_test_seasons)
 
     parser.add_argument("--drop-incomplete-league-seasons", action=argparse.BooleanOptionalAction, default=defaults.drop_incomplete_league_seasons)
@@ -379,6 +406,7 @@ def main() -> None:
         min_minutes=args.min_minutes,
         trials=args.trials,
         optimize_metric=args.optimize_metric,
+        league_holdouts=_parse_csv_tokens(args.league_holdouts),
         band_min_samples=args.band_min_samples,
         band_blend_alpha=args.band_blend_alpha,
         mape_min_denom_eur=args.mape_min_denom_eur,
@@ -393,6 +421,7 @@ def main() -> None:
         backtest_min_test_samples=args.backtest_min_test_samples,
         backtest_min_test_under5m_samples=args.backtest_min_test_under5m_samples,
         backtest_min_test_over20m_samples=args.backtest_min_test_over20m_samples,
+        backtest_exclude_latest_season=args.backtest_exclude_latest_season,
         backtest_skip_incomplete_test_seasons=args.backtest_skip_incomplete_test_seasons,
         drop_incomplete_league_seasons=args.drop_incomplete_league_seasons,
         min_league_season_rows=args.min_league_season_rows,

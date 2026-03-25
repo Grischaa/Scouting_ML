@@ -3,10 +3,36 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from scouting_ml.scripts import run_full_pipeline as rfp
 from scouting_ml.tests.summary_contract import assert_common_summary_contract
+
+
+def _fake_ingestion_health_payload(tmp_path: Path) -> dict[str, object]:
+    csv_path = tmp_path / "processed" / "ingestion_health_report.csv"
+    json_path = tmp_path / "processed" / "ingestion_health_report.json"
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    csv_path.write_text("league_slug,status\n", encoding="utf-8")
+    json_path.write_text(
+        json.dumps(
+            {
+                "summary": {"total": 1, "status_counts": {"healthy": 1, "watch": 0, "blocked": 0}},
+                "rows": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return {
+        "summary": {"total": 1, "status_counts": {"healthy": 1, "watch": 0, "blocked": 0}},
+        "rows": [],
+        "_meta": {
+            "source": "test",
+            "csv_path": str(csv_path.resolve()),
+            "json_path": str(json_path.resolve()),
+        },
+    }
 
 
 def _base_kwargs(tmp_path: Path) -> dict[str, object]:
@@ -68,6 +94,7 @@ def _base_kwargs(tmp_path: Path) -> dict[str, object]:
         "backtest_min_test_samples": 300,
         "backtest_min_test_under5m_samples": 50,
         "backtest_min_test_over20m_samples": 25,
+        "backtest_exclude_latest_season": True,
         "backtest_skip_incomplete_test_seasons": True,
         "backtest_drop_incomplete_league_seasons": True,
         "backtest_min_league_season_rows": 40,
@@ -135,10 +162,21 @@ def test_run_full_pipeline_writes_summary_and_validates_outputs(tmp_path: Path, 
     monkeypatch.setattr(rfp, "_train_market_value_main", _train_stub)
     monkeypatch.setattr(
         rfp,
+        "regenerate_ingestion_health_report",
+        lambda clean_dataset_path: _fake_ingestion_health_payload(tmp_path),
+    )
+    monkeypatch.setattr(
+        rfp,
         "build_lock_bundle",
-        lambda test_predictions, val_predictions, metrics_path, manifest_out, env_out, strict_artifacts, label: (
-            _write_file(str(manifest_out), json.dumps({"label": label, "strict": bool(strict_artifacts)})),
-            _write_file(str(env_out), f"TEST={test_predictions}\nVAL={val_predictions}\nMETRICS={metrics_path}\n"),
+        lambda **kwargs: (
+            _write_file(
+                str(kwargs["manifest_out"]),
+                json.dumps({"label": kwargs["label"], "strict": bool(kwargs["strict_artifacts"])}),
+            ),
+            _write_file(
+                str(kwargs["env_out"]),
+                f"TEST={kwargs['test_predictions']}\nVAL={kwargs['val_predictions']}\nMETRICS={kwargs['metrics_path']}\n",
+            ),
         ),
     )
 
@@ -157,8 +195,11 @@ def test_run_full_pipeline_writes_summary_and_validates_outputs(tmp_path: Path, 
     assert payload["artifacts"]["metrics"]["exists"] is True
     assert payload["artifacts"]["lock_manifest"]["exists"] is True
     assert payload["artifacts"]["lock_env"]["exists"] is True
+    assert payload["artifacts"]["ingestion_health_csv"]["exists"] is True
+    assert payload["artifacts"]["ingestion_health_json"]["exists"] is True
     assert isinstance(summary["snapshots"]["metrics"], dict)
     assert summary["snapshots"]["metrics"]["overall"]["test"]["r2"] == 0.7
+    assert payload["promotion_gate"]["promotable"] is False
 
 
 def test_run_full_pipeline_raises_when_expected_artifact_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -170,6 +211,11 @@ def test_run_full_pipeline_raises_when_expected_artifact_missing(tmp_path: Path,
     monkeypatch.setattr(rfp, "build_dataset_main", lambda **kwargs: _write_file(kwargs["output"], "dataset"))
     monkeypatch.setattr(rfp, "clean_dataset", lambda input_path, output_path, min_minutes: _write_file(output_path, "clean"))
     monkeypatch.setattr(rfp, "build_future_value_targets", lambda input_path, output_path, min_next_minutes, drop_na_target: _write_file(output_path, "future"))
+    monkeypatch.setattr(
+        rfp,
+        "regenerate_ingestion_health_report",
+        lambda clean_dataset_path: _fake_ingestion_health_payload(tmp_path),
+    )
 
     def _train_stub_missing_metrics(**kwargs) -> None:
         output = Path(kwargs["output_path"])
@@ -181,8 +227,74 @@ def test_run_full_pipeline_raises_when_expected_artifact_missing(tmp_path: Path,
     monkeypatch.setattr(
         rfp,
         "build_lock_bundle",
-        lambda test_predictions, val_predictions, metrics_path, manifest_out, env_out, strict_artifacts, label: None,
+        lambda **kwargs: None,
     )
 
     with pytest.raises(FileNotFoundError, match="metrics"):
         rfp.run_full_pipeline(**_base_kwargs(tmp_path))
+
+
+def test_run_full_pipeline_explains_when_holdout_was_removed_during_cleaning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _write_raw_dataset(**kwargs) -> None:
+        path = Path(kwargs["output"])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(
+            [
+                {
+                    "league": "Polish Ekstraklasa",
+                    "season": "2024/25",
+                    "market_value_eur": 250_000.0,
+                    "minutes": None,
+                    "sofa_minutesPlayed": None,
+                    "sofa_matched": 0,
+                }
+            ]
+        ).to_parquet(path, index=False)
+
+    def _write_clean_dataset(input_path, output_path, min_minutes) -> None:
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(
+            [
+                {
+                    "league": "Austrian Bundesliga",
+                    "season": "2024/25",
+                    "market_value_eur": 1_000_000.0,
+                    "minutes": 1200.0,
+                }
+            ]
+        ).to_parquet(path, index=False)
+
+    monkeypatch.setattr(rfp, "build_dataset_main", _write_raw_dataset)
+    monkeypatch.setattr(rfp, "clean_dataset", _write_clean_dataset)
+    monkeypatch.setattr(
+        rfp,
+        "build_future_value_targets",
+        lambda input_path, output_path, min_next_minutes, drop_na_target: Path(output_path).write_text(
+            "future", encoding="utf-8"
+        ),
+    )
+    monkeypatch.setattr(
+        rfp,
+        "regenerate_ingestion_health_report",
+        lambda clean_dataset_path: _fake_ingestion_health_payload(tmp_path),
+    )
+    monkeypatch.setattr(
+        rfp,
+        "_train_market_value_main",
+        lambda **kwargs: (_ for _ in ()).throw(
+            ValueError(
+                "League holdout 'Polish Ekstraklasa' resolved to 'Polish Ekstraklasa', "
+                "but that league is not present in the dataset."
+            )
+        ),
+    )
+
+    kwargs = _base_kwargs(tmp_path)
+    kwargs["league_holdouts"] = ["Polish Ekstraklasa"]
+
+    with pytest.raises(ValueError, match="removed the league via the minimum-minutes filter"):
+        rfp.run_full_pipeline(**kwargs)

@@ -380,8 +380,8 @@ LEAGUES: Dict[str, LeagueConfig] = {
         seasons=["2024/25", "2023/24"],
         tm_season_ids={"2024/25": 2024, "2023/24": 2023},
         sofa_league_key="Super League",
-        sofa_tournament_id=55,
-        sofa_season_map={"2024/25": "24/25", "2023/24": "23/24"},
+        sofa_tournament_id=215,
+        sofa_season_map={"2024/25": "2024", "2023/24": "2023"},
         processed_dataset_pattern=str(
             PROCESSED_DIR / "swiss_super_league_{season_slug}_with_sofa.csv"
         ),
@@ -395,8 +395,8 @@ LEAGUES: Dict[str, LeagueConfig] = {
         seasons=["2024/25", "2023/24"],
         tm_season_ids={"2024/25": 2024, "2023/24": 2023},
         sofa_league_key="Superliga",
-        sofa_tournament_id=31,
-        sofa_season_map={"2024/25": "2024/25", "2023/24": "2023/24"},
+        sofa_tournament_id=39,
+        sofa_season_map={"2024/25": "24/25", "2023/24": "23/24"},
         processed_dataset_pattern=str(
             PROCESSED_DIR / "danish_superliga_{season_slug}_with_sofa.csv"
         ),
@@ -449,7 +449,7 @@ LEAGUES: Dict[str, LeagueConfig] = {
         seasons=["2024/25"],
         tm_season_ids={"2024/25": 2024},
         sofa_league_key="Fortuna Liga",
-        sofa_tournament_id=238,
+        sofa_tournament_id=172,
         sofa_season_map={"2024/25": "24/25"},
         processed_dataset_pattern=str(
             PROCESSED_DIR / "czech_first_league_{season_slug}_with_sofa.csv"

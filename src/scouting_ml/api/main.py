@@ -3,21 +3,25 @@ from __future__ import annotations
 
 import logging
 from threading import Lock
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_503_SERVICE_UNAVAILABLE
 
 from scouting_ml.api.routes_market_value import router as market_value_router
 from scouting_ml.api.routes_players_nlp import router as players_nlp_router
+from scouting_ml.api.routes_team import router as team_router
 from scouting_ml.core.runtime_config import load_api_runtime_config
 from scouting_ml.services.market_value_service import (
     get_resolved_artifact_paths,
     health_payload,
     validate_strict_artifact_env,
 )
+from scouting_ml.team.db import create_all_tables, team_mode_enabled
 
 
 logger = logging.getLogger(__name__)
@@ -34,6 +38,8 @@ def _strict_artifacts_enabled() -> bool:
 
 
 def _startup_checks() -> None:
+    if team_mode_enabled():
+        create_all_tables()
     if _strict_artifacts_enabled():
         validate_strict_artifact_env()
     paths = get_resolved_artifact_paths()
@@ -73,7 +79,7 @@ app = FastAPI(title="Scouting ML API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(API_CONFIG.cors_origins),
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -98,6 +104,11 @@ async def startup_checks_middleware(request: Request, call_next) -> Response:
 # Register routers
 app.include_router(players_nlp_router)
 app.include_router(market_value_router)
+app.include_router(team_router)
+
+_STATIC_APP_DIR = Path(__file__).resolve().parents[1] / "website" / "static"
+if _STATIC_APP_DIR.exists():
+    app.mount("/app", StaticFiles(directory=str(_STATIC_APP_DIR), html=True), name="scoutml_frontend")
 
 
 @app.get("/", summary="API index")

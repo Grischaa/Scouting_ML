@@ -20,6 +20,7 @@ from sklearn.preprocessing import OneHotEncoder
 from scouting_ml.features.feature_cleaning import clean_train_val_test_for_model
 from scouting_ml.features.optuna_tuner import tune_lgbm
 from scouting_ml.features.shap_selector import select_top_features
+from scouting_ml.league_registry import LEAGUES
 from scouting_ml.models.base_models import make_cat, make_lgbm, make_xgb
 from scouting_ml.utils.data_utils import (
     infer_categorical_columns,
@@ -83,6 +84,14 @@ class PositionMetrics:
     mae: float
     mape: float
     wmape: float
+
+
+@dataclass(frozen=True)
+class ResolvedHoldoutLeague:
+    requested_token: str
+    league: str
+    league_slug: str
+    resolved_from: str
 
 
 def build_preprocessor(num_cols: List[str], cat_cols: List[str]) -> ColumnTransformer:
@@ -183,6 +192,133 @@ def _filter_by_league(
     if exclude_set:
         out = out[~series.isin(exclude_set)].copy()
     return out
+
+
+def _canonical_dataset_league_name_maps(frame: pd.DataFrame) -> tuple[dict[str, str], dict[str, str]]:
+    if "league" not in frame.columns:
+        return {}, {}
+
+    by_fold: dict[str, str] = {}
+    by_slug: dict[str, str] = {}
+    leagues = (
+        frame["league"]
+        .dropna()
+        .astype(str)
+        .map(str.strip)
+        .replace("", np.nan)
+        .dropna()
+        .unique()
+        .tolist()
+    )
+    for league in sorted(leagues):
+        by_fold[str(league).casefold()] = str(league)
+        by_slug[_slugify(str(league))] = str(league)
+    return by_fold, by_slug
+
+
+def _registry_league_alias_maps() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    by_slug: dict[str, Any] = {}
+    by_name_fold: dict[str, Any] = {}
+    by_name_slug: dict[str, Any] = {}
+    for slug, config in LEAGUES.items():
+        by_slug[str(slug).casefold()] = config
+        by_name_fold[str(config.name).casefold()] = config
+        by_name_slug[_slugify(config.name)] = config
+    return by_slug, by_name_fold, by_name_slug
+
+
+def _resolve_holdout_leagues(
+    frame: pd.DataFrame,
+    holdout_leagues: Sequence[str] | None,
+    *,
+    test_season: str,
+) -> list[ResolvedHoldoutLeague]:
+    if not holdout_leagues:
+        return []
+    if "league" not in frame.columns:
+        raise ValueError("League holdouts were requested, but the dataset has no 'league' column.")
+
+    dataset_by_fold, dataset_by_slug = _canonical_dataset_league_name_maps(frame)
+    registry_by_slug, registry_by_name_fold, registry_by_name_slug = _registry_league_alias_maps()
+
+    resolved: list[ResolvedHoldoutLeague] = []
+    seen_leagues: set[str] = set()
+
+    for raw_token in holdout_leagues:
+        token = str(raw_token or "").strip()
+        if not token:
+            continue
+
+        token_fold = token.casefold()
+        token_slug = _slugify(token)
+        resolved_from = "name"
+        registry_config = registry_by_slug.get(token_fold) or registry_by_slug.get(token_slug.casefold())
+        canonical_league = None
+        league_slug = None
+
+        if registry_config is not None:
+            canonical_league = dataset_by_fold.get(registry_config.name.casefold()) or dataset_by_slug.get(
+                registry_config.slug
+            )
+            if canonical_league is not None:
+                resolved_from = "slug"
+                league_slug = registry_config.slug
+
+        if canonical_league is None:
+            canonical_league = dataset_by_fold.get(token_fold) or dataset_by_slug.get(token_slug)
+
+        if canonical_league is not None and league_slug is None:
+            config = registry_by_name_fold.get(canonical_league.casefold()) or registry_by_name_slug.get(
+                _slugify(canonical_league)
+            )
+            league_slug = config.slug if config is not None else _slugify(canonical_league)
+        elif canonical_league is None:
+            config = (
+                registry_config
+                or registry_by_name_fold.get(token_fold)
+                or registry_by_name_slug.get(token_slug)
+            )
+            if config is None:
+                raise ValueError(
+                    f"Unknown league holdout token {token!r}. Pass a canonical league name or registry slug."
+                )
+            resolved_from = "slug" if registry_config is not None else "name"
+            canonical_league = dataset_by_fold.get(config.name.casefold()) or dataset_by_slug.get(config.slug)
+            league_slug = config.slug
+            if canonical_league is None:
+                raise ValueError(
+                    f"League holdout {token!r} resolved to {config.name!r}, but that league is not present in the dataset."
+                )
+
+        assert canonical_league is not None  # for type checkers
+        assert league_slug is not None
+
+        league_rows = _filter_by_league(frame, include=[canonical_league])
+        if league_rows.empty:
+            raise ValueError(
+                f"League holdout {token!r} resolved to {canonical_league!r}, but the dataset has zero matching rows."
+            )
+        if "season" in league_rows.columns:
+            season_rows = league_rows[league_rows["season"].astype(str) == str(test_season)].copy()
+            if season_rows.empty:
+                raise ValueError(
+                    f"League holdout {token!r} resolved to {canonical_league!r}, but the dataset has zero rows for test season {test_season}."
+                )
+
+        dedupe_key = canonical_league.casefold()
+        if dedupe_key in seen_leagues:
+            continue
+        seen_leagues.add(dedupe_key)
+        resolved.append(
+            ResolvedHoldoutLeague(
+                requested_token=token,
+                league=canonical_league,
+                league_slug=league_slug,
+                resolved_from=resolved_from,
+            )
+        )
+
+    return resolved
 
 
 def _find_forbidden_feature_columns(columns: Sequence[str]) -> list[str]:
@@ -1453,7 +1589,7 @@ def train_for_position(
 
 def _run_league_holdout_suite(
     df_raw: pd.DataFrame,
-    holdout_leagues: Sequence[str],
+    holdout_leagues: Sequence[ResolvedHoldoutLeague],
     *,
     val_season: str,
     test_season: str,
@@ -1484,19 +1620,8 @@ def _run_league_holdout_suite(
     if not holdout_leagues:
         return holdout_results
 
-    normalized = []
-    seen = set()
-    for league in holdout_leagues:
-        key = str(league).strip()
-        if not key:
-            continue
-        low = key.casefold()
-        if low in seen:
-            continue
-        seen.add(low)
-        normalized.append(key)
-
-    for holdout_league in normalized:
+    for holdout_spec in holdout_leagues:
+        holdout_league = holdout_spec.league
         print("\n======================")
         print(f"  LEAGUE HOLDOUT: {holdout_league}")
         print("======================")
@@ -1504,7 +1629,7 @@ def _run_league_holdout_suite(
         test_parts: list[pd.DataFrame] = []
         holdout_namespace = _holdout_optuna_namespace(
             optuna_study_namespace,
-            holdout_league,
+            holdout_spec.league_slug,
         )
 
         for pos in POSITIONS:
@@ -1546,7 +1671,10 @@ def _run_league_holdout_suite(
             print(f"[holdout] skipped {holdout_league}: no predictions generated.")
             holdout_results.append(
                 {
+                    "requested_token": holdout_spec.requested_token,
                     "league": holdout_league,
+                    "league_slug": holdout_spec.league_slug,
+                    "resolved_from": holdout_spec.resolved_from,
                     "status": "skipped",
                     "reason": "no_predictions",
                 }
@@ -1562,7 +1690,7 @@ def _run_league_holdout_suite(
 
         stem = output_path.stem
         suffix = output_path.suffix or ".csv"
-        league_slug = _slugify(holdout_league)
+        league_slug = holdout_spec.league_slug
         holdout_csv = output_path.with_name(f"{stem}.holdout_{league_slug}{suffix}")
         holdout_metrics_path = output_path.with_name(f"{stem}.holdout_{league_slug}.metrics.json")
 
@@ -1584,7 +1712,10 @@ def _run_league_holdout_suite(
         ref_test = _filter_by_league(ref_test, exclude=[holdout_league])
         holdout_shift = _compute_league_shift_report(ref_test, test_frame)
         holdout_payload = {
+            "requested_token": holdout_spec.requested_token,
             "league": holdout_league,
+            "league_slug": holdout_spec.league_slug,
+            "resolved_from": holdout_spec.resolved_from,
             "status": "ok",
             "n_samples": int(len(test_frame)),
             "overall": {
@@ -1739,6 +1870,12 @@ def main(
             "Quality gate failed. Resolve quality flags or rerun without --strict-quality-gate."
         )
 
+    resolved_holdout_leagues = _resolve_holdout_leagues(
+        df_raw,
+        list(league_holdouts or []),
+        test_season=test_season,
+    )
+
     shap_dir = Path("logs/shap")
     shap_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1839,6 +1976,15 @@ def main(
         "min_provider_feature_coverage": float(min_provider_feature_coverage),
         "save_shap_artifacts": bool(save_shap_artifacts),
         "holdout_n_optuna_trials": holdout_trial_budget,
+        "requested_league_holdouts": [
+            {
+                "requested_token": item.requested_token,
+                "league": item.league,
+                "league_slug": item.league_slug,
+                "resolved_from": item.resolved_from,
+            }
+            for item in resolved_holdout_leagues
+        ],
         "positions": [],
         "overall": {},
         "segments": {},
@@ -1934,7 +2080,7 @@ def main(
 
     holdout_results = _run_league_holdout_suite(
         df_raw=df_raw,
-        holdout_leagues=list(league_holdouts or []),
+        holdout_leagues=resolved_holdout_leagues,
         val_season=val_season,
         test_season=test_season,
         output_path=output,
@@ -1953,13 +2099,13 @@ def main(
         interval_q=interval_q,
         two_stage_band_model=two_stage_band_model,
         band_min_samples=band_min_samples,
-            band_blend_alpha=band_blend_alpha,
-            mape_min_denom_eur=mape_min_denom_eur,
-            min_feature_coverage=min_feature_coverage,
-            min_provider_feature_coverage=min_provider_feature_coverage,
-            optuna_study_namespace=optuna_study_namespace,
-            optuna_load_if_exists=optuna_load_if_exists,
-        )
+        band_blend_alpha=band_blend_alpha,
+        mape_min_denom_eur=mape_min_denom_eur,
+        min_feature_coverage=min_feature_coverage,
+        min_provider_feature_coverage=min_provider_feature_coverage,
+        optuna_study_namespace=optuna_study_namespace,
+        optuna_load_if_exists=optuna_load_if_exists,
+    )
     if holdout_results:
         metrics_payload["league_holdout"] = holdout_results
         metrics_payload["artifacts"]["holdout_count"] = len(holdout_results)
@@ -2103,7 +2249,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--league-holdouts",
         default="",
-        help="Optional comma-separated holdout leagues for unseen-league evaluation.",
+        help="Optional comma-separated holdout leagues for unseen-league evaluation (display names or registry slugs).",
     )
     parser.add_argument(
         "--drop-incomplete-league-seasons",

@@ -163,16 +163,76 @@ def test_lock_bundle_writes_dual_champion_manifest(tmp_path: Path) -> None:
 
     manifest = json.loads(manifest_out.read_text(encoding="utf-8"))
     assert manifest["registry_version"] == 2
-    assert manifest["legacy_default_role"] == "future_shortlist"
+    assert manifest["legacy_default_role"] == "valuation"
+    assert manifest["artifacts"]["metrics"]["path"] == str(valuation_metrics)
     assert manifest["valuation_champion"]["label"] == "prod60"
     assert manifest["future_shortlist_champion"]["label"] == "future_bundle"
+    assert manifest["valuation_champion"]["lane_state"] == "stable"
+    assert manifest["future_shortlist_champion"]["lane_state"] == "live"
+    assert manifest["valuation_champion"]["promotion_state"] == "advisory_only"
+    assert manifest["future_shortlist_champion"]["promotion_state"] == "advisory_only"
+    assert manifest["valuation_champion"]["generated_at_utc"]
+    assert manifest["future_shortlist_champion"]["generated_at_utc"]
     assert manifest["valuation_champion"]["artifacts"]["metrics"]["path"] == str(valuation_metrics)
     assert manifest["future_shortlist_champion"]["artifacts"]["metrics"]["path"] == str(future_metrics)
 
     env_text = env_out.read_text(encoding="utf-8")
     assert "SCOUTING_VALUATION_TEST_PREDICTIONS_PATH=" in env_text
     assert "SCOUTING_FUTURE_SHORTLIST_TEST_PREDICTIONS_PATH=" in env_text
-    assert f"SCOUTING_TEST_PREDICTIONS_PATH={future_test}" in env_text
+    assert f"SCOUTING_TEST_PREDICTIONS_PATH={valuation_test}" in env_text
+
+
+def test_lock_bundle_preserves_existing_valuation_when_future_shortlist_updates(tmp_path: Path) -> None:
+    valuation_test = tmp_path / "valuation_test.csv"
+    valuation_val = tmp_path / "valuation_val.csv"
+    valuation_metrics = tmp_path / "valuation.metrics.json"
+    future_test = tmp_path / "future_test.csv"
+    future_val = tmp_path / "future_val.csv"
+    future_metrics = tmp_path / "future.metrics.json"
+    manifest_out = tmp_path / "model_manifest.json"
+    env_out = tmp_path / "model_artifacts.env"
+
+    pd.DataFrame([{"player_id": "p1"}]).to_csv(valuation_test, index=False)
+    pd.DataFrame([{"player_id": "p2"}]).to_csv(valuation_val, index=False)
+    valuation_metrics.write_text(
+        json.dumps({"dataset": "valuation", "val_season": "2023/24", "test_season": "2024/25"}),
+        encoding="utf-8",
+    )
+    build_lock_bundle(
+        test_predictions=valuation_test,
+        val_predictions=valuation_val,
+        metrics_path=valuation_metrics,
+        manifest_out=manifest_out,
+        env_out=env_out,
+        strict_artifacts=True,
+        label="valuation_bundle",
+        primary_role="valuation",
+    )
+
+    pd.DataFrame([{"player_id": "p3"}]).to_csv(future_test, index=False)
+    pd.DataFrame([{"player_id": "p4"}]).to_csv(future_val, index=False)
+    future_metrics.write_text(
+        json.dumps({"dataset": "future", "val_season": "2024/25", "test_season": "2025/26"}),
+        encoding="utf-8",
+    )
+    build_lock_bundle(
+        test_predictions=future_test,
+        val_predictions=future_val,
+        metrics_path=future_metrics,
+        manifest_out=manifest_out,
+        env_out=env_out,
+        strict_artifacts=True,
+        label="future_bundle",
+        primary_role="future_shortlist",
+    )
+
+    manifest = json.loads(manifest_out.read_text(encoding="utf-8"))
+    assert manifest["legacy_default_role"] == "valuation"
+    assert manifest["artifacts"]["metrics"]["path"] == str(valuation_metrics)
+    assert manifest["valuation_champion"]["artifacts"]["metrics"]["path"] == str(valuation_metrics)
+    assert manifest["future_shortlist_champion"]["artifacts"]["metrics"]["path"] == str(future_metrics)
+    assert manifest["valuation_champion"]["lane_state"] == "stable"
+    assert manifest["future_shortlist_champion"]["lane_state"] == "live"
 
 
 def test_build_future_value_targets_dedupes_duplicate_player_seasons(tmp_path: Path) -> None:

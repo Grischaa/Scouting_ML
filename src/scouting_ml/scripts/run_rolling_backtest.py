@@ -190,6 +190,7 @@ def run_rolling_backtest(
     min_test_samples: int = 300,
     min_test_under5m_samples: int = 50,
     min_test_over20m_samples: int = 25,
+    exclude_latest_dataset_season: bool = True,
     skip_incomplete_test_seasons: bool = True,
     drop_incomplete_league_seasons: bool = True,
     min_league_season_rows: int = 40,
@@ -202,6 +203,7 @@ def run_rolling_backtest(
     exclude_columns: Sequence[str] | None = None,
 ) -> None:
     seasons = _load_dataset_seasons(dataset_path)
+    latest_dataset_season = seasons[-1] if seasons else None
     split_snapshots = _load_test_split_snapshots(dataset_path)
     if len(seasons) < 3:
         raise ValueError("Need at least 3 seasons in dataset for rolling train/val/test backtests.")
@@ -222,6 +224,17 @@ def run_rolling_backtest(
         if len(train_seasons) < min_train_seasons:
             continue
         if requested_tests and test_season not in requested_tests:
+            continue
+        if bool(exclude_latest_dataset_season) and latest_dataset_season and test_season == latest_dataset_season:
+            print(f"[backtest] skipped {test_season}: latest dataset season excluded by default.")
+            skipped_runs.append(
+                {
+                    "test_season": test_season,
+                    "val_season": val_season,
+                    "reasons": ["latest_dataset_season_excluded"],
+                    "source": "latest_dataset_season",
+                }
+            )
             continue
 
         snapshot = split_snapshots.get(test_season, {})
@@ -438,6 +451,7 @@ def run_rolling_backtest(
         "min_test_samples": int(min_test_samples),
         "min_test_under5m_samples": int(min_test_under5m_samples),
         "min_test_over20m_samples": int(min_test_over20m_samples),
+        "exclude_latest_dataset_season": bool(exclude_latest_dataset_season),
         "skip_incomplete_test_seasons": bool(skip_incomplete_test_seasons),
     }
     agg["training_completeness_gate"] = {
@@ -447,6 +461,10 @@ def run_rolling_backtest(
         "residual_calibration_min_samples": int(residual_calibration_min_samples),
         "mape_min_denom_eur": float(mape_min_denom_eur),
     }
+    agg["latest_dataset_season"] = latest_dataset_season
+    agg["excluded_latest_dataset_season"] = (
+        latest_dataset_season if bool(exclude_latest_dataset_season) and latest_dataset_season else None
+    )
     agg["skipped_runs"] = skipped_runs
     agg_path = out_path / "rolling_backtest_summary.json"
     agg_path.write_text(json.dumps(agg, indent=2), encoding="utf-8")
@@ -596,6 +614,12 @@ def main() -> None:
         help="Minimum over_20m test rows required for a season to be included.",
     )
     parser.add_argument(
+        "--exclude-latest-dataset-season",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Skip the chronologically latest dataset season before any sample-based completeness checks.",
+    )
+    parser.add_argument(
         "--skip-incomplete-test-seasons",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -679,6 +703,7 @@ def main() -> None:
         min_test_samples=args.min_test_samples,
         min_test_under5m_samples=args.min_test_under5m_samples,
         min_test_over20m_samples=args.min_test_over20m_samples,
+        exclude_latest_dataset_season=args.exclude_latest_dataset_season,
         skip_incomplete_test_seasons=args.skip_incomplete_test_seasons,
         drop_incomplete_league_seasons=args.drop_incomplete_league_seasons,
         min_league_season_rows=args.min_league_season_rows,

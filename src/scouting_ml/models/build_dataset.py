@@ -119,24 +119,24 @@ def _add_uefa_coefficients(df: pd.DataFrame) -> pd.DataFrame:
     if coeff is None or "season" not in df.columns or "league" not in df.columns:
         return df
     out = df.copy()
-    out["_season_norm"] = out["season"].apply(_normalize_season_label)
-    out["league_country"] = out["league"].map(LEAGUE_COUNTRY_MAP)
-    merged = out.merge(
-        coeff,
-        left_on=["league_country", "_season_norm"],
-        right_on=["country", "season"],
-        how="left",
+    season_norm = out["season"].apply(_normalize_season_label)
+    if "league_country" in out.columns:
+        league_country = out["league_country"].where(out["league_country"].notna(), out["league"].map(LEAGUE_COUNTRY_MAP))
+    else:
+        league_country = out["league"].map(LEAGUE_COUNTRY_MAP)
+        out["league_country"] = league_country
+
+    coeff_lookup = (
+        coeff.drop_duplicates(subset=["country", "season"], keep="last")
+        .set_index(["country", "season"])[["uefa_points", "rank", "points_total"]]
     )
-    merged = merged.rename(
-        columns={
-            "uefa_points": "uefa_coeff_points",
-            "rank": "uefa_coeff_rank",
-            "points_total": "uefa_coeff_5yr_total",
-        }
-    )
-    merged = merged.drop(columns=["country", "season_y", "_season_norm"], errors="ignore")
-    merged = merged.rename(columns={"season_x": "season"})
-    return merged
+    join_index = pd.MultiIndex.from_arrays([league_country, season_norm], names=["country", "season"])
+    matched = coeff_lookup.reindex(join_index)
+
+    out["uefa_coeff_points"] = matched["uefa_points"].to_numpy(copy=False)
+    out["uefa_coeff_rank"] = matched["rank"].to_numpy(copy=False)
+    out["uefa_coeff_5yr_total"] = matched["points_total"].to_numpy(copy=False)
+    return out
 
 
 def _normalize_key_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -563,6 +563,24 @@ def _add_external_presence_and_context_features(df: pd.DataFrame) -> pd.DataFram
         + out["contract_security_score"].fillna(0.0) * 0.15
         + out["durability_score"].fillna(0.0) * 0.10
         + out["club_attacking_environment_score"].fillna(0.0) * 0.10
+    )
+
+    league_strength_norm = (league_strength.clip(lower=0.0) / 0.45).clip(lower=0.0, upper=1.0)
+    uefa_norm = (
+        np.log1p(uefa_total.clip(lower=0.0)) / np.log1p(25.0)
+    ).clip(lower=0.0, upper=1.0)
+    out["league_strength_blend"] = (
+        league_strength_norm.fillna(0.0) * 0.65
+        + uefa_norm.fillna(0.0) * 0.35
+    ).clip(lower=0.0, upper=1.0)
+    out["club_league_strength_interaction"] = (
+        club_strength.clip(lower=0.0).fillna(0.0) * out["league_strength_blend"].fillna(0.0)
+    )
+    out["international_league_strength_interaction"] = (
+        out["international_exposure_score"].fillna(0.0) * out["league_strength_blend"].fillna(0.0)
+    )
+    out["elite_context_league_interaction"] = (
+        out["elite_context_score"].fillna(0.0) * out["league_strength_blend"].fillna(0.0)
     )
 
     return out

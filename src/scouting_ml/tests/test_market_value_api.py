@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import json
 import sys
+import time
 import types
 from pathlib import Path
 
@@ -13,8 +15,12 @@ import pytest
 
 from scouting_ml.api import main as api_main
 from scouting_ml.api.main import app
+from scouting_ml.api import routes_market_value as market_value_routes
 from scouting_ml.scripts.lock_market_value_artifacts import build_lock_bundle
 from scouting_ml.services import market_value_service as mvs
+from scouting_ml.services import proxy_estimate_service as proxy_estimate_service_module
+from scouting_ml.services import similarity_service as similarity_service_module
+from scouting_ml.services import trajectory_service as trajectory_service_module
 
 
 class _ASGITestClient:
@@ -167,16 +173,28 @@ def _write_profile_artifacts(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "sb_progressive_carries_per90": float(rng.uniform(0.5, 5.0)),
                 "sb_passes_into_box_per90": float(rng.uniform(0.1, 2.2)),
                 "sb_pressures_per90": float(rng.uniform(1.0, 12.0)),
+                "sb_snapshot_date": "2026-03-12",
+                "sb_retrieved_at": "2026-03-12T08:15:00Z",
+                "sb_source_version": "sb-v1",
                 "sb_minutes_in_433": float(rng.integers(0, 1400)),
                 "sb_minutes_in_4231": float(rng.integers(0, 900)),
                 "avail_reports": float(rng.integers(0, 12)),
                 "avail_start_share": float(rng.uniform(0.2, 1.0)),
                 "avail_injury_count": float(rng.integers(0, 4)),
+                "avail_snapshot_date": "2026-03-11",
+                "avail_retrieved_at": "2026-03-11T07:00:00Z",
+                "avail_source_version": "avail-v1",
                 "fixture_matches": float(rng.integers(6, 30)),
                 "fixture_mean_rest_days": float(rng.uniform(3.0, 8.0)),
                 "fixture_congestion_share": float(rng.uniform(0.0, 0.5)),
+                "fixture_snapshot_date": "2026-03-10",
+                "fixture_retrieved_at": "2026-03-10T09:30:00Z",
+                "fixture_source_version": "fixture-v1",
                 "odds_implied_team_strength": float(rng.uniform(0.2, 0.7)),
                 "odds_upset_probability": float(rng.uniform(0.2, 0.8)),
+                "odds_snapshot_date": "2026-03-09",
+                "odds_retrieved_at": "2026-03-09T06:45:00Z",
+                "odds_source_version": "odds-v1",
                 "injury_days_per_1000_min": float(rng.uniform(0.0, 12.0)),
                 "contract_years_left": float(rng.uniform(0.3, 4.2)),
             }
@@ -221,8 +239,34 @@ def _write_profile_artifacts(tmp_path: Path) -> tuple[Path, Path, Path]:
             "odds_upset_probability": 0.59,
             "injury_days_per_1000_min": 10.8,
             "contract_years_left": 0.8,
+            "leaguectx_league_strength_index": 0.34,
         }
     )
+
+    sparse = dict(rows[1])
+    sparse.update(
+        {
+            "player_id": "profile_fw_sparse",
+            "name": "Profile Sparse",
+            "club": "Sparse Club",
+            "market_value_eur": 3_200_000.0,
+            "fair_value_eur": 5_400_000.0,
+            "expected_value_low_eur": 3_800_000.0,
+            "expected_value_high_eur": 7_000_000.0,
+            "value_gap_conservative_eur": 1_600_000.0,
+            "sofa_assists_per90": np.nan,
+            "sofa_expectedGoals_per90": np.nan,
+            "sofa_keyPasses_per90": np.nan,
+            "sofa_successfulDribbles_per90": np.nan,
+            "sb_progressive_passes_per90": np.nan,
+            "sb_progressive_carries_per90": np.nan,
+            "sb_pressures_per90": np.nan,
+            "sofa_accuratePassesPercentage": np.nan,
+            "sofa_totalDuelsWonPercentage": np.nan,
+            "leaguectx_league_strength_index": 0.33,
+        }
+    )
+    rows.append(sparse)
 
     df = pd.DataFrame(rows)
     test_path = tmp_path / "profile_pred_test.csv"
@@ -242,6 +286,39 @@ def _write_profile_artifacts(tmp_path: Path) -> tuple[Path, Path, Path]:
         encoding="utf-8",
     )
     return test_path, val_path, metrics_path
+
+
+def _write_clean_profile_dataset(tmp_path: Path, source_csv: Path) -> Path:
+    frame = pd.read_csv(source_csv)
+    frame = frame.copy()
+    frame["goals"] = frame.get("goals", frame.get("sofa_goals_per90", 0)).fillna(0) * 30
+    frame["assists"] = frame.get("assists", frame.get("sofa_assists_per90", 0)).fillna(0) * 20
+    frame["xg"] = frame.get("xg", frame.get("sofa_expectedGoals_per90", 0)).fillna(0) * 18
+    frame["progressive_passes"] = frame.get("progressive_passes", frame.get("sb_progressive_passes_per90", 0)).fillna(0) * 20
+    frame["progressive_carries"] = frame.get("progressive_carries", frame.get("sb_progressive_carries_per90", 0)).fillna(0) * 20
+
+    target = frame.loc[frame["player_id"] == "profile_fw_target"].iloc[0].copy()
+    history_rows: list[dict[str, object]] = []
+    for season, market_value, fair_value, minutes, goals, assists, xg in (
+        ("2022/23", 3_200_000.0, 4_400_000.0, 1450, 9.0, 4.0, 7.2),
+        ("2023/24", 5_000_000.0, 7_600_000.0, 1875, 11.0, 7.0, 9.6),
+    ):
+        item = dict(target)
+        item["season"] = season
+        item["market_value_eur"] = market_value
+        item["fair_value_eur"] = fair_value
+        item["minutes"] = minutes
+        item["goals"] = goals
+        item["assists"] = assists
+        item["xg"] = xg
+        item["progressive_passes"] = 84.0 if season == "2022/23" else 109.0
+        item["progressive_carries"] = 52.0 if season == "2022/23" else 70.0
+        history_rows.append(item)
+
+    clean = pd.concat([frame, pd.DataFrame(history_rows)], ignore_index=True)
+    clean_path = tmp_path / "champion_players_clean.parquet"
+    clean.to_parquet(clean_path, index=False)
+    return clean_path
 
 
 def _write_recruitment_filter_artifacts(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -353,10 +430,446 @@ def _write_recruitment_filter_artifacts(tmp_path: Path) -> tuple[Path, Path, Pat
     return test_path, val_path, metrics_path
 
 
+def _write_league_adjustment_artifacts(tmp_path: Path) -> tuple[Path, Path, Path]:
+    base = {
+        "season": "2024/25",
+        "history_strength_score": 68.0,
+        "history_strength_coverage": 0.80,
+        "future_growth_probability": 0.58,
+        "future_scout_blend_score": 0.64,
+        "has_next_season_target": 1,
+        "talent_impact_score": 72.0,
+        "talent_impact_coverage": 85.0,
+        "talent_technical_score": 70.0,
+        "talent_technical_coverage": 82.0,
+        "talent_tactical_score": 69.0,
+        "talent_tactical_coverage": 83.0,
+        "talent_physical_score": 67.0,
+        "talent_physical_coverage": 80.0,
+        "talent_context_score": 66.0,
+        "talent_context_coverage": 79.0,
+        "talent_trajectory_score": 73.0,
+        "talent_trajectory_coverage": 84.0,
+        "sb_progressive_carries_per90": 3.8,
+        "sb_passes_into_box_per90": 1.2,
+        "sb_shot_assists_per90": 0.7,
+        "sb_pressures_per90": 6.5,
+        "sofa_successfulDribbles_per90": 2.4,
+        "sofa_expectedGoals_per90": 0.28,
+        "sofa_accurateCrossesPercentage": 31.0,
+    }
+    rows = [
+        {
+            **base,
+            "player_id": "est_winger",
+            "name": "Estonia Winger",
+            "league": "Estonian Meistriliiga",
+            "club": "Tallinn Test",
+            "age": 20,
+            "model_position": "FW",
+            "position_main": "Right Winger",
+            "position_alt": "Attack",
+            "minutes": 2100,
+            "market_value_eur": 1_000_000,
+            "fair_value_eur": 5_000_000,
+            "expected_value_eur": 5_000_000,
+            "value_gap_eur": 4_000_000,
+            "value_gap_conservative_eur": 3_000_000,
+            "undervaluation_confidence": 1.0,
+            "contract_years_left": 1.0,
+            "leaguectx_league_strength_index": 0.06,
+            "uefa_coeff_5yr_total": 5.0,
+            "talent_position_family": "W",
+            "future_potential_score": 79.0,
+            "future_potential_confidence": 71.0,
+            "sb_progressive_carries_per90": 4.9,
+            "sofa_successfulDribbles_per90": 3.2,
+        },
+        {
+            **base,
+            "player_id": "cze_cm",
+            "name": "Czech Mid",
+            "league": "Czech Fortuna Liga",
+            "club": "Prague Test",
+            "age": 22,
+            "model_position": "MF",
+            "position_main": "Central Midfielder",
+            "position_alt": "Midfield",
+            "minutes": 2200,
+            "market_value_eur": 2_500_000,
+            "fair_value_eur": 6_000_000,
+            "expected_value_eur": 6_000_000,
+            "value_gap_eur": 3_500_000,
+            "value_gap_conservative_eur": 2_700_000,
+            "undervaluation_confidence": 0.95,
+            "contract_years_left": 1.8,
+            "leaguectx_league_strength_index": 0.18,
+            "uefa_coeff_5yr_total": 12.0,
+            "talent_position_family": "CM",
+            "future_potential_score": 74.0,
+            "future_potential_confidence": 69.0,
+        },
+        {
+            **base,
+            "player_id": "ned_winger",
+            "name": "Dutch Winger",
+            "league": "Eredivisie",
+            "club": "Amsterdam Test",
+            "age": 21,
+            "model_position": "FW",
+            "position_main": "Left Winger",
+            "position_alt": "Attack",
+            "minutes": 2250,
+            "market_value_eur": 4_000_000,
+            "fair_value_eur": 6_500_000,
+            "expected_value_eur": 6_500_000,
+            "value_gap_eur": 2_500_000,
+            "value_gap_conservative_eur": 1_800_000,
+            "undervaluation_confidence": 0.9,
+            "contract_years_left": 2.0,
+            "leaguectx_league_strength_index": 0.55,
+            "uefa_coeff_5yr_total": 50.0,
+            "talent_position_family": "W",
+            "future_potential_score": 77.0,
+            "future_potential_confidence": 72.0,
+            "sb_progressive_carries_per90": 4.4,
+            "sofa_successfulDribbles_per90": 2.9,
+        },
+        {
+            **base,
+            "player_id": "fin_striker",
+            "name": "Finland Striker",
+            "league": "Veikkausliiga",
+            "club": "Helsinki Test",
+            "age": 23,
+            "model_position": "FW",
+            "position_main": "Centre-Forward",
+            "position_alt": "Attack, Centre",
+            "minutes": 2050,
+            "market_value_eur": 3_000_000,
+            "fair_value_eur": 5_000_000,
+            "expected_value_eur": 5_000_000,
+            "value_gap_eur": 2_000_000,
+            "value_gap_conservative_eur": 1_200_000,
+            "undervaluation_confidence": 0.85,
+            "contract_years_left": 1.4,
+            "leaguectx_league_strength_index": 0.14,
+            "uefa_coeff_5yr_total": 7.0,
+            "talent_position_family": "ST",
+            "future_potential_score": 70.0,
+            "future_potential_confidence": 66.0,
+        },
+    ]
+    df = pd.DataFrame(rows)
+    test_path = tmp_path / "league_adjustment_test.csv"
+    val_path = tmp_path / "league_adjustment_val.csv"
+    metrics_path = tmp_path / "league_adjustment.metrics.json"
+    df.to_csv(test_path, index=False)
+    df.to_csv(val_path, index=False)
+    metrics_path.write_text(
+        json.dumps(
+            {
+                "dataset": "tmp_league_adjustment_dataset",
+                "val_season": "2023/24",
+                "test_season": "2024/25",
+                "overall": {"test": {"r2": 0.70, "wmape": 0.42}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    holdouts = {
+        "estonian_meistriliiga": {
+            "league": "Estonian Meistriliiga",
+            "overall": {"r2": -796.77, "wmape": 14.21, "interval_coverage": 0.337},
+            "domain_shift": {"mean_abs_shift_z": 1.8},
+        },
+        "czech_fortuna_liga": {
+            "league": "Czech Fortuna Liga",
+            "overall": {"r2": -1.27, "wmape": 1.96, "interval_coverage": 0.48},
+            "domain_shift": {"mean_abs_shift_z": 1.2},
+        },
+        "eredivisie": {
+            "league": "Eredivisie",
+            "overall": {"r2": 0.72, "wmape": 0.34, "interval_coverage": 0.81},
+            "domain_shift": {"mean_abs_shift_z": 0.42},
+        },
+    }
+    for slug, payload in holdouts.items():
+        (tmp_path / f"league_adjustment.holdout_{slug}.metrics.json").write_text(
+            json.dumps(payload),
+            encoding="utf-8",
+        )
+    return test_path, val_path, metrics_path
+
+
+def _write_system_fit_artifacts(tmp_path: Path) -> tuple[Path, Path, Path]:
+    base = {
+        "season": "2024/25",
+        "expected_value_eur": 0.0,
+        "value_gap_eur": 0.0,
+        "history_strength_score": 72.0,
+        "history_strength_coverage": 0.85,
+        "future_growth_probability": 0.64,
+        "future_scout_blend_score": 0.71,
+        "has_next_season_target": 1,
+        "sb_progressive_passes_per90": 4.5,
+        "sb_progressive_carries_per90": 3.2,
+        "sb_passes_into_box_per90": 1.2,
+        "sb_shot_assists_per90": 0.65,
+        "sb_pressures_per90": 7.0,
+        "sb_duel_win_rate": 0.58,
+        "sb_aerial_win_rate": 0.55,
+        "sofa_tackles_per90": 1.8,
+        "sofa_interceptions_per90": 1.7,
+        "sofa_successfulDribbles_per90": 2.3,
+        "sofa_expectedGoals_per90": 0.32,
+        "sofa_accuratePassesPercentage": 83.0,
+        "sofa_keyPasses_per90": 1.4,
+        "sofa_totalShots_per90": 2.8,
+        "sofa_clearances_per90": 4.3,
+        "sofa_accurateCrossesPercentage": 31.0,
+        "talent_impact_score": 68.0,
+        "talent_impact_coverage": 85.0,
+        "talent_technical_score": 67.0,
+        "talent_technical_coverage": 84.0,
+        "talent_tactical_score": 69.0,
+        "talent_tactical_coverage": 86.0,
+        "talent_physical_score": 66.0,
+        "talent_physical_coverage": 82.0,
+        "talent_context_score": 65.0,
+        "talent_context_coverage": 80.0,
+        "talent_trajectory_score": 71.0,
+        "talent_trajectory_coverage": 84.0,
+    }
+    rows = [
+        {
+            **base,
+            "player_id": "sf_gk_1",
+            "name": "System GK",
+            "league": "Eredivisie",
+            "club": "System XI",
+            "age": 24,
+            "model_position": "GK",
+            "position_main": "Goalkeeper",
+            "minutes": 2500,
+            "market_value_eur": 3_000_000,
+            "fair_value_eur": 4_200_000,
+            "value_gap_conservative_eur": 1_200_000,
+            "contract_years_left": 1.5,
+            "talent_position_family": "GK",
+            "future_potential_score": 61.0,
+            "future_potential_confidence": 70.0,
+        },
+        {
+            **base,
+            "player_id": "sf_cb_1",
+            "name": "System CB",
+            "league": "Eredivisie",
+            "club": "System XI",
+            "age": 23,
+            "model_position": "DF",
+            "position_main": "Centre-Back",
+            "position_alt": "Defender, Centre",
+            "minutes": 2300,
+            "market_value_eur": 5_500_000,
+            "fair_value_eur": 7_800_000,
+            "value_gap_conservative_eur": 2_300_000,
+            "contract_years_left": 2.0,
+            "talent_position_family": "CB",
+            "talent_tactical_score": 78.0,
+            "future_potential_score": 69.0,
+            "future_potential_confidence": 72.0,
+        },
+        {
+            **base,
+            "player_id": "sf_fb_1",
+            "name": "System FB",
+            "league": "Eredivisie",
+            "club": "System XI",
+            "age": 22,
+            "model_position": "DF",
+            "position_main": "Right Back",
+            "position_alt": "Defender, Right",
+            "minutes": 2150,
+            "market_value_eur": 4_800_000,
+            "fair_value_eur": 7_100_000,
+            "value_gap_conservative_eur": 2_300_000,
+            "contract_years_left": 1.2,
+            "talent_position_family": "FB",
+            "talent_technical_score": 74.0,
+            "future_potential_score": 74.0,
+            "future_potential_confidence": 73.0,
+            "sofa_accurateCrossesPercentage": 36.0,
+        },
+        {
+            **base,
+            "player_id": "sf_dm_1",
+            "name": "System DM",
+            "league": "Eredivisie",
+            "club": "System XI",
+            "age": 24,
+            "model_position": "MF",
+            "position_main": "Defensive Midfielder",
+            "minutes": 2400,
+            "market_value_eur": 5_200_000,
+            "fair_value_eur": 7_600_000,
+            "value_gap_conservative_eur": 2_400_000,
+            "contract_years_left": 1.1,
+            "talent_position_family": "CM",
+            "talent_tactical_score": 79.0,
+            "talent_context_score": 70.0,
+            "future_potential_score": 68.0,
+            "future_potential_confidence": 71.0,
+        },
+        {
+            **base,
+            "player_id": "sf_cm_watch",
+            "name": "Watch League Mid",
+            "league": "Primeira Liga",
+            "club": "Watch FC",
+            "age": 21,
+            "model_position": "MF",
+            "position_main": "Central Midfielder",
+            "minutes": 2100,
+            "market_value_eur": 4_900_000,
+            "fair_value_eur": 7_200_000,
+            "value_gap_conservative_eur": 2_300_000,
+            "contract_years_left": 1.7,
+            "talent_position_family": "CM",
+            "talent_technical_score": 76.0,
+            "talent_trajectory_score": 79.0,
+            "future_potential_score": 81.0,
+            "future_potential_confidence": 69.0,
+        },
+        {
+            **base,
+            "player_id": "sf_am_1",
+            "name": "System Creator",
+            "league": "Eredivisie",
+            "club": "System XI",
+            "age": 22,
+            "model_position": "MF",
+            "position_main": "Attacking Midfielder",
+            "minutes": 1950,
+            "market_value_eur": 5_000_000,
+            "fair_value_eur": 8_100_000,
+            "value_gap_conservative_eur": 3_100_000,
+            "contract_years_left": 1.0,
+            "talent_position_family": "AM",
+            "talent_impact_score": 79.0,
+            "talent_technical_score": 81.0,
+            "future_potential_score": 84.0,
+            "future_potential_confidence": 75.0,
+            "sb_shot_assists_per90": 1.1,
+            "sb_passes_into_box_per90": 1.8,
+        },
+        {
+            **base,
+            "player_id": "sf_rw_good",
+            "name": "Trusted Winger",
+            "league": "Eredivisie",
+            "club": "System XI",
+            "age": 20,
+            "model_position": "FW",
+            "position_main": "Right Winger",
+            "position_alt": "Attack",
+            "minutes": 2200,
+            "market_value_eur": 4_000_000,
+            "fair_value_eur": 7_400_000,
+            "value_gap_conservative_eur": 3_400_000,
+            "contract_years_left": 1.3,
+            "talent_position_family": "W",
+            "talent_impact_score": 83.0,
+            "talent_technical_score": 80.0,
+            "talent_trajectory_score": 82.0,
+            "future_potential_score": 91.0,
+            "future_potential_confidence": 77.0,
+            "sb_progressive_carries_per90": 5.8,
+            "sofa_successfulDribbles_per90": 3.4,
+            "sofa_expectedGoals_per90": 0.44,
+        },
+        {
+            **base,
+            "player_id": "sf_rw_blocked",
+            "name": "Blocked Winger",
+            "league": "Belgian Pro League",
+            "club": "Blocked FC",
+            "age": 20,
+            "model_position": "FW",
+            "position_main": "Right Winger",
+            "position_alt": "Attack",
+            "minutes": 2100,
+            "market_value_eur": 8_000_000,
+            "fair_value_eur": 11_200_000,
+            "value_gap_conservative_eur": 3_200_000,
+            "contract_years_left": 3.0,
+            "talent_position_family": "W",
+            "talent_impact_score": 80.0,
+            "talent_technical_score": 78.0,
+            "future_potential_score": 88.0,
+            "future_potential_confidence": 74.0,
+            "sb_progressive_carries_per90": 5.1,
+            "sofa_successfulDribbles_per90": 3.0,
+        },
+        {
+            **base,
+            "player_id": "sf_st_1",
+            "name": "System Nine",
+            "league": "Eredivisie",
+            "club": "System XI",
+            "age": 23,
+            "model_position": "FW",
+            "position_main": "Centre-Forward",
+            "position_alt": "Attack, Centre",
+            "minutes": 2250,
+            "market_value_eur": 6_500_000,
+            "fair_value_eur": 9_000_000,
+            "value_gap_conservative_eur": 2_500_000,
+            "contract_years_left": 1.4,
+            "talent_position_family": "ST",
+            "talent_impact_score": 81.0,
+            "talent_technical_score": 75.0,
+            "future_potential_score": 78.0,
+            "future_potential_confidence": 73.0,
+            "sofa_expectedGoals_per90": 0.58,
+            "sofa_totalShots_per90": 4.1,
+            "sb_pressures_per90": 8.4,
+        },
+    ]
+    df = pd.DataFrame(rows)
+    df["expected_value_eur"] = df["fair_value_eur"]
+    df["value_gap_eur"] = df["value_gap_conservative_eur"]
+    test_path = tmp_path / "system_fit_test.csv"
+    val_path = tmp_path / "system_fit_val.csv"
+    metrics_path = tmp_path / "system_fit_metrics.json"
+    df.to_csv(test_path, index=False)
+    df.to_csv(val_path, index=False)
+    metrics_path.write_text(
+        json.dumps(
+            {
+                "dataset": "tmp_system_fit_dataset",
+                "val_season": "2023/24",
+                "test_season": "2024/25",
+                "trials_per_position": 5,
+                "overall": {"test": {"r2": 0.72, "mae_eur": 3_000_000}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return test_path, val_path, metrics_path
+
+
 def _reset_service_caches() -> None:
     mvs._PRED_CACHE.clear()  # type: ignore[attr-defined]
     mvs._METRICS_CACHE = {}  # type: ignore[attr-defined]
     mvs._RESIDUAL_CALIBRATION_CACHE = None  # type: ignore[attr-defined]
+    mvs._LEAGUE_HOLDOUT_CACHE = None  # type: ignore[attr-defined]
+    mvs._INGESTION_HEALTH_CACHE = None  # type: ignore[attr-defined]
+    mvs._OPERATOR_HEALTH_CACHE = None  # type: ignore[attr-defined]
+    mvs._UI_BOOTSTRAP_CACHE = {}  # type: ignore[attr-defined]
+    proxy_estimate_service_module._PROXY_ESTIMATE_SERVICE = None  # type: ignore[attr-defined]
+    similarity_service_module._SIMILARITY_SERVICE = None  # type: ignore[attr-defined]
+    trajectory_service_module._TRAJECTORY_SERVICE = None  # type: ignore[attr-defined]
     api_main._STARTUP_CHECKS_DONE = False  # type: ignore[attr-defined]
     api_main._STARTUP_CHECKS_ERROR = None  # type: ignore[attr-defined]
 
@@ -485,6 +998,155 @@ def test_api_root_returns_index() -> None:
     assert payload["market_value_base"] == "/market-value"
 
 
+def test_startup_checks_do_not_warm_optional_detail_services(monkeypatch) -> None:
+    monkeypatch.setattr(api_main, "_strict_artifacts_enabled", lambda: False)
+    monkeypatch.setattr(
+        api_main,
+        "get_resolved_artifact_paths",
+        lambda: {
+            "test_predictions_path": "test.csv",
+            "val_predictions_path": "val.csv",
+            "metrics_path": "metrics.json",
+        },
+    )
+
+    real_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):  # type: ignore[no-untyped-def]
+        if name in {
+            "scouting_ml.services.similarity_service",
+            "scouting_ml.services.proxy_estimate_service",
+            "scouting_ml.services.trajectory_service",
+        }:
+            raise AssertionError(f"startup attempted to import optional warmup service: {name}")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    api_main._startup_checks()
+
+
+def test_ui_bootstrap_endpoint_returns_aggregates_and_invalidates(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_test_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.delenv("SCOUTING_MODEL_MANIFEST_PATH", raising=False)
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get("/market-value/ui-bootstrap", params={"split": "test"})
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["split"] == "test"
+    assert payload["seasons"] == ["2024/25"]
+    assert "Eredivisie" in payload["leagues"]
+    coverage = {row["league"]: row for row in payload["coverage_rows"]}
+    assert coverage["Eredivisie"]["rows"] == 2
+    assert coverage["Eredivisie"]["undervalued_share"] == pytest.approx(1.0)
+    generated_at = payload["generated_at_utc"]
+
+    cached = client.get("/market-value/ui-bootstrap", params={"split": "test"})
+    assert cached.status_code == 200
+    assert cached.json()["generated_at_utc"] == generated_at
+
+    df = pd.read_csv(test_path)
+    df = pd.concat(
+        [
+            df,
+            pd.DataFrame(
+                [
+                    {
+                        "player_id": "bel_df_1",
+                        "name": "Belgian Defender",
+                        "league": "Belgian Pro League",
+                        "club": "Bruges Test",
+                        "season": "2025/26",
+                        "age": 22,
+                        "model_position": "DF",
+                        "minutes": 1500,
+                        "market_value_eur": 4_500_000,
+                        "fair_value_eur": 6_000_000,
+                        "value_gap_conservative_eur": 1_500_000,
+                        "undervaluation_confidence": 0.8,
+                    }
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    time.sleep(0.01)
+    df.to_csv(test_path, index=False)
+
+    refreshed = client.get("/market-value/ui-bootstrap", params={"split": "test"})
+    assert refreshed.status_code == 200
+    refreshed_payload = refreshed.json()
+    assert refreshed_payload["generated_at_utc"] != generated_at
+    assert refreshed_payload["seasons"][0] == "2025/26"
+    assert "Belgian Pro League" in refreshed_payload["leagues"]
+
+
+def test_operator_health_endpoint_returns_payload(monkeypatch) -> None:
+    monkeypatch.setattr(
+        market_value_routes,
+        "get_operator_health",
+        lambda: {
+            "active_lanes": {
+                "valuation": {"lane_state": "stable", "promotion_state": "promotable"},
+                "future_shortlist": {"lane_state": "live", "promotion_state": "advisory_only"},
+            },
+            "promotion_gate": {"promotable": True},
+            "ingestion_health": {"summary": {"status_counts": {"healthy": 1, "watch": 0, "blocked": 0}}},
+            "stale_provider_snapshots": {"stale_count": 0},
+            "live_partial_footprint": {"live_rows": 5},
+        },
+    )
+
+    client = _ASGITestClient(app)
+    resp = client.get("/market-value/operator-health")
+    assert resp.status_code == 200
+    payload = resp.json()["payload"]
+    assert payload["promotion_gate"]["promotable"] is True
+    assert payload["active_lanes"]["valuation"]["lane_state"] == "stable"
+    assert payload["live_partial_footprint"]["live_rows"] == 5
+
+
+def test_operator_health_payload_is_cached_until_artifacts_change(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_test_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.delenv("SCOUTING_MODEL_MANIFEST_PATH", raising=False)
+    _reset_service_caches()
+
+    calls = {"ingestion": 0, "live": 0}
+
+    def counted_ingestion() -> dict[str, object]:
+        calls["ingestion"] += 1
+        return {"rows": [], "summary": {}, "_meta": {"source": "test"}}
+
+    def counted_live() -> dict[str, object]:
+        calls["live"] += 1
+        return {"live_rows": 5, "live_share": 0.1}
+
+    monkeypatch.setattr(mvs, "_get_ingestion_health_payload", counted_ingestion)
+    monkeypatch.setattr(mvs, "_live_partial_footprint", counted_live)
+    monkeypatch.setattr(mvs, "build_valuation_promotion_gate", lambda **kwargs: {"promotable": True, "holdout_coverage": {}})
+    monkeypatch.setattr(mvs, "_load_json_snapshot", lambda path: {})
+    monkeypatch.setattr(mvs, "get_model_manifest", lambda: {})
+
+    first = mvs.get_operator_health()
+    second = mvs.get_operator_health()
+    assert first["live_partial_footprint"]["live_rows"] == 5
+    assert second["live_partial_footprint"]["live_rows"] == 5
+    assert calls == {"ingestion": 1, "live": 1}
+
+    time.sleep(0.01)
+    metrics_path.write_text(json.dumps({"dataset": "changed"}), encoding="utf-8")
+    third = mvs.get_operator_health()
+    assert third["generated_at_utc"] != first["generated_at_utc"]
+    assert calls == {"ingestion": 2, "live": 2}
+
+
 def test_model_manifest_and_scout_targets_endpoints(
     tmp_path: Path,
     monkeypatch,
@@ -547,10 +1209,15 @@ def test_dual_champion_manifest_uses_valuation_base_with_future_overlay(tmp_path
     monkeypatch.setenv("SCOUTING_MODEL_MANIFEST_PATH", str(artifacts["manifest_out"]))
     _reset_service_caches()
 
-    merged = mvs.get_predictions("test")
+    merged = mvs._prepare_predictions_frame(mvs.get_predictions("test"))  # type: ignore[attr-defined]
     row = merged[merged["player_id"] == "dual_fw_1"].iloc[0]
     assert float(row["fair_value_eur"]) == 13_500_000.0
     assert float(row["future_scout_blend_score"]) == 0.93
+    assert float(row["future_potential_score"]) > 0.0
+    assert float(row["current_level_score"]) > 0.0
+    assert row["talent_position_family"] in {"ST", "W"}
+    assert isinstance(row["score_families"], dict)
+    assert isinstance(row["score_explanations"], dict)
 
     metrics = mvs.get_metrics()
     assert metrics["trials_per_position"] == 60
@@ -576,6 +1243,12 @@ def test_dual_champion_manifest_uses_valuation_base_with_future_overlay(tmp_path
     )
     assert scout_resp.status_code == 200
     assert scout_resp.json()["diagnostics"]["score_column"] == "future_scout_blend_score"
+    shortlist_item = scout_resp.json()["items"][0]
+    assert "current_level_score" in shortlist_item
+    assert "future_potential_score" in shortlist_item
+    assert "future_potential_confidence" in shortlist_item
+    assert "score_families" in shortlist_item
+    assert "score_explanations" in shortlist_item
 
 
 def test_watchlist_add_list_delete(tmp_path: Path, monkeypatch) -> None:
@@ -931,6 +1604,306 @@ def test_scout_targets_empty_state_retains_diagnostics_shape(tmp_path: Path, mon
     assert isinstance(diagnostics["precision_at_k"].get("rows"), list)
 
 
+def test_system_fit_templates_endpoint_returns_two_named_systems() -> None:
+    client = _ASGITestClient(app)
+    resp = client.get("/market-value/system-fit/templates")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["default_template_key"] == "high_press_433"
+    assert [template["template_key"] for template in payload["templates"]] == [
+        "high_press_433",
+        "transition_4231",
+    ]
+    assert payload["templates"][0]["slots"][0]["slot_key"] == "GK"
+
+
+def test_system_fit_query_returns_slot_lists_and_respects_default_trust_scope(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_system_fit_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setattr(
+        mvs,
+        "load_ingestion_health_payload",
+        lambda clean_dataset_path=None: {
+            "rows": [
+                {"league_name": "Eredivisie", "season": "2024/25", "status": "healthy"},
+                {"league_name": "Primeira Liga", "season": "2024/25", "status": "watch"},
+                {"league_name": "Belgian Pro League", "season": "2024/25", "status": "blocked"},
+            ]
+        },
+    )
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.post(
+        "/market-value/system-fit/query",
+        json={
+            "template_key": "high_press_433",
+            "split": "test",
+            "active_lane": "future_shortlist",
+            "top_n_per_slot": 5,
+            "trust_scope": "trusted_and_watch",
+            "slot_role_overrides": {"RW": "transition_winger"},
+            "filters": {
+                "budget_eur": 5_000_000,
+                "min_minutes": 1200,
+                "max_age": 24,
+                "non_big5_only": True,
+            },
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["active_lane"] == "future_shortlist"
+    assert payload["lane_posture"]["lane_state"] == "live"
+    rw_slot = next(slot for slot in payload["slots"] if slot["slot_key"] == "RW")
+    assert rw_slot["role_template_key"] == "transition_winger"
+    assert rw_slot["items"]
+    assert all(item["league_trust_tier"] in {"trusted", "watch"} for item in rw_slot["items"])
+    assert "sf_rw_blocked" not in {item["player_id"] for item in rw_slot["items"]}
+    top_item = rw_slot["items"][0]
+    assert top_item["budget_status"] == "within_budget"
+    assert top_item["active_lane_score"] == pytest.approx(round(top_item["future_potential_score"], 2))
+    assert isinstance(top_item["fit_reasons"], list) and top_item["fit_reasons"]
+
+
+def test_system_fit_query_supports_trust_scope_all_and_valuation_lane(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_system_fit_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setattr(
+        mvs,
+        "load_ingestion_health_payload",
+        lambda clean_dataset_path=None: {
+            "rows": [
+                {"league_name": "Eredivisie", "season": "2024/25", "status": "healthy"},
+                {"league_name": "Primeira Liga", "season": "2024/25", "status": "watch"},
+                {"league_name": "Belgian Pro League", "season": "2024/25", "status": "blocked"},
+            ]
+        },
+    )
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.post(
+        "/market-value/system-fit/query",
+        json={
+            "template_key": "transition_4231",
+            "split": "test",
+            "active_lane": "valuation",
+            "top_n_per_slot": 5,
+            "trust_scope": "all",
+            "filters": {
+                "include_leagues": ["Eredivisie", "Belgian Pro League"],
+                "budget_eur": 6_000_000,
+                "min_confidence": 40,
+            },
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    rw_slot = next(slot for slot in payload["slots"] if slot["slot_key"] == "RW")
+    ids = {item["player_id"] for item in rw_slot["items"]}
+    assert "sf_rw_good" in ids
+    assert "sf_rw_blocked" in ids
+    blocked_item = next(item for item in rw_slot["items"] if item["player_id"] == "sf_rw_blocked")
+    assert blocked_item["league_trust_tier"] == "blocked"
+    assert blocked_item["budget_status"] == "stretch"
+    assert blocked_item["active_lane_score"] == pytest.approx(round(blocked_item["current_level_score"], 2))
+
+
+def test_predictions_endpoint_applies_league_adjusted_pricing_by_default(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_league_adjustment_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setattr(
+        mvs,
+        "load_ingestion_health_payload",
+        lambda clean_dataset_path=None: {
+            "rows": [
+                {"league_name": "Estonian Meistriliiga", "season": "2024/25", "status": "watch"},
+                {"league_name": "Czech Fortuna Liga", "season": "2024/25", "status": "healthy"},
+                {"league_name": "Eredivisie", "season": "2024/25", "status": "healthy"},
+            ]
+        },
+    )
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get(
+        "/market-value/predictions",
+        params={"split": "test", "limit": 20, "sort_by": "player_id", "sort_order": "asc"},
+    )
+    assert resp.status_code == 200
+    by_id = {item["player_id"]: item for item in resp.json()["items"]}
+
+    est = by_id["est_winger"]
+    assert est["league_adjustment_bucket"] == "severe_failed"
+    assert est["league_adjustment_alpha"] <= 0.25
+    assert est["fair_value_eur"] == pytest.approx(est["league_adjusted_fair_value_eur"])
+    assert est["raw_fair_value_eur"] > est["fair_value_eur"]
+    assert est["raw_value_gap_conservative_eur"] > est["value_gap_conservative_eur"]
+
+    czech = by_id["cze_cm"]
+    assert czech["league_adjustment_bucket"] == "failed"
+    assert czech["league_adjustment_alpha"] <= 0.45
+
+    dutch = by_id["ned_winger"]
+    assert dutch["league_adjustment_bucket"] == "standard"
+    assert dutch["league_adjustment_alpha"] > czech["league_adjustment_alpha"]
+
+    finland = by_id["fin_striker"]
+    assert finland["league_adjustment_bucket"] == "unknown"
+    assert finland["league_adjustment_alpha"] <= 0.60
+
+
+def test_predictions_downrank_failed_leagues_without_hiding_them(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_league_adjustment_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setattr(
+        mvs,
+        "load_ingestion_health_payload",
+        lambda clean_dataset_path=None: {
+            "rows": [
+                {"league_name": "Estonian Meistriliiga", "season": "2024/25", "status": "watch"},
+                {"league_name": "Czech Fortuna Liga", "season": "2024/25", "status": "healthy"},
+                {"league_name": "Eredivisie", "season": "2024/25", "status": "healthy"},
+            ]
+        },
+    )
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get(
+        "/market-value/predictions",
+        params={"split": "test", "limit": 20, "sort_by": "value_gap_conservative_eur", "sort_order": "desc"},
+    )
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    ordered_ids = [item["player_id"] for item in items]
+    assert "est_winger" in ordered_ids
+    assert ordered_ids.index("ned_winger") < ordered_ids.index("est_winger")
+    est = next(item for item in items if item["player_id"] == "est_winger")
+    ned = next(item for item in items if item["player_id"] == "ned_winger")
+    assert float(est["discovery_reliability_weight"]) < float(ned["discovery_reliability_weight"])
+
+
+def test_player_report_exposes_raw_vs_adjusted_valuation_guardrails(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_league_adjustment_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setattr(
+        mvs,
+        "load_ingestion_health_payload",
+        lambda clean_dataset_path=None: {
+            "rows": [
+                {"league_name": "Estonian Meistriliiga", "season": "2024/25", "status": "watch"},
+                {"league_name": "Eredivisie", "season": "2024/25", "status": "healthy"},
+            ]
+        },
+    )
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get(
+        "/market-value/player/est_winger/report",
+        params={"split": "test", "top_metrics": 4},
+    )
+    assert resp.status_code == 200
+    report = resp.json()["report"]
+    guardrails = report["valuation_guardrails"]
+
+    assert guardrails["league_adjustment_bucket"] == "severe_failed"
+    assert guardrails["raw_fair_value_eur"] > guardrails["fair_value_eur"]
+    assert guardrails["league_adjusted_fair_value_eur"] == pytest.approx(guardrails["fair_value_eur"])
+    assert guardrails["raw_value_gap_conservative_eur"] > guardrails["value_gap_conservative_eur"]
+    assert any(flag["code"] == "league_pricing_adjusted" for flag in report["risk_flags"])
+    assert "league-adjusted fair value" in report["summary_text"].lower()
+
+
+def test_system_fit_query_carries_league_adjustment_warning_reasons(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_league_adjustment_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setattr(
+        mvs,
+        "load_ingestion_health_payload",
+        lambda clean_dataset_path=None: {
+            "rows": [
+                {"league_name": "Estonian Meistriliiga", "season": "2024/25", "status": "watch"},
+                {"league_name": "Eredivisie", "season": "2024/25", "status": "healthy"},
+            ]
+        },
+    )
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.post(
+        "/market-value/system-fit/query",
+        json={
+            "template_key": "high_press_433",
+            "split": "test",
+            "active_lane": "valuation",
+            "top_n_per_slot": 5,
+            "trust_scope": "all",
+            "filters": {
+                "include_leagues": ["Estonian Meistriliiga", "Eredivisie"],
+                "budget_eur": 3_000_000,
+                "min_minutes": 1500,
+            },
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    rw_slot = next(slot for slot in payload["slots"] if slot["slot_key"] == "RW")
+    est_item = next(item for item in rw_slot["items"] if item["player_id"] == "est_winger")
+    assert est_item["fair_value_eur"] == pytest.approx(est_item["league_adjusted_fair_value_eur"])
+    assert est_item["league_adjustment_bucket"] == "severe_failed"
+    assert any("Pricing" in reason for reason in est_item["fit_reasons"])
+
+
+def test_system_fit_soft_penalizes_failed_leagues_in_slot_order(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_league_adjustment_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setattr(
+        mvs,
+        "load_ingestion_health_payload",
+        lambda clean_dataset_path=None: {
+            "rows": [
+                {"league_name": "Estonian Meistriliiga", "season": "2024/25", "status": "watch"},
+                {"league_name": "Eredivisie", "season": "2024/25", "status": "healthy"},
+            ]
+        },
+    )
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.post(
+        "/market-value/system-fit/query",
+        json={
+            "template_key": "high_press_433",
+            "split": "test",
+            "active_lane": "valuation",
+            "top_n_per_slot": 5,
+            "trust_scope": "all",
+            "filters": {"include_leagues": ["Estonian Meistriliiga", "Eredivisie"], "min_minutes": 1500},
+        },
+    )
+    assert resp.status_code == 200
+    rw_slot = next(slot for slot in resp.json()["slots"] if slot["slot_key"] == "RW")
+    ordered_ids = [item["player_id"] for item in rw_slot["items"]]
+    assert ordered_ids.index("ned_winger") < ordered_ids.index("est_winger")
+
+
 def test_validate_strict_artifact_env_requires_env_vars(monkeypatch) -> None:
     monkeypatch.delenv("SCOUTING_TEST_PREDICTIONS_PATH", raising=False)
     monkeypatch.delenv("SCOUTING_VAL_PREDICTIONS_PATH", raising=False)
@@ -1123,7 +2096,7 @@ def test_player_profile_endpoint_returns_grouped_stats_and_similar_players(tmp_p
     monkeypatch.setattr(
         mvs,
         "_load_similar_player_matches",
-        lambda player_id, top_k: [
+        lambda player_id, top_k, **kwargs: [
             {
                 "player_id": "profile_fw_2",
                 "score": 0.91,
@@ -1162,6 +2135,7 @@ def test_player_profile_endpoint_returns_grouped_stats_and_similar_players(tmp_p
     assert len(similar["items"]) == 1
     assert similar["items"][0]["player_id"] == "profile_fw_2"
     assert similar["items"][0]["name"] == "Profile FW 2"
+    assert profile["proxy_estimates"]["available"] is False
     assert profile["external_tactical_context"]["available"] is True
     assert isinstance(profile["external_tactical_context"]["summary_text"], str)
     assert isinstance(profile["external_tactical_context"]["signals"], list)
@@ -1175,6 +2149,19 @@ def test_player_profile_endpoint_returns_grouped_stats_and_similar_players(tmp_p
     assert profile["provider_coverage"]["statsbomb"] is True
     assert profile["provider_coverage"]["availability_provider"] is True
     assert profile["provider_coverage"]["market_provider"] is True
+    assert profile["provider_coverage"]["providers"]["statsbomb"]["snapshot_date"] == "2026-03-12"
+    assert profile["provider_coverage"]["latest_snapshot_date"] == "2026-03-12"
+    assert profile["data_freshness"]["status"] == "stable"
+    assert profile["data_freshness"]["partial_season"] is False
+    assert profile["data_freshness"]["latest_snapshot_date"] == "2026-03-12"
+    assert isinstance(profile["talent_view"], dict)
+    assert profile["talent_view"]["current_level_score"] is not None
+    assert profile["talent_view"]["future_potential_score"] is not None
+    assert profile["talent_view"]["talent_position_family"] == "W"
+    assert isinstance(profile["talent_view"]["score_families"], dict)
+    assert isinstance(profile["talent_view"]["score_explanations"], dict)
+    assert isinstance(profile["talent_view"]["current_level_confidence_reasons"], list)
+    assert isinstance(profile["talent_view"]["future_potential_confidence_reasons"], list)
     codes = {flag["code"] for flag in profile.get("risk_flags", [])}
     assert "provider_injury_load" in codes
     assert "provider_schedule_congestion" in codes
@@ -1315,6 +2302,349 @@ def test_player_history_strength_endpoint_handles_sparse_context(tmp_path: Path,
     assert 0.0 <= float(history["coverage_0_to_1"]) <= 1.0
     assert history["tier"] in {"uncertain", "developing", "strong", "elite"}
     assert isinstance(history["components"], list)
+
+
+def test_player_similar_endpoint_returns_comparisons(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    clean_path = _write_clean_profile_dataset(tmp_path, test_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_CLEAN_DATASET_PATH", str(clean_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get(
+        "/market-value/player/profile_fw_target/similar",
+        params={"split": "test", "n": 3, "same_position": "true"},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["player_id"] == "profile_fw_target"
+    assert payload["position_group"] == "FW"
+    assert int(payload["feature_count_used"]) >= 10
+    assert isinstance(payload["feature_columns_used"], list)
+    comparisons = payload["comparisons"]
+    assert len(comparisons) == 3
+    first = comparisons[0]
+    assert first["player_id"] != "profile_fw_target"
+    assert 0.0 <= float(first["similarity_score"]) <= 1.0
+    assert first["market_value_eur"] is not None
+    assert first["predicted_value"] is not None
+    assert isinstance(first["league"], str)
+
+
+def test_similarity_service_uses_position_specific_feature_sets(tmp_path: Path) -> None:
+    rows: list[dict[str, object]] = []
+    for idx in range(6):
+        rows.append(
+            {
+                "player_id": f"gk_{idx}",
+                "season": "2024/25",
+                "name": f"GK {idx}",
+                "club": "Keepers FC",
+                "league": "Eredivisie",
+                "model_position": "GK",
+                "market_value_eur": 1_000_000 + idx,
+                "fair_value_eur": 1_200_000 + idx,
+                "sofa_saves_per90": 3.0 + idx * 0.1,
+                "sofa_cleanSheets_per90": 0.2 + idx * 0.01,
+                "sofa_crossesStoppedPercentage": 10 + idx,
+                "sofa_claimedCrosses_per90": 0.4 + idx * 0.02,
+                "sb_launches_per90": 8 + idx,
+                "sb_throw_distance_avg": 28 + idx,
+                "sb_keeper_actions_per90": 1.5 + idx * 0.1,
+                "sb_sweeper_actions_per90": 0.8 + idx * 0.1,
+                "sofa_accuratePassesPercentage": 72 + idx,
+                "sofa_shotsSavedInsideBox_per90": 1.4 + idx * 0.1,
+                "current_level_confidence": 60 + idx,
+            }
+        )
+        rows.append(
+            {
+                "player_id": f"fw_{idx}",
+                "season": "2024/25",
+                "name": f"FW {idx}",
+                "club": "Forwards FC",
+                "league": "Eredivisie",
+                "model_position": "FW",
+                "market_value_eur": 2_000_000 + idx,
+                "fair_value_eur": 2_400_000 + idx,
+                "sofa_goals_per90": 0.3 + idx * 0.05,
+                "sofa_totalShots_per90": 2.0 + idx * 0.2,
+                "sofa_assists_per90": 0.1 + idx * 0.03,
+                "sofa_expectedGoals_per90": 0.25 + idx * 0.04,
+                "sofa_keyPasses_per90": 1.1 + idx * 0.1,
+                "sofa_successfulDribbles_per90": 1.4 + idx * 0.2,
+                "sb_progressive_carries_per90": 2.2 + idx * 0.15,
+                "sb_passes_into_box_per90": 1.0 + idx * 0.08,
+                "sb_touch_in_box_per90": 5.0 + idx * 0.3,
+                "sb_pressures_per90": 8.0 + idx * 0.4,
+                "current_level_confidence": 62 + idx,
+            }
+        )
+    clean_path = tmp_path / "similarity_groups.parquet"
+    pd.DataFrame(rows).to_parquet(clean_path, index=False)
+    service = similarity_service_module.SimilarityService(dataset_path=clean_path)
+    gk_features = set(service._index.position_feature_columns["GK"])
+    fw_features = set(service._index.position_feature_columns["FW"])
+    assert gk_features
+    assert fw_features
+    assert gk_features != fw_features
+    assert "market_value_eur" not in gk_features
+    assert "fair_value_eur" not in fw_features
+
+
+def test_player_report_exposes_proxy_estimates_for_sparse_profile(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    clean_path = _write_clean_profile_dataset(tmp_path, test_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_CLEAN_DATASET_PATH", str(clean_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get("/market-value/player/profile_fw_sparse/report", params={"split": "test"})
+    assert resp.status_code == 200
+    proxy_payload = resp.json()["report"]["proxy_estimates"]
+    assert proxy_payload["available"] is True
+    assert len(proxy_payload["metrics"]) >= 3
+    first = proxy_payload["metrics"][0]
+    assert first["metric_key"]
+    assert first["neighbor_count"] >= 5
+    assert float(first["mean_similarity"]) >= 0.60
+    assert first["support_label"] in {"strong", "moderate", "weak"}
+
+
+def test_player_trajectory_endpoint_returns_multi_season_payload(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    clean_path = _write_clean_profile_dataset(tmp_path, test_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_CLEAN_DATASET_PATH", str(clean_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get("/market-value/player/profile_fw_target/trajectory", params={"split": "test"})
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["player_id"] == "profile_fw_target"
+    assert payload["trajectory_label"] == "ascending"
+    assert float(payload["projected_next_value"]) > 0.0
+    assert isinstance(payload["peak_season"], str)
+    assert len(payload["seasons"]) >= 3
+    assert payload["seasons"][0]["delta_predicted_value"] is None
+    assert payload["seasons"][1]["delta_predicted_value"] is not None
+
+
+def test_player_memo_pdf_endpoint_streams_pdf(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    clean_path = _write_clean_profile_dataset(tmp_path, test_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_CLEAN_DATASET_PATH", str(clean_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.get("/market-value/player/profile_fw_target/memo.pdf", params={"split": "test"})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/pdf")
+    assert "attachment;" in resp.headers.get("content-disposition", "")
+    assert resp.content.startswith(b"%PDF")
+
+
+def test_scout_decision_post_and_history_include_latest_decision(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    clean_path = _write_clean_profile_dataset(tmp_path, test_path)
+    watchlist_path = tmp_path / "watchlist.jsonl"
+    decisions_path = tmp_path / "scout_decisions.jsonl"
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_CLEAN_DATASET_PATH", str(clean_path))
+    monkeypatch.setenv("SCOUTING_WATCHLIST_PATH", str(watchlist_path))
+    monkeypatch.setenv("SCOUTING_DECISIONS_PATH", str(decisions_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    save_resp = client.post(
+        "/market-value/decisions",
+        json={
+            "player_id": "profile_fw_target",
+            "split": "test",
+            "season": "2024/25",
+            "action": "shortlist",
+            "reason_tags": ["price_gap", "trajectory"],
+            "note": "Fits the current recruitment brief.",
+            "source_surface": "workbench",
+            "ranking_context": {"mode": "shortlist", "rank": 4, "discovery_reliability_weight": 0.92},
+        },
+    )
+    assert save_resp.status_code == 200
+    saved = save_resp.json()
+    assert saved["latest_decision"]["action"] == "shortlist"
+    assert saved["watchlist_item"]["decision_action"] == "shortlist"
+
+    history_resp = client.get(
+        "/market-value/player/profile_fw_target/decisions",
+        params={"split": "test", "season": "2024/25"},
+    )
+    assert history_resp.status_code == 200
+    history = history_resp.json()
+    assert history["player_id"] == "profile_fw_target"
+    assert history["latest_decision"]["action"] == "shortlist"
+    assert len(history["events"]) == 1
+    assert history["events"][0]["reason_tags"] == ["price_gap", "trajectory"]
+
+    report_resp = client.get("/market-value/player/profile_fw_target/report", params={"split": "test"})
+    profile_resp = client.get("/market-value/player/profile_fw_target/profile", params={"split": "test"})
+    assert report_resp.status_code == 200
+    assert profile_resp.status_code == 200
+    assert report_resp.json()["report"]["latest_decision"]["action"] == "shortlist"
+    assert profile_resp.json()["profile"]["latest_decision"]["action"] == "shortlist"
+
+
+def test_scout_decision_validation_requires_reasons_for_shortlist_and_pass(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_DECISIONS_PATH", str(tmp_path / "scout_decisions.jsonl"))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    shortlist_resp = client.post(
+        "/market-value/decisions",
+        json={"player_id": "profile_fw_target", "split": "test", "action": "shortlist", "reason_tags": []},
+    )
+    pass_resp = client.post(
+        "/market-value/decisions",
+        json={"player_id": "profile_fw_target", "split": "test", "action": "pass", "reason_tags": []},
+    )
+    assert shortlist_resp.status_code == 400
+    assert "requires at least one reason tag" in shortlist_resp.json()["detail"]
+    assert pass_resp.status_code == 400
+    assert "requires at least one reason tag" in pass_resp.json()["detail"]
+
+
+def test_positive_decisions_auto_sync_watchlist_without_duplication(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    clean_path = _write_clean_profile_dataset(tmp_path, test_path)
+    watchlist_path = tmp_path / "watchlist.jsonl"
+    decisions_path = tmp_path / "scout_decisions.jsonl"
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_CLEAN_DATASET_PATH", str(clean_path))
+    monkeypatch.setenv("SCOUTING_WATCHLIST_PATH", str(watchlist_path))
+    monkeypatch.setenv("SCOUTING_DECISIONS_PATH", str(decisions_path))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    manual_resp = client.post(
+        "/market-value/watchlist/items",
+        json={
+            "player_id": "profile_fw_target",
+            "split": "test",
+            "season": "2024/25",
+            "tag": "summer_window",
+            "notes": "manual row",
+            "source": "manual",
+        },
+    )
+    assert manual_resp.status_code == 200
+
+    shortlist_resp = client.post(
+        "/market-value/decisions",
+        json={
+            "player_id": "profile_fw_target",
+            "split": "test",
+            "season": "2024/25",
+            "action": "shortlist",
+            "reason_tags": ["system_fit"],
+        },
+    )
+    watch_resp = client.post(
+        "/market-value/decisions",
+        json={
+            "player_id": "profile_fw_target",
+            "split": "test",
+            "season": "2024/25",
+            "action": "watch_live",
+            "reason_tags": ["availability"],
+        },
+    )
+    assert shortlist_resp.status_code == 200
+    assert watch_resp.status_code == 200
+
+    watchlist_resp = client.get("/market-value/watchlist", params={"split": "test"})
+    payload = watchlist_resp.json()
+    assert watchlist_resp.status_code == 200
+    assert payload["total"] == 1
+    item = payload["items"][0]
+    assert item["tag"] == "summer_window"
+    assert item["decision_action"] == "watch_live"
+    assert item["decision_reason_tags"] == ["availability"]
+
+
+def test_pass_decision_does_not_create_watchlist_row(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_WATCHLIST_PATH", str(tmp_path / "watchlist.jsonl"))
+    monkeypatch.setenv("SCOUTING_DECISIONS_PATH", str(tmp_path / "scout_decisions.jsonl"))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.post(
+        "/market-value/decisions",
+        json={
+            "player_id": "profile_fw_target",
+            "split": "test",
+            "season": "2024/25",
+            "action": "pass",
+            "reason_tags": ["league_risk"],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["watchlist_item"] is None
+
+    watchlist_resp = client.get("/market-value/watchlist", params={"split": "test"})
+    assert watchlist_resp.status_code == 200
+    assert watchlist_resp.json()["total"] == 0
+
+
+def test_scout_decision_store_recovers_from_corrupt_log(tmp_path: Path, monkeypatch) -> None:
+    test_path, val_path, metrics_path = _write_profile_artifacts(tmp_path)
+    decisions_path = tmp_path / "scout_decisions.jsonl"
+    decisions_path.write_text("{bad json}\n", encoding="utf-8")
+    monkeypatch.setenv("SCOUTING_TEST_PREDICTIONS_PATH", str(test_path))
+    monkeypatch.setenv("SCOUTING_VAL_PREDICTIONS_PATH", str(val_path))
+    monkeypatch.setenv("SCOUTING_METRICS_PATH", str(metrics_path))
+    monkeypatch.setenv("SCOUTING_DECISIONS_PATH", str(decisions_path))
+    monkeypatch.setenv("SCOUTING_WATCHLIST_PATH", str(tmp_path / "watchlist.jsonl"))
+    _reset_service_caches()
+
+    client = _ASGITestClient(app)
+    resp = client.post(
+        "/market-value/decisions",
+        json={
+            "player_id": "profile_fw_target",
+            "split": "test",
+            "season": "2024/25",
+            "action": "request_report",
+            "reason_tags": ["availability"],
+        },
+    )
+    assert resp.status_code == 200
+    text = decisions_path.read_text(encoding="utf-8")
+    assert "request_report" in text
+    backups = list(tmp_path.glob("scout_decisions.jsonl.bak.*"))
+    assert backups
 
 
 def test_players_routes_return_503_when_experimental_nlp_is_disabled(monkeypatch) -> None:

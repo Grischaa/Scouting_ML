@@ -44,8 +44,12 @@ def _install_future_refresh_stubs(monkeypatch) -> None:
             [
                 {
                     "player_id": "p1",
+                    "talent_position_family": "ST",
+                    "future_potential_score": 81.0,
+                    "future_potential_confidence": 74.0,
                     "future_scout_blend_score": 0.9,
                     "future_growth_probability": 0.8,
+                    "has_next_season_target": 1,
                 }
             ]
         ).to_csv(kwargs["out_val_path"], index=False)
@@ -54,8 +58,12 @@ def _install_future_refresh_stubs(monkeypatch) -> None:
                 [
                     {
                         "player_id": "p1",
+                        "talent_position_family": "ST",
+                        "future_potential_score": 79.0,
+                        "future_potential_confidence": 68.0,
                         "future_scout_blend_score": 0.85,
                         "future_growth_probability": 0.75,
+                        "has_next_season_target": 1,
                     }
                 ]
             ).to_csv(kwargs["out_test_path"], index=False)
@@ -63,6 +71,11 @@ def _install_future_refresh_stubs(monkeypatch) -> None:
             "training_rows": 2,
             "training_positive_rate": 0.5,
             "val_metrics": {"precision_at_25": 0.8},
+            "future_talent_summary": {
+                "future_label_coverage": {"labeled_rows": 1, "total_rows": 1},
+                "position_family_counts": {"ST": 1},
+                "future_potential_confidence_distribution": {"high": 1, "medium": 0, "low": 0},
+            },
         }
         _write(kwargs["diagnostics_out"], json.dumps(diagnostics))
         return diagnostics
@@ -297,6 +310,7 @@ def test_run_future_data_refresh_imports_and_rebuilds_future_artifacts(tmp_path:
     scored_val = pd.read_csv(scored_val_output)
     assert "future_scout_blend_score" in scored_val.columns
     assert "future_growth_probability" in scored_val.columns
+    assert "future_potential_score" in scored_val.columns
 
     audit_payload = json.loads(future_audit_json.read_text(encoding="utf-8"))
     season_rows = {row["season"]: row for row in audit_payload["season_rows"]}
@@ -306,6 +320,8 @@ def test_run_future_data_refresh_imports_and_rebuilds_future_artifacts(tmp_path:
     assert_common_summary_contract(disk_summary)
     assert disk_summary["future_score"]["training_rows"] == 2
     assert disk_summary["promotion"]["enabled"] is False
+    assert disk_summary["talent_summary"]["test"]["position_family_counts"]["ST"] == 1
+    assert disk_summary["talent_summary"]["test"]["confidence_distribution"]["medium"] == 1
 
 
 def test_run_future_data_refresh_skips_missing_import_dir(tmp_path: Path, monkeypatch) -> None:

@@ -27,6 +27,28 @@ def _safe_float(value: Any) -> float | None:
         return None
 
 
+def _safe_text(value: Any) -> str | None:
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _latest_timestamp(values: list[str | None]) -> str | None:
+    valid = [value for value in values if value]
+    if not valid:
+        return None
+    stamped: list[tuple[pd.Timestamp, str]] = []
+    for raw in valid:
+        parsed = pd.to_datetime(raw, errors="coerce", utc=True)
+        if pd.notna(parsed):
+            stamped.append((parsed, str(raw)))
+    if stamped:
+        stamped.sort(key=lambda item: item[0])
+        return stamped[-1][1]
+    return max(valid)
+
+
 def format_eur(value: float | None) -> str:
     if value is None:
         return "n/a"
@@ -364,10 +386,49 @@ def build_provider_coverage(row: pd.Series) -> dict[str, Any]:
     tactical = build_external_tactical_context(row)
     availability = build_availability_context(row)
     market = build_market_context_payload(row)
+    providers = {
+        "statsbomb": {
+            "available": bool(tactical.get("available")),
+            "snapshot_date": _safe_text(row.get("sb_snapshot_date")),
+            "retrieved_at": _safe_text(row.get("sb_retrieved_at")),
+            "source_version": _safe_text(row.get("sb_source_version")),
+        },
+        "availability_provider": {
+            "available": bool(availability.get("available")),
+            "snapshot_date": _safe_text(row.get("avail_snapshot_date")),
+            "retrieved_at": _safe_text(row.get("avail_retrieved_at")),
+            "source_version": _safe_text(row.get("avail_source_version")),
+        },
+        "fixture_provider": {
+            "available": any(
+                _safe_float(row.get(key)) is not None
+                for key in ("fixture_matches", "fixture_mean_rest_days", "fixture_congestion_share")
+            ),
+            "snapshot_date": _safe_text(row.get("fixture_snapshot_date")),
+            "retrieved_at": _safe_text(row.get("fixture_retrieved_at")),
+            "source_version": _safe_text(row.get("fixture_source_version")),
+        },
+        "odds_provider": {
+            "available": any(
+                _safe_float(row.get(key)) is not None
+                for key in ("odds_implied_team_strength", "odds_upset_probability", "odds_expected_total_goals")
+            ),
+            "snapshot_date": _safe_text(row.get("odds_snapshot_date")),
+            "retrieved_at": _safe_text(row.get("odds_retrieved_at")),
+            "source_version": _safe_text(row.get("odds_source_version")),
+        },
+    }
+    latest_snapshot_date = _latest_timestamp([provider.get("snapshot_date") for provider in providers.values()])
+    latest_retrieved_at = _latest_timestamp([provider.get("retrieved_at") for provider in providers.values()])
     return {
-        "statsbomb": bool(tactical.get("available")),
-        "availability_provider": bool(availability.get("available")),
+        "statsbomb": bool(providers["statsbomb"]["available"]),
+        "availability_provider": bool(providers["availability_provider"]["available"]),
         "market_provider": bool(market.get("available")),
+        "fixture_provider": bool(providers["fixture_provider"]["available"]),
+        "odds_provider": bool(providers["odds_provider"]["available"]),
+        "providers": providers,
+        "latest_snapshot_date": latest_snapshot_date,
+        "latest_retrieved_at": latest_retrieved_at,
     }
 
 
