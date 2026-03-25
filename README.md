@@ -1,16 +1,18 @@
 # ScoutML: Artifact-Driven Recruitment Intelligence
 
-ScoutML is a football scouting and market-value ML platform built around an artifact-driven valuation pipeline, a FastAPI serving layer, and a backend-connected static recruitment UI.
+ScoutML is a football scouting and market-value ML platform built around an artifact-driven valuation pipeline, a FastAPI serving layer, and a backend-connected static recruitment UI. It supports both a local-first analyst workflow and a database-backed Team Edition for shared scouting workspaces.
 
 What is materially implemented today:
 
 - position-aware player valuation artifacts and confidence-aware undervaluation ranking
-- shortlist and scout-target workflows oriented toward non-Big-5 opportunity discovery
-- detail-view payloads for scouting memos, archetype fit, formation fit, radar context, and history strength
+- shortlist, scout-target, and backend-owned system-fit workflows
+- detail-view payloads for scouting memos, archetype fit, formation fit, radar context, history strength, similar players, and trajectory
+- PDF memo export plus consultant-ready CSV / JSON export flows
+- local-first watchlist / decision logging and Team Edition shared workspaces with auth, comments, assignments, compare lists, and scout preference profiles
 - explicit degraded-mode/readiness behavior when required artifacts are missing
-- file-backed watchlist and export flows intended for internal or single-operator use
+- Docker / Compose plus Railway / Render deployment config
 
-This repo is best understood as a robust internal-quality ML/API project with a polished demo surface, not as a multi-tenant production SaaS backend.
+This repo is best understood as a serious recruitment-workflow product foundation: artifact-driven ML and evaluation on the backend, a usable scouting workbench on the frontend, and a first-pass collaborative team layer for multi-scout workflows.
 
 ---
 
@@ -22,16 +24,28 @@ Core capabilities:
 
 - Position-aware valuation modeling (`GK`, `DF`, `MF`, `FW`)
 - Conservative valuation guardrails (capped gap logic)
+- League-adjusted valuation correction and trust-aware discovery weighting
+- Backend-first system fit with named tactical templates and slot-level rankings
 - Player report API with:
   - strengths / weaknesses / development levers
   - risk flags
   - history-strength score
   - archetype + formation fit + radar payload
+  - similar players
+  - trajectory
+  - proxy estimates for sparse secondary metrics
 - Frontend console for:
   - model trust + reliability overview
   - recruitment board with budget / contract / age / role filters
   - target funnel + watchlist management
+  - system-fit slot inspector
+  - scout decisions, compare tray, and preference-aware reranking
   - consultant-ready exports (club CSV, window pack JSON, player memo exports)
+- Team Edition:
+  - email/password auth
+  - shared workspaces and invites
+  - role-based access (`admin`, `scout`, `viewer`)
+  - shared watchlist, decisions, comments, assignments, activity, compare lists
 - One-command artifact pipeline + one-command weekly scout ops
 
 ---
@@ -42,8 +56,9 @@ Key folders:
 
 - `src/scouting_ml/models` -> dataset build, cleaning, model training
 - `src/scouting_ml/scripts` -> orchestration and utility scripts
-- `src/scouting_ml/services` -> business logic (valuation, artifacts, reports, watchlist)
+- `src/scouting_ml/services` -> business logic (valuation, artifacts, reports, watchlist, memo, similarity, trajectory)
 - `src/scouting_ml/api` -> FastAPI routes
+- `src/scouting_ml/team` -> Team Edition SQLAlchemy models, DB helpers, and workspace services
 - `src/scouting_ml/website/static` -> canonical backend-connected frontend (HTML/CSS/JS)
 - `frontend` -> optional Next.js mock-data demo, kept for portfolio use and not the canonical backend UI
 - `src/scouting_ml/website` -> canonical static frontend sources plus archived legacy generated frontend reference
@@ -54,7 +69,8 @@ Key folders:
 Operational notes:
 
 - startup readiness is artifact-driven, and market-value routes degrade explicitly when artifacts are unavailable
-- the watchlist is intentionally file-backed and acceptable for local/internal workflows, not shared multi-user state
+- local mode keeps JSONL-backed watchlist / decisions
+- team mode switches shared workflow state to SQLAlchemy-backed workspace persistence without replacing the underlying player/model endpoints
 
 ---
 
@@ -104,6 +120,33 @@ Current `requirements.txt` expects `pyyaml==6.0.2` (needed with `scraperfc==4.1.
   - `PYTHONPATH=src`
   - `SCOUTING_API_CORS_ORIGINS=...`
 - Artifact path overrides remain backwards-compatible with `data/model/model_artifacts.env`.
+- Team Edition is enabled when:
+  - `SCOUTING_DATABASE_URL` is set
+  - `SCOUTING_TEAM_MODE=1` (or left unset and inferred from the DB URL)
+- Team auth/session env:
+  - `SCOUTING_SESSION_COOKIE_NAME`
+  - `SCOUTING_SESSION_SECRET`
+  - `SCOUTING_INVITE_TOKEN_TTL_HOURS`
+  - `SCOUTING_SESSION_SECURE_COOKIE`
+
+### 3.4 Hosted deployment
+
+The repo includes:
+
+- `Dockerfile`
+- `docker-compose.yml`
+- `railway.toml`
+- `render.yaml`
+
+Typical hosted env:
+
+- `PYTHONPATH=src`
+- `SCOUTING_API_CORS_ORIGINS`
+- artifact env from `data/model/model_artifacts.env` or equivalent secrets
+- `MODEL_ARTIFACTS_DIR` when mounting artifact bundles
+- Team Edition envs when running shared workspace mode
+
+The frontend reads `window.SCOUTING_API_BASE` when injected by the host page and otherwise falls back to `http://127.0.0.1:8000`.
 
 ---
 
@@ -612,12 +655,21 @@ Or:
 make api
 ```
 
+Optional Team Edition env:
+
+```powershell
+$env:SCOUTING_DATABASE_URL = "postgresql+psycopg://user:pass@host:5432/scoutml"
+$env:SCOUTING_TEAM_MODE = "1"
+$env:SCOUTING_SESSION_SECRET = "replace-me"
+```
+
 Health / docs:
 
 - `http://127.0.0.1:8000/`
 - `http://127.0.0.1:8000/docs`
 - `http://127.0.0.1:8000/market-value/health`
 - `http://127.0.0.1:8000/market-value/benchmarks`
+- `http://127.0.0.1:8000/app/index.html`
 
 Startup behavior:
 
@@ -632,7 +684,15 @@ Canonical backend-connected UI:
 
 - `src/scouting_ml/website/static/index.html`
 
-Terminal 1: run API (section above).
+Recommended path:
+
+- run the API
+- open the backend-mounted frontend directly:
+  - `http://127.0.0.1:8000/app/index.html`
+
+Optional separate static serving path:
+
+Terminal 1: run API.
 Terminal 2 (repo root):
 
 PowerShell:
@@ -661,11 +721,14 @@ Set API base in UI to:
 
 - `http://127.0.0.1:8000`
 
+If you inject `window.SCOUTING_API_BASE` in hosted/static deployments, the UI will use that automatically.
+
 Views:
 
 - `Overview`
 - `Recruitment Board`
 - `Target Funnel`
+- team/workspace controls appear in the existing workbench and detail rail when team mode is active
 
 Other frontend paths:
 
@@ -677,6 +740,7 @@ Other frontend paths:
 ## 10) Main Market Value API Endpoints
 
 - `GET /market-value/health`
+- `GET /market-value/ui-bootstrap`
 - `GET /market-value/metrics`
 - `GET /market-value/model-manifest`
 - `GET /market-value/active-artifacts`
@@ -684,14 +748,22 @@ Other frontend paths:
 - `GET /market-value/predictions`
 - `GET /market-value/shortlist`
 - `GET /market-value/scout-targets`
+- `GET /market-value/system-fit/templates`
+- `POST /market-value/system-fit/query`
 - `GET /market-value/player/{player_id}`
+- `GET /market-value/player/{player_id}/profile`
 - `GET /market-value/player/{player_id}/report`
+- `GET /market-value/player/{player_id}/similar`
+- `GET /market-value/player/{player_id}/trajectory`
+- `GET /market-value/player/{player_id}/memo.pdf`
 - `GET /market-value/player/{player_id}/advanced-profile`
 - `GET /market-value/player/{player_id}/history-strength`
 - `GET /market-value/player-reports`
 - `GET /market-value/watchlist`
 - `POST /market-value/watchlist/items`
 - `DELETE /market-value/watchlist/items/{watch_id}`
+- `POST /market-value/decisions`
+- `GET /market-value/player/{player_id}/decisions`
 
 Experimental NLP routes:
 
@@ -700,6 +772,37 @@ Experimental NLP routes:
 - `/players/{player_id}/role`
 
 These are disabled by default. Set `SCOUTING_ENABLE_EXPERIMENTAL_NLP_ROUTES=1` to enable them.
+
+Team Edition APIs:
+
+- `POST /auth/bootstrap-admin`
+- `POST /auth/login`
+- `POST /auth/logout`
+- `GET /auth/me`
+- `GET /workspaces/me`
+- `POST /workspaces`
+- `POST /workspaces/{workspace_id}/invites`
+- `POST /invites/{token}/accept`
+- `GET /team/watchlist`
+- `POST /team/watchlist/items`
+- `PATCH /team/watchlist/items/{item_id}`
+- `DELETE /team/watchlist/items/{item_id}`
+- `POST /team/decisions`
+- `GET /team/player/{player_id}/decisions`
+- `POST /team/assignments`
+- `PATCH /team/assignments/{assignment_id}`
+- `GET /team/assignments`
+- `GET /team/player/{player_id}/comments`
+- `POST /team/player/{player_id}/comments`
+- `GET /team/activity`
+- `GET /team/compare-lists`
+- `POST /team/compare-lists`
+- `PATCH /team/compare-lists/{compare_id}`
+- `DELETE /team/compare-lists/{compare_id}`
+- `POST /team/compare-lists/{compare_id}/players`
+- `DELETE /team/compare-lists/{compare_id}/players/{player_id}`
+- `GET /team/preferences/me`
+- `PUT /team/preferences/me`
 
 ---
 
@@ -762,8 +865,9 @@ python -c "import sklearn,optuna,lightgbm,xgboost,catboost,shap; print('ok')"
 
 ## 13) Recommended Next Iteration
 
-For better tactical precision in player reports:
+For the next product step after the current Team Edition baseline:
 
-- expand usable non-Big5 coverage first (rows > columns),
-- then add richer tactical metrics (zones/progression/pressing),
-- keep weekly KPI + onboarding + shortlist summary as your production monitoring loop.
+- harden auth / migration / production Postgres operations
+- improve compare-workspace ergonomics and manager-facing shared shortlist views
+- continue performance work before a broader hosted rollout
+- keep weekly KPI + onboarding + decision-feedback reporting as the tuning loop for ranking quality
